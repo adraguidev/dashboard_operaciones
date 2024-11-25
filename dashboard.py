@@ -9,6 +9,7 @@ from sklearn.linear_model import LinearRegression
 import numpy as np
 from prophet import Prophet
 import plotly.graph_objects as go
+from io import BytesIO
 
 # Módulos habilitados
 modules = {
@@ -41,8 +42,47 @@ def load_ccm_ley_data():
     ccm_esp_data = load_consolidated_cached('CCM-ESP')
     
     if ccm_data is not None and ccm_esp_data is not None:
+        # Mostrar estadísticas iniciales
+        
         # Filtrar CCM-LEY: registros de CCM que no están en CCM-ESP
         ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
+
+        # Verificar estadísticas después de la exclusión
+        
+        # Validar columnas necesarias
+        required_columns = ['FechaExpendiente', 'FechaPre']
+        for col in required_columns:
+            if col not in ccm_ley_data.columns:
+                st.error(f"Falta la columna requerida: {col}")
+                return None
+
+        # Asegurarnos de que las fechas se interpreten correctamente
+        try:
+            ccm_ley_data['FechaExpendiente'] = pd.to_datetime(ccm_ley_data['FechaExpendiente'], format='%d/%m/%Y', errors='coerce')
+            ccm_ley_data['FechaPre'] = pd.to_datetime(ccm_ley_data['FechaPre'], format='%d/%m/%Y', errors='coerce')
+        except Exception as e:
+            st.error(f"Error al convertir las fechas: {e}")
+            return None
+
+        # Identificar registros con fechas inconsistentes
+        invalid_dates = ccm_ley_data[ccm_ley_data['FechaExpendiente'] > ccm_ley_data['FechaPre']]
+
+        # Descargar registros con fechas inconsistentes
+        if not invalid_dates.empty:
+            st.subheader("Descarga de registros con fechas inconsistentes")
+            # Crear un buffer de memoria para almacenar el Excel
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                invalid_dates.to_excel(writer, index=False, sheet_name='Fechas Inconsistentes')
+            output.seek(0)  # Volver al inicio del buffer
+
+            # Botón de descarga
+            st.download_button(
+                label="Descargar registros inconsistentes",
+                data=output,
+                file_name="registros_inconsistentes.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
         
         return ccm_ley_data
     
@@ -67,7 +107,7 @@ if data is None:
     st.error("No se encontró el archivo consolidado para este módulo.")
 else:
     # Crear pestañas para el módulo
-    tabs = st.tabs(["Dashboard de Pendientes", "Ingreso de Expedientes", "Cierre de Expedientes"])
+    tabs = st.tabs(["Dashboard de Pendientes", "Ingreso de Expedientes", "Cierre de Expedientes","Ranking de Evaluadores"])
     
     # Pestaña 1: Dashboard de Pendientes
     with tabs[0]:
@@ -260,17 +300,17 @@ with tabs[1]:
 # Pestaña 3: Cierre de Expedientes
 with tabs[2]:
     st.header("Cierre de Expedientes")
-    st.info("Matriz de cierre de expedientes por evaluador en los últimos 15 días.")
 
-    # Asegurarnos de que 'FechaPre' esté en formato datetime
+    # Asegurarnos de que 'FechaExpendiente' y 'FechaPre' estén en formato datetime
+    data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], errors='coerce')
     data['FechaPre'] = pd.to_datetime(data['FechaPre'], errors='coerce')
 
-    # Filtrar los últimos 15 días
+    # Filtrar los últimos 15 días para la matriz de cierre
     last_15_days = pd.Timestamp.now() - pd.DateOffset(days=15)
-    cierre_data = data[data['FechaPre'] >= last_15_days].copy()
+    cierre_data_last_15 = data[data['FechaPre'] >= last_15_days].copy()
 
     # Agrupar por evaluador y fecha de cierre
-    cierre_matrix = cierre_data.groupby(['EVALASIGN', cierre_data['FechaPre'].dt.date]).size().unstack(fill_value=0)
+    cierre_matrix = cierre_data_last_15.groupby(['EVALASIGN', cierre_data_last_15['FechaPre'].dt.date]).size().unstack(fill_value=0)
 
     # Limitar a los últimos 15 días
     cierre_matrix = cierre_matrix.loc[:, cierre_matrix.columns[-15:]]
@@ -305,9 +345,92 @@ with tabs[2]:
     st.subheader("Matriz de Cierre de Expedientes (Últimos 15 Días)")
     st.dataframe(cierre_matrix)
 
+    # Filtro de período dinámico
+    st.subheader("Selecciona el Período de Análisis")
+    period_options = ["Últimos 30 días", "Últimos 3 meses", "Últimos 6 meses"]
+    selected_period = st.radio("Período", period_options, index=1)  # Por defecto, selecciona "Últimos 3 meses"
+
+    # Filtrar datos según el período seleccionado
+    if selected_period == "Últimos 30 días":
+        start_date = pd.Timestamp.now() - pd.DateOffset(days=30)
+    elif selected_period == "Últimos 3 meses":
+        start_date = pd.Timestamp.now() - pd.DateOffset(months=3)
+    elif selected_period == "Últimos 6 meses":
+        start_date = pd.Timestamp.now() - pd.DateOffset(months=6)
+
+    cierre_data = data[data['FechaExpendiente'] >= start_date].copy()
+
+    # Validar fechas: excluir registros con inconsistencias
+    valid_cierre_data = cierre_data[cierre_data['FechaPre'] >= cierre_data['FechaExpendiente']]
+    invalid_cierre_data = cierre_data[cierre_data['FechaPre'] < cierre_data['FechaExpendiente']]
+
+    # Mostrar advertencia sobre registros excluidos
+    if len(invalid_cierre_data) > 0:
+        st.warning(f"Se excluyeron {len(invalid_cierre_data)} registros con fechas inconsistentes.")
+        
+        # Botón para descargar los registros inconsistentes
+        st.subheader("Descargar registros con fechas inconsistentes")
+        from io import BytesIO
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            invalid_cierre_data.to_excel(writer, index=False, sheet_name='Fechas Inconsistentes')
+        output.seek(0)  # Volver al inicio del buffer
+
+        st.download_button(
+            label="Descargar registros inconsistentes",
+            data=output,
+            file_name="fechas_inconsistentes.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    # Reemplazar el cierre_data con los datos válidos
+    cierre_data = valid_cierre_data
+
+    # Calcular el tiempo promedio de cierre por evaluador
+    cierre_data['TiempoCierre'] = (cierre_data['FechaPre'] - cierre_data['FechaExpendiente']).dt.days
+    tiempo_promedio_general = cierre_data['TiempoCierre'].mean()
+
+    # Agrupar por evaluador para calcular el promedio de tiempo de cierre
+    tiempo_promedio_por_evaluador = cierre_data.groupby('EVALASIGN')['TiempoCierre'].mean().reset_index()
+    tiempo_promedio_por_evaluador.rename(columns={'TiempoCierre': 'PromedioDíasCierre'}, inplace=True)
+    tiempo_promedio_por_evaluador = tiempo_promedio_por_evaluador.sort_values(by='PromedioDíasCierre', ascending=False)
+
+    # Mostrar el tiempo promedio general
+    st.metric(f"Tiempo Promedio General de Cierre ({selected_period})", f"{tiempo_promedio_general:.2f} días")
+
+    # Mostrar tabla de tiempos promedio por evaluador
+    st.subheader(f"Tiempos Promedio de Cierre por Evaluador ({selected_period})")
+    st.dataframe(tiempo_promedio_por_evaluador[['EVALASIGN', 'PromedioDíasCierre']].reset_index(drop=True))  # Eliminar índice
+
+    # Distribución de cierres por tiempo en días con 10 categorías fijas
+    bins = [1, 3, 6, 9, 12, 15, 18, 21, 24, 28, float('inf')]  # Categorías fijas
+    labels = [
+        "1-3 días", "4-6 días", "7-9 días", "10-12 días",
+        "13-15 días", "16-18 días", "19-21 días", "22-24 días",
+        "25-28 días", "28+ días"
+    ]
+    cierre_data['CategoríaTiempo'] = pd.cut(
+        cierre_data['TiempoCierre'],
+        bins=bins,
+        labels=labels,
+        include_lowest=True
+    )
+
+    cierre_categorías = cierre_data['CategoríaTiempo'].value_counts(normalize=True).sort_index() * 100
+
+    st.subheader(f"Distribución de Cierres por Tiempo ({selected_period})")
+    fig_categorías = px.bar(
+        cierre_categorías,
+        x=cierre_categorías.index,
+        y=cierre_categorías.values,
+        title=f"Cierres de Expedientes por Tiempo ({selected_period})",
+        labels={'x': "Categoría de Tiempo", 'y': "Porcentaje de Expedientes"},
+        text_auto=True
+    )
+    st.plotly_chart(fig_categorías)
+
     st.write("""
-    **Interpretación de la Tendencia:**
-    - **⬆️**: El evaluador está cerrando más expedientes en comparación con días anteriores (sin considerar días con cero cierres).
-    - **⬇️**: El evaluador está cerrando menos expedientes en comparación con días anteriores.
-    - **➡️**: El evaluador está manteniendo un ritmo constante de cierres.
+    **Interpretación del Indicador:**
+    - El gráfico muestra la distribución porcentual de los expedientes según el tiempo tomado para su cierre.
+    - Las categorías ayudan a identificar patrones de eficiencia en los cierres.
     """)

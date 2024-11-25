@@ -4,4 +4,4 @@ plotly
 scikit-learn
 numpy
 prophet
-st-aggrid
+streamlit-aggrid

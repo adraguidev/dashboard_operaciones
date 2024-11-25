@@ -6,3 +6,4 @@ numpy
 prophet
 streamlit-aggrid
 openpyxl
+xlsxwriter

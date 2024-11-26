@@ -109,7 +109,7 @@ if data is None:
     st.error("No se encontró el archivo consolidado para este módulo.")
 else:
     # Crear pestañas para el módulo
-    tabs = st.tabs(["Dashboard de Pendientes", "Ingreso de Expedientes", "Cierre de Expedientes","Reporte por Evaluador"])
+    tabs = st.tabs(["Reporte de pendientes", "Ingreso de Expedientes", "Cierre de Expedientes","Reporte por Evaluador", "Reporte de Asignaciones"])
     
 # Listas de evaluadores inactivos por módulo
 inactive_evaluators = {
@@ -146,6 +146,31 @@ inactive_evaluators = {
 # Pestaña 1: Dashboard de Pendientes
 with tabs[0]:
     st.header("Dashboard de Pendientes")
+    
+    # Filtrar pendientes sin asignar
+    unassigned_data = data[(data['Evaluado'] == 'NO') & (data['EVALASIGN'].isna())]
+    total_unassigned = len(unassigned_data)
+
+    # Mostrar resumen de pendientes sin asignar
+    if total_unassigned > 0:
+        st.metric("Total de Pendientes Sin Asignar", total_unassigned)
+
+        # Botón para descargar los pendientes sin asignar
+        from io import BytesIO
+        unassigned_buf = BytesIO()
+        with pd.ExcelWriter(unassigned_buf, engine='openpyxl') as writer:
+            unassigned_data.to_excel(writer, index=False, sheet_name='Pendientes Sin Asignar')
+        unassigned_buf.seek(0)  # Volver al inicio del buffer
+
+        st.download_button(
+            label="Descargar Pendientes Sin Asignar",
+            data=unassigned_buf,
+            file_name="pendientes_sin_asignar.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("No hay pendientes sin asignar en este momento.")
+
 
     # Determinar evaluadores inactivos según el módulo seleccionado
     if selected_module in ['CCM', 'CCM-ESP', 'CCM-LEY']:
@@ -566,3 +591,63 @@ with tabs[3]:
         )
     else:
         st.warning("No se encontraron expedientes pendientes para los filtros seleccionados.")
+
+# Pestaña 5: Porcentaje de Expedientes Asignados y Sin Asignar
+with tabs[4]:
+    st.header("Porcentaje de Expedientes Asignados y Sin Asignar")
+
+    # Información adicional: Porcentaje de expedientes asignados por día (Últimos 15 días)
+    st.subheader("Porcentaje de Expedientes Asignados y Sin Asignar por Día (Últimos 15 Días)")
+
+    # Filtrar los datos de los últimos 15 días y excluir "TOMA DE IMAGENES - I"
+    last_15_days = pd.Timestamp.now() - pd.DateOffset(days=15)
+    recent_data = data[(data['FechaExpendiente'] >= last_15_days) & (data['UltimaEtapa'] != 'TOMA DE IMAGENES - I') & (data['UltimaEtapa'] != 'TOMA DE IMAGENES - F')]
+
+    # Agrupar por FechaExpendiente y calcular asignados y no asignados
+    assignment_data = recent_data.groupby('FechaExpendiente').apply(
+        lambda x: pd.Series({
+            'TotalExpedientes': len(x),
+            'CantidadAsignados': len(x[x['EVALASIGN'].notna()]),
+            'CantidadSinAsignar': len(x[x['EVALASIGN'].isna()])
+        })
+    ).reset_index()
+
+    # Calcular porcentajes
+    assignment_data['% Sin Asignar'] = (assignment_data['CantidadSinAsignar'] / assignment_data['TotalExpedientes']) * 100
+
+    # Formatear la columna FechaExpendiente al formato dd/mm/aaaa
+    assignment_data['FechaExpendiente'] = assignment_data['FechaExpendiente'].dt.strftime('%d/%m/%Y')
+
+    # Limitar los porcentajes a dos decimales y agregar el símbolo "%"
+    assignment_data['% Sin Asignar'] = assignment_data['% Sin Asignar'].apply(lambda x: f"{x:.2f}%")
+
+    # Mostrar la tabla con las columnas requeridas
+    st.dataframe(assignment_data[['FechaExpendiente', 'TotalExpedientes', 'CantidadAsignados', 'CantidadSinAsignar', '% Sin Asignar']])
+
+    # Gráfico de barras apiladas para porcentajes asignados y sin asignar
+    fig_stacked_bar = px.bar(
+        assignment_data,
+        x='FechaExpendiente',
+        y=['CantidadAsignados', 'CantidadSinAsignar'],
+        title="Distribución de Expedientes Asignados y Sin Asignar (Últimos 15 Días, Excluyendo 'TOMA DE IMAGENES - I')",
+        labels={
+            'value': 'Cantidad de Expedientes',
+            'FechaExpendiente': 'Fecha Expediente',
+            'variable': 'Estado'
+        },
+        text_auto=True,
+        color_discrete_map={
+            'CantidadAsignados': 'green',
+            'CantidadSinAsignar': 'red'
+        }
+    )
+
+    # Configurar el gráfico para que sea apilado
+    fig_stacked_bar.update_layout(
+        barmode='stack',
+        xaxis_title='Fecha Expediente',
+        yaxis_title='Cantidad de Expedientes',
+        legend_title='Estado'
+    )
+
+    st.plotly_chart(fig_stacked_bar)

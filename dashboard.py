@@ -396,6 +396,9 @@ with tabs[2]:
 
     cierre_data_range = data[data['FechaPre'] >= date_threshold].copy()
 
+    # Calcular 'TiempoCierre'
+    cierre_data_range['TiempoCierre'] = (cierre_data_range['FechaPre'] - cierre_data_range['FechaExpendiente']).dt.days
+
     # Agrupar por evaluador y fecha de cierre
     cierre_matrix = cierre_data_range.groupby(['EVALASIGN', cierre_data_range['FechaPre'].dt.date]).size().unstack(fill_value=0)
 
@@ -422,72 +425,50 @@ with tabs[2]:
     # Agregar la tendencia al final de la matriz
     cierre_matrix['Tendencia'] = cierre_matrix.index.map(tendencias)
 
-    # Calcular el promedio de cierre por evaluador
-    cierre_matrix['Promedio'] = cierre_matrix.drop(columns=['Tendencia']).mean(axis=1)
+    # Calcular el promedio dinámico de cierre por evaluador (considerando días válidos)
+    def calcular_promedio_dias_validos(cierre_data):
+        # Contar cierres por día
+        cierres_por_dia = cierre_data.groupby(['EVALASIGN', 'FechaPre']).size().reset_index(name='Cierres')
 
-    # Ordenar la matriz por promedio de mayor a menor
+        # Agregar columna del día de la semana
+        cierres_por_dia['DiaSemana'] = cierres_por_dia['FechaPre'].dt.dayofweek  # 0 = Lunes, 6 = Domingo
+
+        # Filtrar días válidos
+        cierres_por_dia['Valido'] = (
+            (cierres_por_dia['DiaSemana'].between(0, 4)) |  # Lunes a Viernes
+            ((cierres_por_dia['DiaSemana'] == 5) & (cierres_por_dia['Cierres'] > 10)) |  # Sábados con > 10 cierres
+            ((cierres_por_dia['DiaSemana'] == 6) & (cierres_por_dia['Cierres'] > 10))    # Domingos con > 10 cierres
+        )
+
+        # Filtrar solo días válidos
+        dias_validos = cierres_por_dia[cierres_por_dia['Valido'] & (cierres_por_dia['Cierres'] > 0)]
+
+        # Calcular promedio dinámico por evaluador
+        promedio_por_evaluador = dias_validos.groupby('EVALASIGN').apply(
+            lambda x: x['Cierres'].sum() / x['FechaPre'].nunique()
+        ).reset_index(name='PromedioDíasCierre')
+
+        return promedio_por_evaluador
+
+    tiempo_promedio_por_evaluador = calcular_promedio_dias_validos(cierre_data_range)
+
+    # Mostrar el tiempo promedio general en Streamlit
+    tiempo_promedio_general = tiempo_promedio_por_evaluador['PromedioDíasCierre'].mean()
+    st.metric(f"Tiempo Promedio General de Cierre ({selected_range})", f"{tiempo_promedio_general:.2f} días")
+
+    # Ordenar la matriz por promedio de cierre dinámico
+    cierre_matrix['Promedio'] = cierre_matrix.index.map(
+        tiempo_promedio_por_evaluador.set_index('EVALASIGN')['PromedioDíasCierre'].to_dict()
+    )
     cierre_matrix = cierre_matrix.sort_values(by='Promedio', ascending=False)
 
     # Mostrar la matriz en Streamlit
     st.subheader(f"Matriz de Cierre de Expedientes ({selected_range})")
     st.dataframe(cierre_matrix)
 
-    # Filtro de período dinámico para otros análisis
-    st.subheader("Selecciona el Período de Análisis")
-    period_options = ["Últimos 30 días", "Últimos 3 meses", "Últimos 6 meses"]
-    selected_period = st.radio("Período", period_options, index=1)  # Por defecto, selecciona "Últimos 3 meses"
-
-    # Filtrar datos según el período seleccionado
-    if selected_period == "Últimos 30 días":
-        start_date = pd.Timestamp.now() - pd.DateOffset(days=30)
-    elif selected_period == "Últimos 3 meses":
-        start_date = pd.Timestamp.now() - pd.DateOffset(months=3)
-    elif selected_period == "Últimos 6 meses":
-        start_date = pd.Timestamp.now() - pd.DateOffset(months=6)
-
-    cierre_data = data[data['FechaExpendiente'] >= start_date].copy()
-
-    # Validar fechas: excluir registros con inconsistencias
-    valid_cierre_data = cierre_data[cierre_data['FechaPre'] >= cierre_data['FechaExpendiente']]
-    invalid_cierre_data = cierre_data[cierre_data['FechaPre'] < cierre_data['FechaExpendiente']]
-
-    # Mostrar advertencia sobre registros excluidos
-    if len(invalid_cierre_data) > 0:
-        st.warning(f"Se excluyeron {len(invalid_cierre_data)} registros con fechas inconsistentes.")
-        
-        # Botón para descargar los registros inconsistentes
-        st.subheader("Descargar registros con fechas inconsistentes")
-        from io import BytesIO
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            invalid_cierre_data.to_excel(writer, index=False, sheet_name='Fechas Inconsistentes')
-        output.seek(0)  # Volver al inicio del buffer
-
-        st.download_button(
-            label="Descargar registros inconsistentes",
-            data=output,
-            file_name="fechas_inconsistentes.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-    # Reemplazar el cierre_data con los datos válidos
-    cierre_data = valid_cierre_data
-
-    # Calcular el tiempo promedio de cierre por evaluador
-    cierre_data['TiempoCierre'] = (cierre_data['FechaPre'] - cierre_data['FechaExpendiente']).dt.days
-    tiempo_promedio_general = cierre_data['TiempoCierre'].mean()
-
-    # Agrupar por evaluador para calcular el promedio de tiempo de cierre
-    tiempo_promedio_por_evaluador = cierre_data.groupby('EVALASIGN')['TiempoCierre'].mean().reset_index()
-    tiempo_promedio_por_evaluador.rename(columns={'TiempoCierre': 'PromedioDíasCierre'}, inplace=True)
-    tiempo_promedio_por_evaluador = tiempo_promedio_por_evaluador.sort_values(by='PromedioDíasCierre', ascending=False)
-
-    # Mostrar el tiempo promedio general
-    st.metric(f"Tiempo Promedio General de Cierre ({selected_period})", f"{tiempo_promedio_general:.2f} días")
-
     # Mostrar tabla de tiempos promedio por evaluador
-    st.subheader(f"Tiempos Promedio de Cierre por Evaluador ({selected_period})")
-    st.dataframe(tiempo_promedio_por_evaluador[['EVALASIGN', 'PromedioDíasCierre']].reset_index(drop=True))  # Eliminar índice
+    st.subheader(f"Tiempos Promedio de Cierre por Evaluador ({selected_range})")
+    st.dataframe(tiempo_promedio_por_evaluador[['EVALASIGN', 'PromedioDíasCierre']].sort_values(by='PromedioDíasCierre', ascending=False).reset_index(drop=True))
 
     # Distribución de cierres por tiempo en días con 10 categorías fijas
     bins = [1, 3, 6, 9, 12, 15, 18, 21, 24, 28, float('inf')]  # Categorías fijas
@@ -496,21 +477,21 @@ with tabs[2]:
         "13-15 días", "16-18 días", "19-21 días", "22-24 días",
         "25-28 días", "28+ días"
     ]
-    cierre_data['CategoríaTiempo'] = pd.cut(
-        cierre_data['TiempoCierre'],
+    cierre_data_range['CategoríaTiempo'] = pd.cut(
+        cierre_data_range['TiempoCierre'],
         bins=bins,
         labels=labels,
         include_lowest=True
     )
 
-    cierre_categorías = cierre_data['CategoríaTiempo'].value_counts(normalize=True).sort_index() * 100
+    cierre_categorías = cierre_data_range['CategoríaTiempo'].value_counts(normalize=True).sort_index() * 100
 
-    st.subheader(f"Distribución de Cierres por Tiempo ({selected_period})")
+    st.subheader(f"Distribución de Cierres por Tiempo ({selected_range})")
     fig_categorías = px.bar(
         cierre_categorías,
         x=cierre_categorías.index,
         y=cierre_categorías.values,
-        title=f"Cierres de Expedientes por Tiempo ({selected_period})",
+        title=f"Cierres de Expedientes por Tiempo ({selected_range})",
         labels={'x': "Categoría de Tiempo", 'y': "Porcentaje de Expedientes"},
         text_auto=True
     )
@@ -521,6 +502,7 @@ with tabs[2]:
     - El gráfico muestra la distribución porcentual de los expedientes según el tiempo tomado para su cierre.
     - Las categorías ayudan a identificar patrones de eficiencia en los cierres.
     """)
+
 
 
 # Pestaña 4: Reporte por Evaluador

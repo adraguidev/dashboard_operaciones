@@ -513,9 +513,6 @@ with tabs[3]:
     # Desplegable para seleccionar el evaluador (solo con evaluadores que tienen pendientes)
     selected_evaluator = st.selectbox("Selecciona un Evaluador", options=evaluators_with_pendings)
 
-    # Desplegable para seleccionar el evaluador
-    selected_evaluator = st.selectbox("Selecciona un Evaluador", options=evaluators)
-
     # Multiselección para seleccionar años disponibles
     available_years = sorted(data['Anio'].unique())
     selected_years = st.multiselect("Selecciona el Año o Años", options=available_years)

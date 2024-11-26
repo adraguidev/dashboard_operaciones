@@ -119,7 +119,9 @@ inactive_evaluators = {
         "Miranda Avila, Marco Antonio",
         "Aponte Sanchez, Paola Lita",
         "Orcada Herrera, Javier Eduardo",
-        "Gomez Vera, Marcos Alberto"
+        "Gomez Vera, Marcos Alberto",
+        "VULNERABILIDAD",
+        "SUSPENDIDA"
     ],
     "PRR": [
         "Pozo Ferro, Sonia Leonor",
@@ -133,7 +135,9 @@ inactive_evaluators = {
         "Santibañez Chafalote, Lila Mariella",
         "Pumallanque Ramirez, Mariela",
         "Valera Gaviria, Jessica Valeria",
-        "Vásquez Fernandez, Anthony Piere"
+        "Vásquez Fernandez, Anthony Piere",
+        "VULNERABILIDAD",
+        "SUSPENDIDA"
     ]
 }
 
@@ -144,32 +148,31 @@ with tabs[0]:
     # Filtrar los evaluadores inactivos del módulo seleccionado
     module_inactive_evaluators = inactive_evaluators.get(selected_module, [])
 
+    # Selección de vista (Activos, Inactivos, Total)
+    st.subheader("Selecciona la Vista")
+    view_option = st.radio(
+        "Elige qué evaluadores deseas visualizar:",
+        options=["Activos", "Inactivos", "Total"],
+        index=0
+    )
+
     # Selección de años
     selected_years = st.multiselect("Selecciona los Años", sorted(data['Anio'].unique()))
     
-    # Selección de evaluadores con separación de activos e inactivos
+    # Filtrar evaluadores según la opción seleccionada
     evaluators = sorted(data['EVALASIGN'].dropna().unique())
-    active_evaluators = [e for e in evaluators if e not in module_inactive_evaluators]
-    inactive_evaluators_in_data = [e for e in evaluators if e in module_inactive_evaluators]
+    if view_option == "Activos":
+        evaluators = [e for e in evaluators if e not in module_inactive_evaluators]
+    elif view_option == "Inactivos":
+        evaluators = [e for e in evaluators if e in module_inactive_evaluators]
 
-    st.subheader("Evaluadores Activos")
-    selected_active_evaluators = []
-    with st.expander("Filtro de Evaluadores Activos (Clic para expandir)", expanded=True):
-        select_all_active = st.checkbox("Seleccionar Todos (Activos)", value=True, key="active")
-        for evaluator in active_evaluators:
-            if select_all_active or st.checkbox(evaluator, value=True, key=f"checkbox_active_{evaluator}"):
-                selected_active_evaluators.append(evaluator)
-
-    st.subheader("Evaluadores Inactivos")
-    selected_inactive_evaluators = []
-    with st.expander("Filtro de Evaluadores Inactivos (Clic para expandir)", expanded=False):
-        select_all_inactive = st.checkbox("Seleccionar Todos (Inactivos)", value=False, key="inactive")
-        for evaluator in inactive_evaluators_in_data:
-            if select_all_inactive or st.checkbox(evaluator, value=False, key=f"checkbox_inactive_{evaluator}"):
-                selected_inactive_evaluators.append(evaluator)
-
-    # Combinar los evaluadores seleccionados
-    selected_evaluators = selected_active_evaluators + selected_inactive_evaluators
+    st.subheader(f"Evaluadores ({view_option})")
+    selected_evaluators = []
+    with st.expander(f"Filtro de Evaluadores ({view_option})", expanded=True):
+        select_all = st.checkbox("Seleccionar Todos", value=True)
+        for evaluator in evaluators:
+            if select_all or st.checkbox(evaluator, value=True, key=f"checkbox_{evaluator}"):
+                selected_evaluators.append(evaluator)
 
     # Mostrar tabla y descargas si se seleccionan años
     if selected_years:
@@ -181,14 +184,14 @@ with tabs[0]:
             table = generate_table_multiple_years(filtered_data, selected_years, selected_evaluators)
             total_pendientes = table['Total'].sum()
             st.metric("Total de Expedientes Pendientes", total_pendientes)
-            render_table(table, "Pendientes por Evaluador (Varios Años)")
+            render_table(table, f"Pendientes por Evaluador ({view_option}, Varios Años)")
             
             # Descarga como Excel
-            excel_buf = download_table_as_excel(table, "Pendientes Varios Años")
+            excel_buf = download_table_as_excel(table, f"Pendientes_{view_option}_Varios_Años")
             st.download_button(
                 "Descargar como Excel",
                 excel_buf,
-                file_name="pendientes_varios_anos.xlsx",
+                file_name=f"pendientes_{view_option.lower()}_varios_anos.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         else:
@@ -196,14 +199,14 @@ with tabs[0]:
             table = generate_table_single_year(filtered_data, selected_years[0], selected_evaluators)
             total_pendientes = table['Total'].sum()
             st.metric("Total de Expedientes Pendientes", total_pendientes)
-            render_table(table, f"Pendientes por Evaluador ({selected_years[0]})")
+            render_table(table, f"Pendientes por Evaluador ({view_option}, Año {selected_years[0]})")
             
             # Descarga como Excel
-            excel_buf = download_table_as_excel(table, f"Pendientes Año {selected_years[0]}")
+            excel_buf = download_table_as_excel(table, f"Pendientes_{view_option}_Año_{selected_years[0]}")
             st.download_button(
                 "Descargar como Excel",
                 excel_buf,
-                file_name=f"pendientes_{selected_years[0]}.xlsx",
+                file_name=f"pendientes_{view_option.lower()}_año_{selected_years[0]}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
     
@@ -216,7 +219,7 @@ with tabs[0]:
         st.download_button(
             "Descargar Detallado (Pendientes - Todos los Filtros)",
             detailed_buf,
-            file_name="pendientes_detallado_filtrado.xlsx",
+            file_name=f"pendientes_detallado_{view_option.lower()}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:

@@ -18,9 +18,8 @@ modules = {
     'CCM': '📊 CCM',
     'PRR': '📈 PRR',
     'CCM-ESP': '📉 CCM-ESP',
-    'CCM-LEY': '📋 CCM-LEY',  # Añadido CCM-LEY
+    'CCM-LEY': '📋 CCM-LEY', 
     'SOL': '📂 SOL',
-    'SPE': '📑 SPE'
 }
 
 st.title("Gestión de Expedientes")
@@ -36,20 +35,6 @@ def load_consolidated_cached(module_name):
             data['Mes'] = data['Mes'].astype(int)
             data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'])  # Aseguramos formato de fecha
             return data
-    return None
-
-
-# Lógica para cargar SPE
-def load_spe_data(uploaded_file):
-    if uploaded_file is not None:
-        if uploaded_file.name.endswith('.csv'):
-            data = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith('.xlsx'):
-            data = pd.read_excel(uploaded_file)
-
-        # Aseguramos que los nombres de columnas estén en mayúsculas
-        data.columns = [col.strip().upper() for col in data.columns]
-        return data
     return None
 
 # Lógica para CCM-LEY usando CCM y excluyendo CCM-ESP
@@ -117,10 +102,6 @@ selected_module = st.sidebar.radio(
 # Cargar datos del módulo
 if selected_module == 'CCM-LEY':
     data = load_ccm_ley_data()
-elif selected_module == 'SPE':
-    st.header("Módulo SPE")
-    uploaded_file = st.file_uploader("Sube tu archivo SPE en formato .csv o .xlsx", type=["csv", "xlsx"])
-    data = load_spe_data(uploaded_file)
 else:
     data = load_consolidated_cached(selected_module)
 
@@ -182,115 +163,87 @@ with tabs[0]:
         index=0
     )
 
-    # Verificar si el módulo es SPE
-    if selected_module == "SPE":
-        st.subheader("Análisis de Pendientes (SPE)")
-        pending_data = data[
-            (data['ETAPA_EVALUACION'].str.upper() == 'INICIADA') |
-            (data['ETAPA_EVALUACION'].isna()) |
-            (data['ETAPA_EVALUACION'] == '')
-        ]
+    # Selección de años
+    selected_years = st.multiselect("Selecciona los Años", sorted(data['Anio'].unique()))
 
-        # Agrupar pendientes por evaluador
-        pending_by_evaluator = pending_data.groupby('EVALUADOR').size().reset_index(name='Pendientes')
-        pending_by_evaluator = pending_by_evaluator.sort_values(by='Pendientes', ascending=False)
+    # Obtener todos los evaluadores del módulo actual
+    all_evaluators = sorted(data['EVALASIGN'].dropna().unique())
 
-        # Mostrar tabla con pendientes
-        st.dataframe(pending_by_evaluator)
+    # Filtrar evaluadores según la opción seleccionada
+    if view_option == "Activos":
+        evaluators = [e for e in all_evaluators if e not in module_inactive_evaluators]
+    elif view_option == "Inactivos":
+        evaluators = [e for e in all_evaluators if e in module_inactive_evaluators]
+    else:  # Total
+        evaluators = all_evaluators
 
-        # Botón para descargar pendientes en Excel
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            pending_data.to_excel(writer, index=False, sheet_name='Pendientes')
-        output.seek(0)
-        st.download_button(
-            label="Descargar Pendientes en Excel",
-            data=output,
-            file_name="pendientes_spe.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        # Selección de años
-        selected_years = st.multiselect("Selecciona los Años", sorted(data['Anio'].unique()))
+    # Mostrar filtro de evaluadores
+    st.subheader(f"Evaluadores ({view_option})")
+    selected_evaluators = []
+    with st.expander(f"Filtro de Evaluadores ({view_option})", expanded=True):
+        select_all = st.checkbox("Seleccionar Todos", value=False)  # No seleccionados por defecto
+        if select_all:
+            selected_evaluators = evaluators
+        else:
+            for evaluator in evaluators:
+                if st.checkbox(evaluator, value=False, key=f"{selected_module}_checkbox_{evaluator}"):
+                    selected_evaluators.append(evaluator)
 
-        # Obtener todos los evaluadores del módulo actual
-        all_evaluators = sorted(data['EVALASIGN'].dropna().unique())
+    # Mostrar tabla y descargas si se seleccionan años
+    if selected_years:
+        # Filtrar solo los pendientes (Evaluado == NO)
+        filtered_data = data[data['Evaluado'] == 'NO']
 
-        # Filtrar evaluadores según la opción seleccionada
-        if view_option == "Activos":
-            evaluators = [e for e in all_evaluators if e not in module_inactive_evaluators]
-        elif view_option == "Inactivos":
-            evaluators = [e for e in all_evaluators if e in module_inactive_evaluators]
-        else:  # Total
-            evaluators = all_evaluators
+        # Filtrar según los evaluadores seleccionados
+        if selected_evaluators:
+            filtered_data = filtered_data[filtered_data['EVALASIGN'].isin(selected_evaluators)]
 
-        # Mostrar filtro de evaluadores
-        st.subheader(f"Evaluadores ({view_option})")
-        selected_evaluators = []
-        with st.expander(f"Filtro de Evaluadores ({view_option})", expanded=True):
-            select_all = st.checkbox("Seleccionar Todos", value=False)  # No seleccionados por defecto
-            if select_all:
-                selected_evaluators = evaluators
-            else:
-                for evaluator in evaluators:
-                    if st.checkbox(evaluator, value=False, key=f"{selected_module}_checkbox_{evaluator}"):
-                        selected_evaluators.append(evaluator)
+        if len(selected_years) > 1:
+            # Generar tabla para múltiples años
+            table = generate_table_multiple_years(filtered_data, selected_years, selected_evaluators)
+            total_pendientes = table['Total'].sum()
+            st.metric("Total de Expedientes Pendientes", total_pendientes)
+            render_table(table, f"Pendientes por Evaluador ({view_option}, Varios Años)")
 
-        # Mostrar tabla y descargas si se seleccionan años
-        if selected_years:
-            # Filtrar solo los pendientes (Evaluado == NO)
-            filtered_data = data[data['Evaluado'] == 'NO']
-
-            # Filtrar según los evaluadores seleccionados
-            if selected_evaluators:
-                filtered_data = filtered_data[filtered_data['EVALASIGN'].isin(selected_evaluators)]
-
-            if len(selected_years) > 1:
-                # Generar tabla para múltiples años
-                table = generate_table_multiple_years(filtered_data, selected_years, selected_evaluators)
-                total_pendientes = table['Total'].sum()
-                st.metric("Total de Expedientes Pendientes", total_pendientes)
-                render_table(table, f"Pendientes por Evaluador ({view_option}, Varios Años)")
-
-                # Descarga como Excel
-                excel_buf = download_table_as_excel(table, f"Pendientes_{view_option}_Varios_Años")
-                st.download_button(
-                    "Descargar como Excel",
-                    excel_buf,
-                    file_name=f"pendientes_{view_option.lower()}_varios_anos.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            else:
-                # Generar tabla para un solo año
-                table = generate_table_single_year(filtered_data, selected_years[0], selected_evaluators)
-                total_pendientes = table['Total'].sum()
-                st.metric("Total de Expedientes Pendientes", total_pendientes)
-                render_table(table, f"Pendientes por Evaluador ({view_option}, Año {selected_years[0]})")
-
-                # Descarga como Excel
-                excel_buf = download_table_as_excel(table, f"Pendientes_{view_option}_Año_{selected_years[0]}")
-                st.download_button(
-                    "Descargar como Excel",
-                    excel_buf,
-                    file_name=f"pendientes_{view_option.lower()}_año_{selected_years[0]}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
-            # Descarga Detallada
-            filters = {
-                'Anio': selected_years if selected_years else None,
-                'EVALASIGN': selected_evaluators if selected_evaluators else None
-            }
-            detailed_buf = download_detailed_list(filtered_data, filters)
+            # Descarga como Excel
+            excel_buf = download_table_as_excel(table, f"Pendientes_{view_option}_Varios_Años")
             st.download_button(
-                "Descargar Detallado (Pendientes - Todos los Filtros)",
-                detailed_buf,
-                file_name=f"pendientes_detallado_{view_option.lower()}.xlsx",
+                "Descargar como Excel",
+                excel_buf,
+                file_name=f"pendientes_{view_option.lower()}_varios_anos.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         else:
-            st.warning("Por favor selecciona al menos un año.")
-            
+            # Generar tabla para un solo año
+            table = generate_table_single_year(filtered_data, selected_years[0], selected_evaluators)
+            total_pendientes = table['Total'].sum()
+            st.metric("Total de Expedientes Pendientes", total_pendientes)
+            render_table(table, f"Pendientes por Evaluador ({view_option}, Año {selected_years[0]})")
+
+            # Descarga como Excel
+            excel_buf = download_table_as_excel(table, f"Pendientes_{view_option}_Año_{selected_years[0]}")
+            st.download_button(
+                "Descargar como Excel",
+                excel_buf,
+                file_name=f"pendientes_{view_option.lower()}_año_{selected_years[0]}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+        # Descarga Detallada
+        filters = {
+            'Anio': selected_years if selected_years else None,
+            'EVALASIGN': selected_evaluators if selected_evaluators else None
+        }
+        detailed_buf = download_detailed_list(filtered_data, filters)
+        st.download_button(
+            "Descargar Detallado (Pendientes - Todos los Filtros)",
+            detailed_buf,
+            file_name=f"pendientes_detallado_{view_option.lower()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("Por favor selecciona al menos un año.")
+
 # Pestaña 2: Ingreso de Expedientes
 with tabs[1]:
     st.header("Ingreso de Expedientes")

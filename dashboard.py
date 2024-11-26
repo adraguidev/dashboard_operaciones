@@ -145,8 +145,13 @@ inactive_evaluators = {
 with tabs[0]:
     st.header("Dashboard de Pendientes")
 
-    # Filtrar los evaluadores inactivos según el módulo seleccionado
-    module_inactive_evaluators = inactive_evaluators.get(selected_module, [])
+    # Determinar evaluadores inactivos según el módulo seleccionado
+    if selected_module in ['CCM', 'CCM-ESP', 'CCM-LEY']:
+        module_inactive_evaluators = inactive_evaluators.get('CCM', [])
+    elif selected_module == 'PRR':
+        module_inactive_evaluators = inactive_evaluators.get('PRR', [])
+    else:
+        module_inactive_evaluators = []
 
     # Selección de vista (Activos, Inactivos, Total)
     st.subheader("Selecciona la Vista")
@@ -159,7 +164,7 @@ with tabs[0]:
     # Selección de años
     selected_years = st.multiselect("Selecciona los Años", sorted(data['Anio'].unique()))
 
-    # Obtener todos los evaluadores
+    # Obtener todos los evaluadores del módulo actual
     all_evaluators = sorted(data['EVALASIGN'].dropna().unique())
 
     # Filtrar evaluadores según la opción seleccionada
@@ -179,7 +184,7 @@ with tabs[0]:
             selected_evaluators = evaluators
         else:
             for evaluator in evaluators:
-                if st.checkbox(evaluator, value=False, key=f"checkbox_{evaluator}"):
+                if st.checkbox(evaluator, value=False, key=f"{selected_module}_checkbox_{evaluator}"):
                     selected_evaluators.append(evaluator)
 
     # Mostrar tabla y descargas si se seleccionan años

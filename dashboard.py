@@ -517,27 +517,28 @@ with tabs[3]:
     available_years = sorted(data['Anio'].unique())
     selected_years = st.multiselect("Selecciona el Año o Años", options=available_years)
 
-    # Mostrar opción para seleccionar mes si se elige un solo año
-    selected_month = None
-    if len(selected_years) == 1:
-        months = sorted(data[data['Anio'] == selected_years[0]]['Mes'].unique())
+    # Mostrar opción para seleccionar uno o varios meses si se elige al menos un año
+    selected_months = None
+    if selected_years:
+        # Obtener los meses disponibles para los años seleccionados
+        months = sorted(data[data['Anio'].isin(selected_years)]['Mes'].unique())
         month_names = {
             1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
             7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
         }
         month_options = [month_names[m] for m in months]
         month_mapping = {v: k for k, v in month_names.items()}
-        selected_month_name = st.selectbox("Selecciona el Mes", options=month_options)
-        selected_month = month_mapping[selected_month_name]  # Convertir nombre a número
+        selected_month_names = st.multiselect("Selecciona uno o varios Meses", options=month_options)
+        selected_months = [month_mapping[m] for m in selected_month_names]  # Convertir nombres a números
 
-    # Filtrar datos según el evaluador, años y mes seleccionado
+    # Filtrar datos según el evaluador, años y meses seleccionados
     filtered_data = data[data['EVALASIGN'] == selected_evaluator]
 
     if selected_years:
         filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
 
-    if selected_month is not None:
-        filtered_data = filtered_data[filtered_data['Mes'] == selected_month]
+    if selected_months:
+        filtered_data = filtered_data[filtered_data['Mes'].isin(selected_months)]
 
     # Filtrar pendientes (Evaluado == 'NO')
     filtered_data = filtered_data[filtered_data['Evaluado'] == 'NO']

@@ -11,6 +11,8 @@ from prophet import Prophet
 import plotly.graph_objects as go
 from io import BytesIO
 
+st.set_page_config(layout="wide")
+
 # Módulos habilitados
 modules = {
     'CCM': '📊 CCM',

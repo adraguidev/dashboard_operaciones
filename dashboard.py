@@ -112,72 +112,94 @@ else:
 # Pestaña 1: Dashboard de Pendientes
 with tabs[0]:
     st.header("Dashboard de Pendientes")
-
-    # Sección para cargar la lista de evaluadores inactivos
-    st.subheader("Configuración: Evaluadores Inactivos")
-    uploaded_file = st.file_uploader("Sube un archivo de texto o CSV con los nombres de evaluadores inactivos", type=["txt", "csv"])
     
-    if uploaded_file:
-        if uploaded_file.name.endswith(".txt"):
-            inactivos = uploaded_file.read().decode("utf-8").splitlines()
-        elif uploaded_file.name.endswith(".csv"):
-            inactivos = pd.read_csv(uploaded_file, header=None).iloc[:, 0].tolist()
-        st.success("Lista de evaluadores inactivos cargada exitosamente.")
+    # Lista de evaluadores inactivos (editable dinámicamente)
+    inactive_evaluators = [
+        "Mauricio Romero", "Hugo Ugarte Sánchez", "Paulo César Santibañez Chafalote",
+        "Lila Mariella Quispe Orosco", "Karina Wendy Miranda Avila", "Marco Antonio Aponte Sanchez",
+        "Paola Lita Orcada Herrera", "Javier Eduardo Gomez Vera", "Marcos Alberto Pozo Ferro",
+        "Sonia Leonor Bautista Lopez", "Diana Carolina Infantes Panduro", "Jheyson Vizcardo Ordoñez",
+        "Fiorella Carola Ponce Malpartida", "Miguel Valdez Gallo", "Cynthia Andrea Hurtado Lago",
+        "Briyan Deivi Diaz Amaya", "Esthefany Lisset Santibañez Chafalote", "Lila Mariella Pumallanque Ramirez",
+        "Mariela Valera Gaviria", "Jessica Valeria Vásquez Fernandez", "Anthony Piere"
+    ]
+
+    # Separar evaluadores en activos e inactivos
+    data['Activo'] = ~data['EVALASIGN'].isin(inactive_evaluators)
+    
+    # Filtros para evaluadores activos e inactivos
+    st.subheader("Selecciona los Evaluadores")
+    filter_option = st.radio("¿Qué grupo de evaluadores deseas ver?", ["Activos", "Inactivos"], index=0)
+    
+    if filter_option == "Activos":
+        filtered_data = data[data['Activo'] == True]
+        st.info("Mostrando datos de evaluadores activos.")
     else:
-        # Lista predeterminada de evaluadores inactivos
-        inactivos = [
-            "Mauricio Romero", "Hugo Ugarte Sánchez", "Paulo César Santibañez Chafalote",
-            "Lila Mariella Quispe Orosco", "Karina Wendy Miranda Avila", "Marco Antonio Aponte Sanchez",
-            "Paola Lita Orcada Herrera", "Javier Eduardo Gomez Vera", "Marcos Alberto Pozo Ferro",
-            "Sonia Leonor Bautista Lopez", "Diana Carolina Infantes Panduro", "Jheyson Vizcardo Ordoñez",
-            "Fiorella Carola Ponce Malpartida", "Miguel Valdez Gallo", "Cynthia Andrea Hurtado Lago",
-            "Briyan Deivi Diaz Amaya", "Esthefany Lisset Santibañez Chafalote", "Lila Mariella Pumallanque Ramirez",
-            "Mariela Valera Gaviria", "Jessica Valeria Vásquez Fernandez", "Anthony Piere"
-        ]
-        st.warning("Usando lista predeterminada de evaluadores inactivos.")
+        filtered_data = data[data['Activo'] == False]
+        st.info("Mostrando datos de evaluadores inactivos.")
 
-    # Dividir datos en activos e inactivos
-    data['Activo'] = ~data['EVALASIGN'].isin(inactivos)
+    # Selección de años
+    selected_years = st.multiselect("Selecciona los Años", sorted(filtered_data['Anio'].unique()))
 
-    # Evaluadores Activos
-    st.subheader("Evaluadores Activos")
-    data_activos = data[data['Activo'] == True]
-    selected_years_activos = st.multiselect("Selecciona los Años (Activos)", sorted(data_activos['Anio'].unique()), key="activos")
+    # Selección de evaluadores con checkboxes compactos
+    evaluators = sorted(filtered_data['EVALASIGN'].dropna().unique())
+    selected_evaluators = []
+    with st.expander("Filtro de Evaluadores (Clic para expandir)", expanded=True):
+        select_all = st.checkbox("Seleccionar Todos", value=True)
+        for evaluator in evaluators:
+            if select_all or st.checkbox(evaluator, value=True, key=f"checkbox_{evaluator}"):
+                selected_evaluators.append(evaluator)
 
-    if selected_years_activos:
-        filtered_data_activos = data_activos[data_activos['Anio'].isin(selected_years_activos) & (data_activos['Evaluado'] == 'NO')]
-        render_table(filtered_data_activos, "Pendientes por Evaluador Activo")
+    # Mostrar tabla y descargas si se seleccionan años
+    if selected_years:
+        # Filtrar solo los pendientes (Evaluado == NO)
+        pending_data = filtered_data[filtered_data['Evaluado'] == 'NO']
 
-        # Descarga como Excel
-        excel_buf_activos = download_table_as_excel(filtered_data_activos, "Pendientes Activos")
+        if len(selected_years) > 1:
+            # Generar tabla para múltiples años
+            table = generate_table_multiple_years(pending_data, selected_years, selected_evaluators)
+            total_pendientes = table['Total'].sum()
+            st.metric("Total de Expedientes Pendientes", total_pendientes)
+            render_table(table, "Pendientes por Evaluador (Varios Años)")
+            
+            # Descarga como Excel
+            excel_buf = download_table_as_excel(table, "Pendientes Varios Años")
+            st.download_button(
+                "Descargar como Excel",
+                excel_buf,
+                file_name="pendientes_varios_anos.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            # Generar tabla para un solo año
+            table = generate_table_single_year(pending_data, selected_years[0], selected_evaluators)
+            total_pendientes = table['Total'].sum()
+            st.metric("Total de Expedientes Pendientes", total_pendientes)
+            render_table(table, f"Pendientes por Evaluador ({selected_years[0]})")
+            
+            # Descarga como Excel
+            excel_buf = download_table_as_excel(table, f"Pendientes Año {selected_years[0]}")
+            st.download_button(
+                "Descargar como Excel",
+                excel_buf,
+                file_name=f"pendientes_{selected_years[0]}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+    
+        # Descarga Detallada
+        filters = {
+            'Anio': selected_years if selected_years else None,
+            'EVALASIGN': selected_evaluators if selected_evaluators else None
+        }
+        detailed_buf = download_detailed_list(pending_data, filters)
         st.download_button(
-            "Descargar Pendientes Activos como Excel",
-            excel_buf_activos,
-            file_name="pendientes_activos.xlsx",
+            "Descargar Detallado (Pendientes - Todos los Filtros)",
+            detailed_buf,
+            file_name="pendientes_detallado_filtrado.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.warning("Selecciona al menos un año para los evaluadores activos.")
-
-    # Evaluadores Inactivos
-    st.subheader("Evaluadores Inactivos")
-    data_inactivos = data[data['Activo'] == False]
-    selected_years_inactivos = st.multiselect("Selecciona los Años (Inactivos)", sorted(data_inactivos['Anio'].unique()), key="inactivos")
-
-    if selected_years_inactivos:
-        filtered_data_inactivos = data_inactivos[data_inactivos['Anio'].isin(selected_years_inactivos) & (data_inactivos['Evaluado'] == 'NO')]
-        render_table(filtered_data_inactivos, "Pendientes por Evaluador Inactivo")
-
-        # Descarga como Excel
-        excel_buf_inactivos = download_table_as_excel(filtered_data_inactivos, "Pendientes Inactivos")
-        st.download_button(
-            "Descargar Pendientes Inactivos como Excel",
-            excel_buf_inactivos,
-            file_name="pendientes_inactivos.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.warning("Selecciona al menos un año para los evaluadores inactivos.")
+        st.warning("Por favor selecciona al menos un año.")
 
 # Pestaña 2: Ingreso de Expedientes
 with tabs[1]:

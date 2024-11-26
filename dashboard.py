@@ -115,26 +115,26 @@ with tabs[0]:
     
     # Lista de evaluadores inactivos (editable dinámicamente)
     inactive_evaluators = [
-        "Mauricio Romero",
-        "Hugo Ugarte Sánchez",
-        "Paulo César Santibañez Chafalote",
-        "Lila Mariella Quispe Orosco",
-        "Karina Wendy Miranda Avila",
-        "Marco Antonio Aponte Sanchez",
-        "Paola Lita Orcada Herrera",
-        "Javier Eduardo Gomez Vera",
-        "Marcos Alberto Pozo Ferro",
-        "Sonia Leonor Bautista Lopez",
-        "Diana Carolina Infantes Panduro",
-        "Jheyson Vizcardo Ordoñez",
-        "Fiorella Carola Ponce Malpartida",
-        "Miguel Valdez Gallo",
-        "Cynthia Andrea Hurtado Lago",
-        "Briyan Deivi Diaz Amaya",
-        "Esthefany Lisset Santibañez Chafalote",
-        "Mariela Pumallanque Ramirez",
-        "Jessica Valeria Valera Gaviria",
-        "Anthony Piere Vásquez Fernandez"
+    "Mauricio Romero, Hugo",
+    "Ugarte Sánchez, Paulo César",
+    "Santibañez Chafalote, Lila Mariella",
+    "Quispe Orosco, Karina Wendy",
+    "Miranda Avila, Marco Antonio",
+    "Aponte Sanchez, Paola Lita",
+    "Orcada Herrera, Javier Eduardo",
+    "Gomez Vera, Marcos Alberto",
+    "Pozo Ferro, Sonia Leonor",
+    "Bautista Lopez, Diana Carolina",
+    "Infantes Panduro, Jheyson",
+    "Vizcardo Ordoñez, Fiorella Carola",
+    "Ponce Malpartida, Miguel",
+    "Valdez Gallo, Cynthia Andrea",
+    "Hurtado Lago Briyan Deivi",
+    "Diaz Amaya, Esthefany Lisset",
+    "Santibañez Chafalote, Lila Mariella",
+    "Pumallanque Ramirez, Mariela",
+    "Valera Gaviria, Jessica Valeria",
+    "Vásquez Fernandez, Anthony Piere"
     ]
 
     # Separar evaluadores en activos e inactivos

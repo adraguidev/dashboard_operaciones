@@ -180,8 +180,8 @@ with tabs[0]:
     # Mostrar filtro de evaluadores
     st.subheader(f"Evaluadores ({view_option})")
     selected_evaluators = []
-    with st.expander(f"Filtro de Evaluadores ({view_option})", expanded=True):
-        select_all = st.checkbox("Seleccionar Todos", value=False)  # No seleccionados por defecto
+    with st.expander(f"Filtro de Evaluadores ({view_option})", expanded=False):
+        select_all = st.checkbox("Seleccionar Todos", value=True)  # No seleccionados por defecto
         if select_all:
             selected_evaluators = evaluators
         else:

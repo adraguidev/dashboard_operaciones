@@ -160,27 +160,36 @@ with tabs[0]:
     selected_years = st.multiselect("Selecciona los Años", sorted(data['Anio'].unique()))
 
     # Obtener todos los evaluadores
-    evaluators = sorted(data['EVALASIGN'].dropna().unique())
+    all_evaluators = sorted(data['EVALASIGN'].dropna().unique())
 
     # Filtrar evaluadores según la opción seleccionada
     if view_option == "Activos":
-        evaluators = [e for e in evaluators if e not in module_inactive_evaluators]
+        evaluators = [e for e in all_evaluators if e not in module_inactive_evaluators]
     elif view_option == "Inactivos":
-        evaluators = [e for e in evaluators if e in module_inactive_evaluators]
+        evaluators = [e for e in all_evaluators if e in module_inactive_evaluators]
+    else:  # Total
+        evaluators = all_evaluators
 
     # Mostrar filtro de evaluadores
     st.subheader(f"Evaluadores ({view_option})")
     selected_evaluators = []
     with st.expander(f"Filtro de Evaluadores ({view_option})", expanded=True):
-        select_all = st.checkbox("Seleccionar Todos", value=True)
-        for evaluator in evaluators:
-            if select_all or st.checkbox(evaluator, value=True, key=f"checkbox_{evaluator}"):
-                selected_evaluators.append(evaluator)
+        select_all = st.checkbox("Seleccionar Todos", value=False)  # No seleccionados por defecto
+        if select_all:
+            selected_evaluators = evaluators
+        else:
+            for evaluator in evaluators:
+                if st.checkbox(evaluator, value=False, key=f"checkbox_{evaluator}"):
+                    selected_evaluators.append(evaluator)
 
     # Mostrar tabla y descargas si se seleccionan años
     if selected_years:
         # Filtrar solo los pendientes (Evaluado == NO)
         filtered_data = data[data['Evaluado'] == 'NO']
+
+        # Filtrar según los evaluadores seleccionados
+        if selected_evaluators:
+            filtered_data = filtered_data[filtered_data['EVALASIGN'].isin(selected_evaluators)]
 
         if len(selected_years) > 1:
             # Generar tabla para múltiples años

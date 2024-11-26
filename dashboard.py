@@ -109,68 +109,76 @@ else:
     # Crear pestañas para el módulo
     tabs = st.tabs(["Dashboard de Pendientes", "Ingreso de Expedientes", "Cierre de Expedientes","Ranking de Evaluadores"])
     
+# Listas de evaluadores inactivos por módulo
+inactive_evaluators = {
+    "CCM": [
+        "Mauricio Romero, Hugo",
+        "Ugarte Sánchez, Paulo César",
+        "Santibañez Chafalote, Lila Mariella",
+        "Quispe Orosco, Karina Wendy",
+        "Miranda Avila, Marco Antonio",
+        "Aponte Sanchez, Paola Lita",
+        "Orcada Herrera, Javier Eduardo",
+        "Gomez Vera, Marcos Alberto"
+    ],
+    "PRR": [
+        "Pozo Ferro, Sonia Leonor",
+        "Bautista Lopez, Diana Carolina",
+        "Infantes Panduro, Jheyson",
+        "Vizcardo Ordoñez, Fiorella Carola",
+        "Ponce Malpartida, Miguel",
+        "Valdez Gallo, Cynthia Andrea",
+        "Hurtado Lago Briyan Deivi",
+        "Diaz Amaya, Esthefany Lisset",
+        "Santibañez Chafalote, Lila Mariella",
+        "Pumallanque Ramirez, Mariela",
+        "Valera Gaviria, Jessica Valeria",
+        "Vásquez Fernandez, Anthony Piere"
+    ]
+}
+
 # Pestaña 1: Dashboard de Pendientes
 with tabs[0]:
     st.header("Dashboard de Pendientes")
     
-    # Lista de evaluadores inactivos (editable dinámicamente)
-    inactive_evaluators = [
-    "Mauricio Romero, Hugo",
-    "Ugarte Sánchez, Paulo César",
-    "Santibañez Chafalote, Lila Mariella",
-    "Quispe Orosco, Karina Wendy",
-    "Miranda Avila, Marco Antonio",
-    "Aponte Sanchez, Paola Lita",
-    "Orcada Herrera, Javier Eduardo",
-    "Gomez Vera, Marcos Alberto",
-    "Pozo Ferro, Sonia Leonor",
-    "Bautista Lopez, Diana Carolina",
-    "Infantes Panduro, Jheyson",
-    "Vizcardo Ordoñez, Fiorella Carola",
-    "Ponce Malpartida, Miguel",
-    "Valdez Gallo, Cynthia Andrea",
-    "Hurtado Lago Briyan Deivi",
-    "Diaz Amaya, Esthefany Lisset",
-    "Santibañez Chafalote, Lila Mariella",
-    "Pumallanque Ramirez, Mariela",
-    "Valera Gaviria, Jessica Valeria",
-    "Vásquez Fernandez, Anthony Piere"
-    ]
-
-    # Separar evaluadores en activos e inactivos
-    data['Activo'] = ~data['EVALASIGN'].isin(inactive_evaluators)
-    
-    # Filtros para evaluadores activos e inactivos
-    st.subheader("Selecciona los Evaluadores")
-    filter_option = st.radio("¿Qué grupo de evaluadores deseas ver?", ["Activos", "Inactivos"], index=0)
-    
-    if filter_option == "Activos":
-        filtered_data = data[data['Activo'] == True]
-        st.info("Mostrando datos de evaluadores activos.")
-    else:
-        filtered_data = data[data['Activo'] == False]
-        st.info("Mostrando datos de evaluadores inactivos.")
+    # Filtrar los evaluadores inactivos del módulo seleccionado
+    module_inactive_evaluators = inactive_evaluators.get(selected_module, [])
 
     # Selección de años
-    selected_years = st.multiselect("Selecciona los Años", sorted(filtered_data['Anio'].unique()))
+    selected_years = st.multiselect("Selecciona los Años", sorted(data['Anio'].unique()))
+    
+    # Selección de evaluadores con separación de activos e inactivos
+    evaluators = sorted(data['EVALASIGN'].dropna().unique())
+    active_evaluators = [e for e in evaluators if e not in module_inactive_evaluators]
+    inactive_evaluators_in_data = [e for e in evaluators if e in module_inactive_evaluators]
 
-    # Selección de evaluadores con checkboxes compactos
-    evaluators = sorted(filtered_data['EVALASIGN'].dropna().unique())
-    selected_evaluators = []
-    with st.expander("Filtro de Evaluadores (Clic para expandir)", expanded=True):
-        select_all = st.checkbox("Seleccionar Todos", value=True)
-        for evaluator in evaluators:
-            if select_all or st.checkbox(evaluator, value=True, key=f"checkbox_{evaluator}"):
-                selected_evaluators.append(evaluator)
+    st.subheader("Evaluadores Activos")
+    selected_active_evaluators = []
+    with st.expander("Filtro de Evaluadores Activos (Clic para expandir)", expanded=True):
+        select_all_active = st.checkbox("Seleccionar Todos (Activos)", value=True, key="active")
+        for evaluator in active_evaluators:
+            if select_all_active or st.checkbox(evaluator, value=True, key=f"checkbox_active_{evaluator}"):
+                selected_active_evaluators.append(evaluator)
+
+    st.subheader("Evaluadores Inactivos")
+    selected_inactive_evaluators = []
+    with st.expander("Filtro de Evaluadores Inactivos (Clic para expandir)", expanded=False):
+        select_all_inactive = st.checkbox("Seleccionar Todos (Inactivos)", value=False, key="inactive")
+        for evaluator in inactive_evaluators_in_data:
+            if select_all_inactive or st.checkbox(evaluator, value=False, key=f"checkbox_inactive_{evaluator}"):
+                selected_inactive_evaluators.append(evaluator)
+
+    # Combinar los evaluadores seleccionados
+    selected_evaluators = selected_active_evaluators + selected_inactive_evaluators
 
     # Mostrar tabla y descargas si se seleccionan años
     if selected_years:
         # Filtrar solo los pendientes (Evaluado == NO)
-        pending_data = filtered_data[filtered_data['Evaluado'] == 'NO']
+        filtered_data = data[data['Evaluado'] == 'NO']
 
         if len(selected_years) > 1:
             # Generar tabla para múltiples años
-            table = generate_table_multiple_years(pending_data, selected_years, selected_evaluators)
+            table = generate_table_multiple_years(filtered_data, selected_years, selected_evaluators)
             total_pendientes = table['Total'].sum()
             st.metric("Total de Expedientes Pendientes", total_pendientes)
             render_table(table, "Pendientes por Evaluador (Varios Años)")
@@ -185,7 +193,7 @@ with tabs[0]:
             )
         else:
             # Generar tabla para un solo año
-            table = generate_table_single_year(pending_data, selected_years[0], selected_evaluators)
+            table = generate_table_single_year(filtered_data, selected_years[0], selected_evaluators)
             total_pendientes = table['Total'].sum()
             st.metric("Total de Expedientes Pendientes", total_pendientes)
             render_table(table, f"Pendientes por Evaluador ({selected_years[0]})")
@@ -204,7 +212,7 @@ with tabs[0]:
             'Anio': selected_years if selected_years else None,
             'EVALASIGN': selected_evaluators if selected_evaluators else None
         }
-        detailed_buf = download_detailed_list(pending_data, filters)
+        detailed_buf = download_detailed_list(filtered_data, filters)
         st.download_button(
             "Descargar Detallado (Pendientes - Todos los Filtros)",
             detailed_buf,

@@ -109,7 +109,7 @@ if data is None:
     st.error("No se encontró el archivo consolidado para este módulo.")
 else:
     # Crear pestañas para el módulo
-    tabs = st.tabs(["Dashboard de Pendientes", "Ingreso de Expedientes", "Cierre de Expedientes","Ranking de Evaluadores"])
+    tabs = st.tabs(["Dashboard de Pendientes", "Ingreso de Expedientes", "Cierre de Expedientes","Reporte por Evaluador"])
     
 # Listas de evaluadores inactivos por módulo
 inactive_evaluators = {
@@ -501,3 +501,64 @@ with tabs[2]:
     - El gráfico muestra la distribución porcentual de los expedientes según el tiempo tomado para su cierre.
     - Las categorías ayudan a identificar patrones de eficiencia en los cierres.
     """)
+
+# Pestaña 4: Reporte por Evaluador
+with tabs[3]:
+    st.header("Reporte por Evaluador")
+    st.info("Genera un reporte personalizado de expedientes pendientes por evaluador, año y mes.")
+
+    # Obtener lista de evaluadores únicos
+    evaluators = sorted(data['EVALASIGN'].dropna().unique())
+
+    # Desplegable para seleccionar el evaluador
+    selected_evaluator = st.selectbox("Selecciona un Evaluador", options=evaluators)
+
+    # Multiselección para seleccionar años disponibles
+    available_years = sorted(data['Anio'].unique())
+    selected_years = st.multiselect("Selecciona el Año o Años", options=available_years)
+
+    # Mostrar opción para seleccionar mes si se elige un solo año
+    selected_month = None
+    if len(selected_years) == 1:
+        months = sorted(data[data['Anio'] == selected_years[0]]['Mes'].unique())
+        month_names = {
+            1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+            7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+        }
+        month_options = [month_names[m] for m in months]
+        month_mapping = {v: k for k, v in month_names.items()}
+        selected_month_name = st.selectbox("Selecciona el Mes", options=month_options)
+        selected_month = month_mapping[selected_month_name]  # Convertir nombre a número
+
+    # Filtrar datos según el evaluador, años y mes seleccionado
+    filtered_data = data[data['EVALASIGN'] == selected_evaluator]
+
+    if selected_years:
+        filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
+
+    if selected_month is not None:
+        filtered_data = filtered_data[filtered_data['Mes'] == selected_month]
+
+    # Filtrar pendientes (Evaluado == 'NO')
+    filtered_data = filtered_data[filtered_data['Evaluado'] == 'NO']
+
+    # Mostrar tabla con los expedientes pendientes
+    if not filtered_data.empty:
+        st.subheader(f"Reporte de Expedientes Pendientes ({selected_evaluator})")
+        st.dataframe(filtered_data)
+
+        # Botón para descargar los datos como Excel
+        st.subheader("Descarga de Reporte")
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            filtered_data.to_excel(writer, index=False, sheet_name='Reporte')
+        output.seek(0)
+
+        st.download_button(
+            label="Descargar Reporte en Excel",
+            data=output,
+            file_name=f"Reporte_{selected_evaluator}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("No se encontraron expedientes pendientes para los filtros seleccionados.")

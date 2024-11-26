@@ -507,8 +507,11 @@ with tabs[3]:
     st.header("Reporte por Evaluador")
     st.info("Genera un reporte personalizado de expedientes pendientes por evaluador, año y mes.")
 
-    # Obtener lista de evaluadores únicos
-    evaluators = sorted(data['EVALASIGN'].dropna().unique())
+    # Obtener lista de evaluadores con pendientes (Evaluado == 'NO') en el módulo actual
+    evaluators_with_pendings = sorted(data[data['Evaluado'] == 'NO']['EVALASIGN'].dropna().unique())
+
+    # Desplegable para seleccionar el evaluador (solo con evaluadores que tienen pendientes)
+    selected_evaluator = st.selectbox("Selecciona un Evaluador", options=evaluators_with_pendings)
 
     # Desplegable para seleccionar el evaluador
     selected_evaluator = st.selectbox("Selecciona un Evaluador", options=evaluators)

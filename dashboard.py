@@ -288,8 +288,16 @@ with tabs[1]:
     - La línea verde discontinua proyecta los ingresos diarios para los próximos 7 días.
     """)
 
+    # Tabla de ingresos diarios detallados en formato pivot
+    st.subheader("Ingresos Diarios Detallados (Últimos 30 Días)")
+    last_30_days_data = data[data['FechaExpendiente'] >= (pd.Timestamp.now() - pd.DateOffset(days=30))]
+    daily_counts_30 = last_30_days_data.groupby(last_30_days_data['FechaExpendiente'].dt.date).size().reset_index(name='Ingresos')
+    daily_counts_30['FechaExpendiente'] = pd.to_datetime(daily_counts_30['FechaExpendiente']).dt.strftime('%d/%m')
+    pivot_table_30 = daily_counts_30.set_index('FechaExpendiente').transpose()
+
+    st.table(pivot_table_30)
+
     # Gráfico 2: Pronóstico de ingresos diarios con Prophet
-    st.subheader("Pronóstico de Ingresos Diarios")
 
     # Preparar los datos históricos completos para Prophet
     historical_data = data[['FechaExpendiente']].copy()
@@ -364,6 +372,7 @@ with tabs[1]:
     En promedio, se estima que el ingreso diario de expedientes para los próximos 30 días será de aproximadamente **{avg_prediction:.2f} expedientes por día**.
     """)
 
+
 # Pestaña 3: Cierre de Expedientes
 with tabs[2]:
     st.header("Cierre de Expedientes")
@@ -372,15 +381,26 @@ with tabs[2]:
     data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], errors='coerce')
     data['FechaPre'] = pd.to_datetime(data['FechaPre'], errors='coerce')
 
-    # Filtrar los últimos 15 días para la matriz de cierre
-    last_15_days = pd.Timestamp.now() - pd.DateOffset(days=15)
-    cierre_data_last_15 = data[data['FechaPre'] >= last_15_days].copy()
+    # Selección del rango de fechas para la Matriz de Cierre
+    st.subheader("Selecciona el Rango de Fechas para la Matriz de Cierre")
+    range_options = ["Últimos 15 días", "Últimos 30 días", "Durante el último mes"]
+    selected_range = st.radio("Rango de Fechas", range_options, index=0)
+
+    # Determinar el rango de fechas basado en la selección
+    if selected_range == "Últimos 15 días":
+        date_threshold = pd.Timestamp.now() - pd.DateOffset(days=15)
+    elif selected_range == "Últimos 30 días":
+        date_threshold = pd.Timestamp.now() - pd.DateOffset(days=30)
+    elif selected_range == "Durante el último mes":
+        date_threshold = pd.Timestamp.now().replace(day=1)  # Inicio del mes actual
+
+    cierre_data_range = data[data['FechaPre'] >= date_threshold].copy()
 
     # Agrupar por evaluador y fecha de cierre
-    cierre_matrix = cierre_data_last_15.groupby(['EVALASIGN', cierre_data_last_15['FechaPre'].dt.date]).size().unstack(fill_value=0)
+    cierre_matrix = cierre_data_range.groupby(['EVALASIGN', cierre_data_range['FechaPre'].dt.date]).size().unstack(fill_value=0)
 
-    # Limitar a los últimos 15 días
-    cierre_matrix = cierre_matrix.loc[:, cierre_matrix.columns[-15:]]
+    # Limitar las columnas de la matriz a las fechas seleccionadas
+    cierre_matrix = cierre_matrix.loc[:, cierre_matrix.columns]
 
     # Renombrar las columnas de fecha a formato dd/mm
     cierre_matrix.columns = [col.strftime('%d/%m') for col in cierre_matrix.columns]
@@ -409,10 +429,10 @@ with tabs[2]:
     cierre_matrix = cierre_matrix.sort_values(by='Promedio', ascending=False)
 
     # Mostrar la matriz en Streamlit
-    st.subheader("Matriz de Cierre de Expedientes (Últimos 15 Días)")
+    st.subheader(f"Matriz de Cierre de Expedientes ({selected_range})")
     st.dataframe(cierre_matrix)
 
-    # Filtro de período dinámico
+    # Filtro de período dinámico para otros análisis
     st.subheader("Selecciona el Período de Análisis")
     period_options = ["Últimos 30 días", "Últimos 3 meses", "Últimos 6 meses"]
     selected_period = st.radio("Período", period_options, index=1)  # Por defecto, selecciona "Últimos 3 meses"
@@ -501,6 +521,7 @@ with tabs[2]:
     - El gráfico muestra la distribución porcentual de los expedientes según el tiempo tomado para su cierre.
     - Las categorías ayudan a identificar patrones de eficiencia en los cierres.
     """)
+
 
 # Pestaña 4: Reporte por Evaluador
 with tabs[3]:

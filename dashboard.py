@@ -144,8 +144,8 @@ inactive_evaluators = {
 # Pestaña 1: Dashboard de Pendientes
 with tabs[0]:
     st.header("Dashboard de Pendientes")
-    
-    # Filtrar los evaluadores inactivos del módulo seleccionado
+
+    # Filtrar los evaluadores inactivos según el módulo seleccionado
     module_inactive_evaluators = inactive_evaluators.get(selected_module, [])
 
     # Selección de vista (Activos, Inactivos, Total)
@@ -158,14 +158,17 @@ with tabs[0]:
 
     # Selección de años
     selected_years = st.multiselect("Selecciona los Años", sorted(data['Anio'].unique()))
-    
-    # Filtrar evaluadores según la opción seleccionada
+
+    # Obtener todos los evaluadores
     evaluators = sorted(data['EVALASIGN'].dropna().unique())
+
+    # Filtrar evaluadores según la opción seleccionada
     if view_option == "Activos":
         evaluators = [e for e in evaluators if e not in module_inactive_evaluators]
     elif view_option == "Inactivos":
         evaluators = [e for e in evaluators if e in module_inactive_evaluators]
 
+    # Mostrar filtro de evaluadores
     st.subheader(f"Evaluadores ({view_option})")
     selected_evaluators = []
     with st.expander(f"Filtro de Evaluadores ({view_option})", expanded=True):
@@ -185,7 +188,7 @@ with tabs[0]:
             total_pendientes = table['Total'].sum()
             st.metric("Total de Expedientes Pendientes", total_pendientes)
             render_table(table, f"Pendientes por Evaluador ({view_option}, Varios Años)")
-            
+
             # Descarga como Excel
             excel_buf = download_table_as_excel(table, f"Pendientes_{view_option}_Varios_Años")
             st.download_button(
@@ -200,7 +203,7 @@ with tabs[0]:
             total_pendientes = table['Total'].sum()
             st.metric("Total de Expedientes Pendientes", total_pendientes)
             render_table(table, f"Pendientes por Evaluador ({view_option}, Año {selected_years[0]})")
-            
+
             # Descarga como Excel
             excel_buf = download_table_as_excel(table, f"Pendientes_{view_option}_Año_{selected_years[0]}")
             st.download_button(
@@ -209,7 +212,7 @@ with tabs[0]:
                 file_name=f"pendientes_{view_option.lower()}_año_{selected_years[0]}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-    
+
         # Descarga Detallada
         filters = {
             'Anio': selected_years if selected_years else None,

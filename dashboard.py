@@ -649,5 +649,4 @@ with tabs[4]:
         yaxis_title='Cantidad de Expedientes',
         legend_title='Estado'
     )
-
     st.plotly_chart(fig_stacked_bar)

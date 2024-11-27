@@ -139,7 +139,11 @@ inactive_evaluators = {
         "Valera Gaviria, Jessica Valeria",
         "Vásquez Fernandez, Anthony Piere",
         "VULNERABILIDAD",
-        "SUSPENDIDA"
+        "SUSPENDIDA",
+        "Quispe Orosco, Karina Wendy",
+        "Gomez Vera, Marcos Alberto",
+        "Lucero Martinez, Carlos Martin",
+        "Aponte Sanchez, Paola Lita"
     ]
 }
 
@@ -184,7 +188,7 @@ with tabs[0]:
     st.subheader("Selecciona la Vista")
     view_option = st.radio(
         "Elige qué evaluadores deseas visualizar:",
-        options=["Activos", "Inactivos", "Total"],
+        options=["Activos", "Inactivos", "Vulnerabilidad", "Total"],
         index=0
     )
 
@@ -194,11 +198,29 @@ with tabs[0]:
     # Obtener todos los evaluadores del módulo actual
     all_evaluators = sorted(data['EVALASIGN'].dropna().unique())
 
+    # Categorizar evaluadores
+    vulnerabilidad_evaluators = [
+        "Quispe Orosco, Karina Wendy",
+        "Lucero Martinez, Carlos Martin",
+        "Gomez Vera, Marcos Alberto",
+        "Aponte Sanchez, Paola Lita",
+        "Santibañez Chafalote, Lila Mariella",
+        "VULNERABILIDAD"
+]
+
     # Filtrar evaluadores según la opción seleccionada
-    if view_option == "Activos":
-        evaluators = [e for e in all_evaluators if e not in module_inactive_evaluators]
+    if view_option == "Vulnerabilidad":
+        evaluators = vulnerabilidad_evaluators
+    elif view_option == "Activos":
+        evaluators = [
+            e for e in all_evaluators
+            if e not in module_inactive_evaluators and e not in vulnerabilidad_evaluators
+        ]
     elif view_option == "Inactivos":
-        evaluators = [e for e in all_evaluators if e in module_inactive_evaluators]
+        evaluators = [
+            e for e in module_inactive_evaluators
+            if e not in vulnerabilidad_evaluators
+        ]
     else:  # Total
         evaluators = all_evaluators
 

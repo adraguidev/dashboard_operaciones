@@ -206,7 +206,7 @@ with tabs[0]:
         "Aponte Sanchez, Paola Lita",
         "Santibañez Chafalote, Lila Mariella",
         "VULNERABILIDAD"
-]
+    ]
 
     # Filtrar evaluadores según la opción seleccionada
     if view_option == "Vulnerabilidad":
@@ -217,12 +217,19 @@ with tabs[0]:
             if e not in module_inactive_evaluators and e not in vulnerabilidad_evaluators
         ]
     elif view_option == "Inactivos":
+        # Obtener inactivos excluyendo "Vulnerabilidad"
         evaluators = [
             e for e in module_inactive_evaluators
-            if e not in vulnerabilidad_evaluators
+            if e in all_evaluators and e not in vulnerabilidad_evaluators
         ]
     else:  # Total
         evaluators = all_evaluators
+
+    # Validación: Si no hay evaluadores en la categoría seleccionada
+    if not evaluators:
+        st.warning(f"No hay evaluadores en la categoría '{view_option}' para este módulo.")
+        st.stop()  # Detener la ejecución para no mostrar la tabla
+
 
     # Mostrar filtro de evaluadores
     st.subheader(f"Evaluadores ({view_option})")

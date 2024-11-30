@@ -717,14 +717,15 @@ with tabs[5]:
             collection.insert_one(nuevos_datos)
 
     try:
-        # Obtener los últimos 7 días del Excel
+        # Obtener la fecha de ayer
         fecha_actual = pd.Timestamp.now().date()
+        fecha_ayer = fecha_actual - pd.Timedelta(days=1)
         fecha_inicio_excel = fecha_actual - pd.Timedelta(days=7)
 
         # Convertir la columna 'FECHA DE TRABAJO' a datetime
         data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
         datos_nuevos = data[(data['FECHA DE TRABAJO'].dt.date >= fecha_inicio_excel) & 
-                            (data['FECHA DE TRABAJO'].dt.date <= fecha_actual)]
+                            (data['FECHA DE TRABAJO'].dt.date <= fecha_ayer)]
 
         # Obtener la última fecha registrada en la base de datos
         ultima_fecha_db = obtener_ultima_fecha_db()
@@ -750,52 +751,62 @@ with tabs[5]:
             if nuevos_registros:
                 guardar_nuevos_registros(nuevos_registros)
 
-        # Mostrar siempre los últimos 15 días registrados
+        # Mostrar siempre los últimos 15 días registrados hasta ayer
         registros_historicos = obtener_ultimos_registros_db()
         
         if registros_historicos:
             df_historico = pd.DataFrame()
-            for registro in registros_historicos[:15]:
-                fecha = pd.Timestamp(registro['fecha']).strftime('%d/%m/%Y')
-                df_temp = pd.DataFrame(registro['datos'])
-                
-                if not df_temp.empty:
-                    df_pivot = pd.DataFrame({
-                        'EVALASIGN': df_temp['evaluador'].tolist(),
-                        fecha: df_temp['cantidad'].tolist()
-                    })
-                    if df_historico.empty:
-                        df_historico = df_pivot
-                    else:
-                        df_historico = df_historico.merge(
-                            df_pivot,
-                            on='EVALASIGN',
-                            how='outer'
-                        )
+            for registro in registros_historicos:
+                fecha = pd.Timestamp(registro['fecha']).strftime('%d/%m')
+                if pd.Timestamp(registro['fecha']).date() < fecha_actual:
+                    df_temp = pd.DataFrame(registro['datos'])
+                    if not df_temp.empty:
+                        df_pivot = pd.DataFrame({
+                            'EVALASIGN': df_temp['evaluador'].tolist(),
+                            fecha: df_temp['cantidad'].tolist()
+                        })
+                        if df_historico.empty:
+                            df_historico = df_pivot
+                        else:
+                            df_historico = df_historico.merge(
+                                df_pivot,
+                                on='EVALASIGN',
+                                how='outer'
+                            )
 
             if not df_historico.empty:
-                st.subheader("Ranking de Expedientes Trabajados (Últimos 15 días)")
+                # Reemplazar NaN con ceros y convertir valores a enteros
                 df_historico = df_historico.fillna(0)
-                st.table(df_historico)
+                df_historico.iloc[:, 1:] = df_historico.iloc[:, 1:].astype(int)
 
-                # Crear gráfico de barras
-                df_plot = df_historico.melt(
-                    id_vars=['EVALASIGN'],
-                    var_name='Fecha',
-                    value_name='Expedientes'
+                # Ordenar las fechas de más antiguo a más reciente
+                df_historico = df_historico.reindex(
+                    columns=['EVALASIGN'] + sorted(df_historico.columns[1:], key=lambda x: pd.to_datetime(x, format='%d/%m'))
                 )
-                fig = px.bar(
-                    df_plot,
-                    x='EVALASIGN',
-                    y='Expedientes',
-                    color='Fecha',
-                    title="Expedientes Trabajados por Evaluador (Últimos 15 días)",
-                    labels={'EVALASIGN': 'Evaluador', 'Expedientes': 'Cantidad'},
-                    barmode='group'
-                )
-                fig.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig)
 
+                # Agregar columna 'Total' y ordenar por esta
+                df_historico['Total'] = df_historico.iloc[:, 1:].sum(axis=1)
+                df_historico = df_historico.sort_values(by='Total', ascending=False)
+
+                # Convertir únicamente las columnas numéricas a enteros en la tabla de visualización
+                st.subheader("Ranking de Expedientes Trabajados (Últimos 15 días hasta ayer)")
+                st.table(
+                    df_historico.style.format(
+                        {col: "{:.0f}" for col in df_historico.columns if col != 'EVALASIGN'}
+                    )
+                )
+
+                # Botón para descargar el ranking histórico como Excel
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_historico.to_excel(writer, index=False, sheet_name='Ranking_Historico')
+                output.seek(0)
+                st.download_button(
+                    label="Descargar Ranking Histórico en Excel",
+                    data=output,
+                    file_name="Ranking_Historico_Expedientes.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
         else:
             st.warning("No hay datos históricos disponibles.")
 

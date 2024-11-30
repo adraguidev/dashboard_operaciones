@@ -7,3 +7,4 @@ prophet
 streamlit-aggrid
 openpyxl
 xlsxwriter
+pymongo

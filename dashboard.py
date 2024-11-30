@@ -10,8 +10,20 @@ import numpy as np
 from prophet import Prophet
 import plotly.graph_objects as go
 from io import BytesIO
+import pymongo
+from datetime import datetime
+
 
 st.set_page_config(layout="wide")
+
+@st.cache_resource
+def init_connection():
+    return pymongo.MongoClient(st.secrets["connections"]["mongodb"]["uri"])
+
+client = init_connection()
+db = client.expedientes_db
+collection = db.rankings
+
 
 # Módulos habilitados
 modules = {
@@ -109,7 +121,7 @@ if data is None:
     st.error("No se encontró el archivo consolidado para este módulo.")
 else:
     # Crear pestañas para el módulo
-    tabs = st.tabs(["Reporte de pendientes", "Ingreso de Expedientes", "Cierre de Expedientes","Reporte por Evaluador", "Reporte de Asignaciones"])
+    tabs = st.tabs(["Reporte de pendientes", "Ingreso de Expedientes", "Cierre de Expedientes", "Reporte por Evaluador", "Reporte de Asignaciones", "Ranking de Expedientes Trabajados"])
     
 # Listas de evaluadores inactivos por módulo
 inactive_evaluators = {
@@ -680,3 +692,112 @@ with tabs[4]:
     )
 
     st.plotly_chart(fig_stacked_bar)
+
+# Pestaña 6: Ranking de Expedientes Trabajados
+with tabs[5]:
+    st.header("Ranking de Expedientes Trabajados")
+
+    def obtener_ultimos_registros_db():
+        db = client.expedientes_db
+        collection = db.rankings
+        return list(collection.find().sort("fecha", -1))
+
+    def obtener_ultima_fecha_db():
+        db = client.expedientes_db
+        collection = db.rankings
+        ultimo_registro = collection.find_one(sort=[("fecha", -1)])
+        return ultimo_registro['fecha'] if ultimo_registro else None
+
+    def guardar_nuevos_registros(nuevos_datos):
+        db = client.expedientes_db
+        collection = db.rankings
+        if isinstance(nuevos_datos, list):
+            collection.insert_many(nuevos_datos)
+        else:
+            collection.insert_one(nuevos_datos)
+
+    try:
+        # Obtener los últimos 7 días del Excel
+        fecha_actual = pd.Timestamp.now().date()
+        fecha_inicio_excel = fecha_actual - pd.Timedelta(days=7)
+
+        # Convertir la columna 'FECHA DE TRABAJO' a datetime
+        data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
+        datos_nuevos = data[(data['FECHA DE TRABAJO'].dt.date >= fecha_inicio_excel) & 
+                            (data['FECHA DE TRABAJO'].dt.date <= fecha_actual)]
+
+        # Obtener la última fecha registrada en la base de datos
+        ultima_fecha_db = obtener_ultima_fecha_db()
+        
+        if ultima_fecha_db:
+            datos_a_guardar = datos_nuevos[
+                datos_nuevos['FECHA DE TRABAJO'].dt.date > ultima_fecha_db.date()
+            ]
+        else:
+            datos_a_guardar = datos_nuevos
+
+        # Guardar los nuevos registros en la base de datos
+        if not datos_a_guardar.empty:
+            nuevos_registros = []
+            for fecha, grupo in datos_a_guardar.groupby(datos_a_guardar['FECHA DE TRABAJO'].dt.date):
+                ranking_dia = grupo.groupby('EVALASIGN').size().reset_index(name='cantidad')
+                ranking_dia.columns = ['evaluador', 'cantidad']
+                nuevos_registros.append({
+                    "fecha": pd.Timestamp(fecha),
+                    "datos": ranking_dia.to_dict('records')
+                })
+            
+            if nuevos_registros:
+                guardar_nuevos_registros(nuevos_registros)
+
+        # Mostrar siempre los últimos 15 días registrados
+        registros_historicos = obtener_ultimos_registros_db()
+        
+        if registros_historicos:
+            df_historico = pd.DataFrame()
+            for registro in registros_historicos[:15]:
+                fecha = pd.Timestamp(registro['fecha']).strftime('%d/%m/%Y')
+                df_temp = pd.DataFrame(registro['datos'])
+                
+                if not df_temp.empty:
+                    df_pivot = pd.DataFrame({
+                        'EVALASIGN': df_temp['evaluador'].tolist(),
+                        fecha: df_temp['cantidad'].tolist()
+                    })
+                    if df_historico.empty:
+                        df_historico = df_pivot
+                    else:
+                        df_historico = df_historico.merge(
+                            df_pivot,
+                            on='EVALASIGN',
+                            how='outer'
+                        )
+
+            if not df_historico.empty:
+                st.subheader("Ranking de Expedientes Trabajados (Últimos 15 días)")
+                df_historico = df_historico.fillna(0)
+                st.table(df_historico)
+
+                # Crear gráfico de barras
+                df_plot = df_historico.melt(
+                    id_vars=['EVALASIGN'],
+                    var_name='Fecha',
+                    value_name='Expedientes'
+                )
+                fig = px.bar(
+                    df_plot,
+                    x='EVALASIGN',
+                    y='Expedientes',
+                    color='Fecha',
+                    title="Expedientes Trabajados por Evaluador (Últimos 15 días)",
+                    labels={'EVALASIGN': 'Evaluador', 'Expedientes': 'Cantidad'},
+                    barmode='group'
+                )
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig)
+
+        else:
+            st.warning("No hay datos históricos disponibles.")
+
+    except Exception as e:
+        st.error(f"Error al procesar los datos: {str(e)}")

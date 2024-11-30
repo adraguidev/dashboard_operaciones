@@ -4,11 +4,7 @@ import os
 import glob
 import time
 from concurrent.futures import ThreadPoolExecutor
-from requests.auth import HTTPBasicAuth
 from requests_ntlm import HttpNtlmAuth
-
-# Configuración de directorios de descarga
-download_dir = os.path.abspath("./descargas_temporales/")
 
 # Configuración de parámetros
 tipos_tramite = {
@@ -21,11 +17,13 @@ anios = [2024, 2023, 2022, 2021, 2020, 2019, 2018]
 estados_tramite = ["A", "P", "B", "R", "D", "E", "N"]
 
 # Crear carpetas dinámicas para guardar archivos
-output_folders = {}
-for tipo, nombre in tipos_tramite.items():
-    folder_name = f"./descargas/{nombre}/"
-    output_folders[tipo] = os.path.abspath(folder_name)
-    os.makedirs(output_folders[tipo], exist_ok=True)
+def crear_carpetas():
+    output_folders = {}
+    for tipo, nombre in tipos_tramite.items():
+        folder_name = f"./descargas/{nombre}/"
+        output_folders[tipo] = os.path.abspath(folder_name)
+        os.makedirs(output_folders[tipo], exist_ok=True)
+    return output_folders
 
 # Generar URLs por partes
 def generar_urls_por_partes():
@@ -40,16 +38,14 @@ def generar_urls_por_partes():
                 urls_por_partes[tipo].append((url, anio, estado))
     return urls_por_partes
 
-urls_por_partes = generar_urls_por_partes()
-
 # Descargar con requests y reintentos
-def descargar_con_reintentos(url, output_path, max_reintentos=3, proxies=None, timeout=600):
+def descargar_con_reintentos(url, output_path, max_reintentos=3, timeout=600):
+    delay = 5  # Espera inicial de 5 segundos
     for intento in range(max_reintentos):
         try:
             print(f"Intento {intento + 1} de {max_reintentos} para: {url}")
             response = requests.get(
                 url,
-                proxies=proxies,
                 timeout=timeout,
                 auth=HttpNtlmAuth('Yacosta', 'Yoky2024.4')  # Credenciales NTLM
             )
@@ -60,12 +56,13 @@ def descargar_con_reintentos(url, output_path, max_reintentos=3, proxies=None, t
             return True
         except requests.exceptions.RequestException as e:
             print(f"Error en intento {intento + 1}: {e}")
-            time.sleep(30)
+            time.sleep(delay)
+            delay *= 2  # Incrementa exponencialmente el tiempo de espera
     print(f"Falló la descarga tras {max_reintentos} intentos: {url}")
     return False
 
 # Descargar en paralelo
-def descargar_en_paralelo(tipo, urls, output_folder, max_workers=5):
+def descargar_en_paralelo(tipo, urls, output_folder, max_workers=7):
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
         for url, anio, estado in urls:
@@ -106,8 +103,11 @@ def consolidate_csv(folder_path, output_filename):
     except Exception as e:
         print(f"Error al consolidar archivos: {e}")
 
-# Descargar y consolidar por cada tipo
-for tipo, urls in urls_por_partes.items():
-    print(f"Iniciando descargas en paralelo para {tipos_tramite[tipo]}...")
-    descargar_en_paralelo(tipo, urls, output_folders[tipo], max_workers=5)  # Ajusta max_workers según tu sistema
-    consolidate_csv(output_folders[tipo], f"Consolidado_{tipos_tramite[tipo]}.xlsx")
+# Descargar y consolidar archivos
+def descargar_y_consolidar():
+    output_folders = crear_carpetas()
+    urls_por_partes = generar_urls_por_partes()
+    for tipo, urls in urls_por_partes.items():
+        print(f"Iniciando descargas en paralelo para {tipos_tramite[tipo]}...")
+        descargar_en_paralelo(tipo, urls, output_folders[tipo], max_workers=5)
+        consolidate_csv(output_folders[tipo], f"Consolidado_{tipos_tramite[tipo]}.xlsx")

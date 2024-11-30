@@ -697,39 +697,43 @@ with tabs[4]:
 with tabs[5]:
     st.header("Ranking de Expedientes Trabajados")
 
-    def obtener_ultimos_registros_db():
-        db = client.expedientes_db
-        collection = db.rankings
-        return list(collection.find().sort("fecha", -1))
+    # Selección del módulo activo
+    st.subheader("Seleccione el módulo para visualizar el ranking")
+    modulo_activo = selected_module
 
-    def obtener_ultima_fecha_db():
-        db = client.expedientes_db
-        collection = db.rankings
-        ultimo_registro = collection.find_one(sort=[("fecha", -1)])
+    def obtener_ultimos_registros_db(modulo):
+        """Obtener los registros históricos específicos para el módulo seleccionado."""
+        return list(collection.find({"modulo": modulo}).sort("fecha", -1))
+
+    def obtener_ultima_fecha_db(modulo):
+        """Obtener la última fecha registrada para el módulo."""
+        ultimo_registro = collection.find_one({"modulo": modulo}, sort=[("fecha", -1)])
         return ultimo_registro['fecha'] if ultimo_registro else None
 
-    def guardar_nuevos_registros(nuevos_datos):
-        db = client.expedientes_db
-        collection = db.rankings
-        if isinstance(nuevos_datos, list):
-            collection.insert_many(nuevos_datos)
-        else:
-            collection.insert_one(nuevos_datos)
+    def guardar_nuevos_registros(nuevos_datos, modulo):
+        """Guardar nuevos registros en la base de datos, asignando el módulo correspondiente."""
+        for dato in nuevos_datos:
+            dato["modulo"] = modulo  # Asignar el módulo
+        collection.insert_many(nuevos_datos)
 
     try:
-        # Obtener la fecha de ayer
+        # Verificar si hay datos cargados para el módulo seleccionado
+        if data is None:
+            st.warning(f"No se encontraron datos para el módulo {modulo_activo}.")
+            st.stop()
+
+        # Determinar rango de fechas
         fecha_actual = pd.Timestamp.now().date()
         fecha_ayer = fecha_actual - pd.Timedelta(days=1)
         fecha_inicio_excel = fecha_actual - pd.Timedelta(days=7)
 
-        # Convertir la columna 'FECHA DE TRABAJO' a datetime
+        # Convertir y filtrar datos por fechas relevantes
         data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
-        datos_nuevos = data[(data['FECHA DE TRABAJO'].dt.date >= fecha_inicio_excel) & 
+        datos_nuevos = data[(data['FECHA DE TRABAJO'].dt.date >= fecha_inicio_excel) &
                             (data['FECHA DE TRABAJO'].dt.date <= fecha_ayer)]
 
-        # Obtener la última fecha registrada en la base de datos
-        ultima_fecha_db = obtener_ultima_fecha_db()
-        
+        # Obtener última fecha registrada en la base de datos
+        ultima_fecha_db = obtener_ultima_fecha_db(modulo_activo)
         if ultima_fecha_db:
             datos_a_guardar = datos_nuevos[
                 datos_nuevos['FECHA DE TRABAJO'].dt.date > ultima_fecha_db.date()
@@ -737,7 +741,7 @@ with tabs[5]:
         else:
             datos_a_guardar = datos_nuevos
 
-        # Guardar los nuevos registros en la base de datos
+        # Guardar nuevos registros si existen datos nuevos
         if not datos_a_guardar.empty:
             nuevos_registros = []
             for fecha, grupo in datos_a_guardar.groupby(datos_a_guardar['FECHA DE TRABAJO'].dt.date):
@@ -745,15 +749,13 @@ with tabs[5]:
                 ranking_dia.columns = ['evaluador', 'cantidad']
                 nuevos_registros.append({
                     "fecha": pd.Timestamp(fecha),
-                    "datos": ranking_dia.to_dict('records')
+                    "datos": ranking_dia.to_dict('records'),
+                    "modulo": modulo_activo
                 })
-            
-            if nuevos_registros:
-                guardar_nuevos_registros(nuevos_registros)
+            guardar_nuevos_registros(nuevos_registros, modulo_activo)
 
-        # Mostrar siempre los últimos 15 días registrados hasta ayer
-        registros_historicos = obtener_ultimos_registros_db()
-        
+        # Mostrar registros históricos específicos del módulo activo
+        registros_historicos = obtener_ultimos_registros_db(modulo_activo)
         if registros_historicos:
             df_historico = pd.DataFrame()
             for registro in registros_historicos:
@@ -769,9 +771,7 @@ with tabs[5]:
                             df_historico = df_pivot
                         else:
                             df_historico = df_historico.merge(
-                                df_pivot,
-                                on='EVALASIGN',
-                                how='outer'
+                                df_pivot, on='EVALASIGN', how='outer'
                             )
 
             if not df_historico.empty:
@@ -779,7 +779,7 @@ with tabs[5]:
                 df_historico = df_historico.fillna(0)
                 df_historico.iloc[:, 1:] = df_historico.iloc[:, 1:].astype(int)
 
-                # Ordenar las fechas de más antiguo a más reciente
+                # Ordenar fechas de más antiguo a más reciente
                 df_historico = df_historico.reindex(
                     columns=['EVALASIGN'] + sorted(df_historico.columns[1:], key=lambda x: pd.to_datetime(x, format='%d/%m'))
                 )
@@ -788,27 +788,26 @@ with tabs[5]:
                 df_historico['Total'] = df_historico.iloc[:, 1:].sum(axis=1)
                 df_historico = df_historico.sort_values(by='Total', ascending=False)
 
-                # Convertir únicamente las columnas numéricas a enteros en la tabla de visualización
-                st.subheader("Ranking de Expedientes Trabajados (Últimos 15 días hasta ayer)")
+                # Mostrar tabla
+                st.subheader(f"Ranking de Expedientes Trabajados - {modulo_activo} (Últimos 15 días hasta ayer)")
                 st.table(
                     df_historico.style.format(
                         {col: "{:.0f}" for col in df_historico.columns if col != 'EVALASIGN'}
                     )
                 )
 
-                # Botón para descargar el ranking histórico como Excel
+                # Botón para descargar ranking como Excel
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     df_historico.to_excel(writer, index=False, sheet_name='Ranking_Historico')
                 output.seek(0)
                 st.download_button(
-                    label="Descargar Ranking Histórico en Excel",
+                    label="Descargar Ranking Histórico",
                     data=output,
-                    file_name="Ranking_Historico_Expedientes.xlsx",
+                    file_name=f"Ranking_Historico_{modulo_activo}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
         else:
-            st.warning("No hay datos históricos disponibles.")
-
+            st.warning(f"No hay datos históricos para el módulo {modulo_activo}.")
     except Exception as e:
         st.error(f"Error al procesar los datos: {str(e)}")

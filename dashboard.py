@@ -698,7 +698,6 @@ with tabs[5]:
     st.header("Ranking de Expedientes Trabajados")
 
     # Selección del módulo activo
-    st.subheader("Seleccione el módulo para visualizar el ranking")
     modulo_activo = selected_module
 
     def obtener_ultimos_registros_db(modulo):

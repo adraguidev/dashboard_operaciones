@@ -3,6 +3,7 @@ import json
 import streamlit as st
 from google.oauth2 import service_account
 from src.config.settings import GOOGLE_CREDENTIALS_FILE, GOOGLE_SCOPES
+import pymongo
 
 def get_google_credentials():
     """
@@ -10,23 +11,38 @@ def get_google_credentials():
     y usando el archivo local solo como respaldo
     """
     # Primero intenta obtener las credenciales desde st.secrets (para Streamlit Cloud)
-    try:
-        return service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
-            scopes=GOOGLE_SCOPES
-        )
-    except (KeyError, FileNotFoundError):
-        # Si estamos en local, intenta usar el archivo de credenciales
-        if os.path.exists(GOOGLE_CREDENTIALS_FILE):
-            return service_account.Credentials.from_service_account_file(
-                GOOGLE_CREDENTIALS_FILE,
+    if "gcp_service_account" in st.secrets:
+        try:
+            return service_account.Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"],
                 scopes=GOOGLE_SCOPES
             )
-        else:
-            raise FileNotFoundError(
-                "No se encontraron credenciales. En Streamlit Cloud, configura los secrets. "
-                "En local, asegúrate de tener el archivo de credenciales en la ruta correcta."
-            )
+        except Exception as e:
+            st.error(f"Error al obtener credenciales desde secrets: {str(e)}")
+    
+    # Si no hay secrets o fallan, intenta usar el archivo local
+    try:
+        # Intenta diferentes ubicaciones posibles del archivo
+        possible_paths = [
+            GOOGLE_CREDENTIALS_FILE,
+            'migra2024-77aaf61899d3.json',
+            os.path.join('credentials', 'migra2024-77aaf61899d3.json')
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                return service_account.Credentials.from_service_account_file(
+                    path,
+                    scopes=GOOGLE_SCOPES
+                )
+    except Exception as e:
+        st.error(f"Error al leer archivo de credenciales: {str(e)}")
+    
+    raise FileNotFoundError(
+        "No se encontraron credenciales válidas. "
+        "En Streamlit Cloud, configura los secrets. "
+        "En local, asegúrate de tener el archivo de credenciales en una ubicación válida."
+    )
 
 def get_mongodb_connection():
     """
@@ -49,4 +65,4 @@ def get_mongodb_connection():
 @st.cache_resource
 def init_connection():
     """Inicializa la conexión a MongoDB usando la función get_mongodb_connection"""
-    return get_mongodb_connection() 
+    return get_mongodb_connection()

@@ -10,6 +10,9 @@ def get_google_credentials():
     Obtiene las credenciales de Google, priorizando st.secrets para Streamlit Cloud
     y usando el archivo local solo como respaldo
     """
+    # Debug: Mostrar el entorno actual
+    st.write("Directorio actual:", os.getcwd())
+    
     # Primero intenta obtener las credenciales desde st.secrets (para Streamlit Cloud)
     if "gcp_service_account" in st.secrets:
         try:
@@ -23,14 +26,21 @@ def get_google_credentials():
     # Si no hay secrets o fallan, intenta usar el archivo local
     try:
         # Intenta diferentes ubicaciones posibles del archivo
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         possible_paths = [
-            GOOGLE_CREDENTIALS_FILE,
+            os.path.join(base_dir, 'credentials', 'migra2024-77aaf61899d3.json'),
+            os.path.join(base_dir, 'migra2024-77aaf61899d3.json'),
             'migra2024-77aaf61899d3.json',
-            os.path.join('credentials', 'migra2024-77aaf61899d3.json')
+            os.path.join('credentials', 'migra2024-77aaf61899d3.json'),
+            GOOGLE_CREDENTIALS_FILE
         ]
         
+        # Debug: Mostrar todas las rutas que se intentan
+        st.write("Buscando archivo de credenciales en:")
         for path in possible_paths:
-            if os.path.exists(path):
+            exists = os.path.exists(path)
+            st.write(f"- {path} ({'existe' if exists else 'no existe'})")
+            if exists:
                 return service_account.Credentials.from_service_account_file(
                     path,
                     scopes=GOOGLE_SCOPES

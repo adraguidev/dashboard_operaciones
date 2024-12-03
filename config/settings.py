@@ -26,5 +26,14 @@ MODULE_FOLDERS = {
     'SPE': 'descargas/SPE'
 }
 
-# Agregar la lista de evaluadores inactivos
-INACTIVE_EVALUATORS = ['GRODRIGUEZ']  # Lista de evaluadores que no deben aparecer en los reportes 
+# Lista de evaluadores inactivos
+INACTIVE_EVALUATORS = ['GRODRIGUEZ']  # Lista de evaluadores que no deben aparecer en los reportes
+
+# Configuración de MongoDB
+MONGODB_CONFIG = {
+    'database': 'expedientes_db',
+    'collections': {
+        'rankings': 'rankings',
+        'historico': 'historico'
+    }
+}

@@ -8,7 +8,7 @@ import pymongo
 from datetime import datetime, timedelta
 from config.spe_config import SPE_SETTINGS
 from src.utils.database import get_google_credentials
-from config.settings import INACTIVE_EVALUATORS
+from config.settings import INACTIVE_EVALUATORS, MONGODB_CONFIG
 
 class SPEModule:
     SCOPES = [
@@ -51,8 +51,8 @@ class SPEModule:
 
         # Inicializar conexión MongoDB
         client = self._init_mongodb_connection()
-        db = client.expedientes_db
-        collection = db.rankings
+        db = client[MONGODB_CONFIG['database']]
+        collection = db[MONGODB_CONFIG['collections']['rankings']]
 
         tabs = st.tabs([
             "Reporte de Pendientes", 

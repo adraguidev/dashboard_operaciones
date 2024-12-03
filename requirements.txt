@@ -26,4 +26,4 @@ python-dateutil
 tqdm
 
 prophet
-sklearn
+scikit-learn

@@ -1,0 +1,10 @@
+pandas
+streamlit
+plotly
+scikit-learn
+numpy
+prophet
+streamlit-aggrid
+openpyxl
+xlsxwriter
+pymongo

@@ -1,15 +1,26 @@
+# Básicos
 streamlit
 pandas
 numpy
+
+# Visualización
 plotly
 openpyxl
+
+# Base de datos
 pymongo
+
+# Google APIs
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
 gspread
 google-api-python-client
+
+# Procesamiento de datos
 xlsxwriter
 streamlit-aggrid
+
+# Utilidades
 python-dateutil
 tqdm

@@ -10,17 +10,12 @@ def render_pending_reports_tab(data, selected_module):
     """Renderizar pestaña de reportes pendientes."""
     st.header("Dashboard de Pendientes")
     
-    # Filtrar solo los pendientes
-    data = data[data['Evaluado'] == 'NO']
-    
     # Filtrar pendientes sin asignar
-    unassigned_data = data[data['EVALASIGN'].isna()]
+    unassigned_data = data[(data['Evaluado'] == 'NO') & (data['EVALASIGN'].isna())]
     total_unassigned = len(unassigned_data)
 
     if total_unassigned > 0:
         st.metric("Total de Pendientes Sin Asignar", total_unassigned)
-        
-        # Botón para descargar pendientes sin asignar
         unassigned_buf = download_table_as_excel(unassigned_data, "Pendientes_Sin_Asignar")
         st.download_button(
             label="Descargar Pendientes Sin Asignar",
@@ -31,23 +26,48 @@ def render_pending_reports_tab(data, selected_module):
     else:
         st.info("No hay pendientes sin asignar en este momento.")
 
-    # Selección de vista (Activos, Inactivos, Total)
+    # Determinar evaluadores según el módulo seleccionado
+    if selected_module in ['CCM', 'CCM-ESP', 'CCM-LEY']:
+        module_inactive_evaluators = INACTIVE_EVALUATORS.get('CCM', [])
+    elif selected_module == 'PRR':
+        module_inactive_evaluators = INACTIVE_EVALUATORS.get('PRR', [])
+    else:
+        module_inactive_evaluators = []
+
+    # Obtener todos los evaluadores del módulo actual
+    all_evaluators = sorted(data['EVALASIGN'].dropna().unique())
+
+    # Selección de vista
     st.subheader("Selecciona la Vista")
     view_option = st.radio(
         "Elige qué evaluadores deseas visualizar:",
         options=["Activos", "Inactivos", "Vulnerabilidad", "Total"],
+        index=0,
         horizontal=True
     )
 
-    # Obtener evaluadores según la vista seleccionada
-    if view_option == "Activos":
-        evaluators = get_active_evaluators(selected_module, data)
-    elif view_option == "Inactivos":
-        evaluators = INACTIVE_EVALUATORS.get(selected_module, [])
-    elif view_option == "Vulnerabilidad":
+    # Filtrar evaluadores según la opción seleccionada
+    if view_option == "Vulnerabilidad":
         evaluators = VULNERABILIDAD_EVALUATORS.get(selected_module, [])
+    elif view_option == "Activos":
+        evaluators = [
+            e for e in all_evaluators
+            if e not in module_inactive_evaluators 
+            and e not in VULNERABILIDAD_EVALUATORS.get(selected_module, [])
+        ]
+    elif view_option == "Inactivos":
+        evaluators = [
+            e for e in module_inactive_evaluators
+            if e in all_evaluators 
+            and e not in VULNERABILIDAD_EVALUATORS.get(selected_module, [])
+        ]
     else:  # Total
-        evaluators = sorted(data['EVALASIGN'].dropna().unique())
+        evaluators = all_evaluators
+
+    # Validación: Si no hay evaluadores en la categoría seleccionada
+    if not evaluators:
+        st.warning(f"No hay evaluadores en la categoría '{view_option}' para este módulo.")
+        return
 
     # Selección de años
     selected_years = st.multiselect(
@@ -69,23 +89,19 @@ def render_pending_reports_tab(data, selected_module):
 
     # Mostrar tabla y descargas si se seleccionan años
     if selected_years and selected_evaluators:
-        display_multiple_years_report(data, selected_years, selected_evaluators)
-
-def get_active_evaluators(selected_module, data):
-    """Obtener evaluadores activos para el módulo seleccionado."""
-    # Obtener todos los evaluadores del módulo actual
-    all_evaluators = sorted(data['EVALASIGN'].dropna().unique())
-    
-    # Obtener inactivos y vulnerables
-    module_inactive_evaluators = INACTIVE_EVALUATORS.get(selected_module, [])
-    vulnerabilidad_evaluators = VULNERABILIDAD_EVALUATORS.get(selected_module, [])
-    
-    # Los evaluadores activos son aquellos que no están ni inactivos ni en vulnerabilidad
-    return [
-        e for e in all_evaluators 
-        if e not in module_inactive_evaluators 
-        and e not in vulnerabilidad_evaluators
-    ]
+        # Filtrar solo los pendientes
+        filtered_data = data[
+            (data['Evaluado'] == 'NO') &
+            (data['Anio'].isin(selected_years)) &
+            (data['EVALASIGN'].isin(selected_evaluators))
+        ]
+        
+        if len(selected_years) > 1:
+            display_multiple_years_report(filtered_data, selected_years, selected_evaluators)
+        else:
+            display_single_year_report(filtered_data, selected_years[0], selected_evaluators)
+    else:
+        st.warning("Por favor selecciona al menos un año.")
 
 def display_multiple_years_report(data, selected_years, selected_evaluators):
     """Mostrar reporte para múltiples años."""

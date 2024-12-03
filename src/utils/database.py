@@ -6,28 +6,27 @@ from src.config.settings import GOOGLE_CREDENTIALS_FILE, GOOGLE_SCOPES
 
 def get_google_credentials():
     """
-    Obtiene las credenciales de Google, ya sea desde st.secrets (cloud) 
-    o desde el archivo local de credenciales
+    Obtiene las credenciales de Google, priorizando st.secrets para Streamlit Cloud
+    y usando el archivo local solo como respaldo
     """
+    # Primero intenta obtener las credenciales desde st.secrets (para Streamlit Cloud)
     try:
-        # Intenta obtener credenciales desde st.secrets
-        credentials = service_account.Credentials.from_service_account_info(
+        return service_account.Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
             scopes=GOOGLE_SCOPES
         )
     except (KeyError, FileNotFoundError):
-        # Si no hay secrets, busca el archivo de credenciales local
-        if not os.path.exists(GOOGLE_CREDENTIALS_FILE):
-            raise FileNotFoundError(
-                "No se encontraron credenciales ni en st.secrets ni en el archivo local"
+        # Si estamos en local, intenta usar el archivo de credenciales
+        if os.path.exists(GOOGLE_CREDENTIALS_FILE):
+            return service_account.Credentials.from_service_account_file(
+                GOOGLE_CREDENTIALS_FILE,
+                scopes=GOOGLE_SCOPES
             )
-            
-        credentials = service_account.Credentials.from_service_account_file(
-            GOOGLE_CREDENTIALS_FILE,
-            scopes=GOOGLE_SCOPES
-        )
-    
-    return credentials
+        else:
+            raise FileNotFoundError(
+                "No se encontraron credenciales. En Streamlit Cloud, configura los secrets. "
+                "En local, asegúrate de tener el archivo de credenciales en la ruta correcta."
+            )
 
 def get_mongodb_connection():
     """

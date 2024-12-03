@@ -5,6 +5,7 @@ import streamlit as st
 from google.oauth2 import service_account
 import gspread
 import pandas as pd
+from src.utils.database import get_google_credentials
 
 # Configuración de credenciales de Google Sheets
 SCOPES = [
@@ -15,10 +16,7 @@ SCOPES = [
 @st.cache_resource
 def get_google_sheets_client():
     """Inicializar cliente de Google Sheets con caché."""
-    credentials = service_account.Credentials.from_service_account_file(
-        'migra2024-77aaf61899d3.json',
-        scopes=SCOPES
-    )
+    credentials = get_google_credentials()
     return gspread.authorize(credentials)
 
 def load_spe_data():

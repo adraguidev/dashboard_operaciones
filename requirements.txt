@@ -1,10 +1,9 @@
-pandas
 streamlit
-plotly
-scikit-learn
-numpy
-prophet
-streamlit-aggrid
-openpyxl
-xlsxwriter
 pymongo
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+pandas
+numpy
+plotly
+openpyxl

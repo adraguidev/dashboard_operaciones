@@ -78,7 +78,8 @@ class SPEModule:
         # Convertir fecha de trabajo a datetime
         data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
             data[COLUMNAS['FECHA_TRABAJO']], 
-            format='%d/%m/%Y', 
+            format='%d/%m/%Y',
+            dayfirst=True,
             errors='coerce'
         )
 

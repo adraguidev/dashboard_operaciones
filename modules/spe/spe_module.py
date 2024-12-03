@@ -7,6 +7,7 @@ import gspread
 import pymongo
 from datetime import datetime, timedelta
 from config.spe_config import SPE_SETTINGS
+from src.utils.database import get_google_credentials
 
 class SPEModule:
     SCOPES = [
@@ -21,10 +22,7 @@ class SPEModule:
     @st.cache_resource
     def _initialize_client():
         """Inicializar cliente de Google Sheets con caché."""
-        credentials = service_account.Credentials.from_service_account_file(
-            SPE_SETTINGS['CREDENTIALS_PATH'],
-            scopes=SPEModule.SCOPES
-        )
+        credentials = get_google_credentials()
         return gspread.authorize(credentials)
 
     def load_data(self):

@@ -26,8 +26,15 @@ MODULE_FOLDERS = {
     'SPE': 'descargas/SPE'
 }
 
-# Lista de evaluadores inactivos
-INACTIVE_EVALUATORS = ['GRODRIGUEZ']  # Lista de evaluadores que no deben aparecer en los reportes
+# Lista de evaluadores inactivos por módulo
+INACTIVE_EVALUATORS = {
+    'CCM': ['GRODRIGUEZ'],
+    'CCM-ESP': ['GRODRIGUEZ'],
+    'CCM-LEY': ['GRODRIGUEZ'],
+    'PRR': [],
+    'SOL': [],
+    'SPE': ['GRODRIGUEZ']
+}
 
 # Configuración de MongoDB
 MONGODB_CONFIG = {

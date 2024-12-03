@@ -93,7 +93,7 @@ class SPEModule:
         )
 
         # Excluir evaluadores inactivos
-        data = data[~data[COLUMNAS['EVALUADOR']].isin(INACTIVE_EVALUATORS)]
+        data = data[~data[COLUMNAS['EVALUADOR']].isin(INACTIVE_EVALUATORS['SPE'])]
 
         # Obtener fechas relevantes
         fecha_actual = datetime.now().date()

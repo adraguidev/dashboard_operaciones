@@ -8,6 +8,7 @@ import pymongo
 from datetime import datetime, timedelta
 from config.spe_config import SPE_SETTINGS
 from src.utils.database import get_google_credentials
+from config.settings import INACTIVE_EVALUATORS
 
 class SPEModule:
     SCOPES = [
@@ -22,12 +23,20 @@ class SPEModule:
     @st.cache_resource
     def _initialize_client():
         """Inicializar cliente de Google Sheets con caché."""
-        credentials = get_google_credentials()
-        return gspread.authorize(credentials)
+        try:
+            credentials = get_google_credentials()
+            return gspread.authorize(credentials)
+        except Exception as e:
+            st.error(f"Error al inicializar el cliente de Google Sheets: {str(e)}")
+            return None
 
     def load_data(self):
         """Cargar datos desde Google Sheets."""
         try:
+            if self.client is None:
+                st.error("No se pudo inicializar el cliente de Google Sheets")
+                return None
+                
             sheet = self.client.open_by_key(SPE_SETTINGS['SPREADSHEET_ID']).worksheet(SPE_SETTINGS['WORKSHEET_NAME'])
             return pd.DataFrame(sheet.get_all_records())
         except Exception as e:
@@ -83,8 +92,8 @@ class SPEModule:
             errors='coerce'
         )
 
-        # Excluir evaluador GRODRIGUEZ
-        data = data[data[COLUMNAS['EVALUADOR']] != 'GRODRIGUEZ']
+        # Excluir evaluadores inactivos
+        data = data[~data[COLUMNAS['EVALUADOR']].isin(INACTIVE_EVALUATORS)]
 
         # Obtener fechas relevantes
         fecha_actual = datetime.now().date()

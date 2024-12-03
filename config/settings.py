@@ -24,4 +24,7 @@ MODULE_FOLDERS = {
     'CCM-LEY': 'descargas/CCM-LEY',
     'SOL': 'descargas/SOL',
     'SPE': 'descargas/SPE'
-} 
+}
+
+# Agregar la lista de evaluadores inactivos
+INACTIVE_EVALUATORS = ['GRODRIGUEZ']  # Lista de evaluadores que no deben aparecer en los reportes 

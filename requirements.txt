@@ -24,3 +24,5 @@ streamlit-aggrid
 # Utilidades
 python-dateutil
 tqdm
+
+prophet

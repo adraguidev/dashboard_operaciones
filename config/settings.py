@@ -28,12 +28,64 @@ MODULE_FOLDERS = {
 
 # Lista de evaluadores inactivos por módulo
 INACTIVE_EVALUATORS = {
-    'CCM': ['GRODRIGUEZ'],
-    'CCM-ESP': ['GRODRIGUEZ'],
-    'CCM-LEY': ['GRODRIGUEZ'],
-    'PRR': [],
+    'CCM': [
+        "Mauricio Romero, Hugo",
+        "Ugarte Sánchez, Paulo César",
+        "Santibañez Chafalote, Lila Mariella",
+        "Quispe Orosco, Karina Wendy",
+        "Miranda Avila, Marco Antonio",
+        "Aponte Sanchez, Paola Lita",
+        "Orcada Herrera, Javier Eduardo",
+        "Gomez Vera, Marcos Alberto",
+        "VULNERABILIDAD",
+        "SUSPENDIDA"
+    ],
+    'CCM-ESP': [
+        "Mauricio Romero, Hugo",
+        "Ugarte Sánchez, Paulo César",
+        "Santibañez Chafalote, Lila Mariella",
+        "Quispe Orosco, Karina Wendy",
+        "Miranda Avila, Marco Antonio",
+        "Aponte Sanchez, Paola Lita",
+        "Orcada Herrera, Javier Eduardo",
+        "Gomez Vera, Marcos Alberto",
+        "VULNERABILIDAD",
+        "SUSPENDIDA"
+    ],
+    'CCM-LEY': [
+        "Mauricio Romero, Hugo",
+        "Ugarte Sánchez, Paulo César",
+        "Santibañez Chafalote, Lila Mariella",
+        "Quispe Orosco, Karina Wendy",
+        "Miranda Avila, Marco Antonio",
+        "Aponte Sanchez, Paola Lita",
+        "Orcada Herrera, Javier Eduardo",
+        "Gomez Vera, Marcos Alberto",
+        "VULNERABILIDAD",
+        "SUSPENDIDA"
+    ],
+    'PRR': [
+        "Pozo Ferro, Sonia Leonor",
+        "Bautista Lopez, Diana Carolina",
+        "Infantes Panduro, Jheyson",
+        "Vizcardo Ordoñez, Fiorella Carola",
+        "Ponce Malpartida, Miguel",
+        "Valdez Gallo, Cynthia Andrea",
+        "Hurtado Lago Briyan Deivi",
+        "Diaz Amaya, Esthefany Lisset",
+        "Santibañez Chafalote, Lila Mariella",
+        "Pumallanque Ramirez, Mariela",
+        "Valera Gaviria, Jessica Valeria",
+        "Vásquez Fernandez, Anthony Piere",
+        "VULNERABILIDAD",
+        "SUSPENDIDA",
+        "Quispe Orosco, Karina Wendy",
+        "Gomez Vera, Marcos Alberto",
+        "Lucero Martinez, Carlos Martin",
+        "Aponte Sanchez, Paola Lita"
+    ],
     'SOL': [],
-    'SPE': ['GRODRIGUEZ']
+    'SPE': []
 }
 
 # Configuración de MongoDB

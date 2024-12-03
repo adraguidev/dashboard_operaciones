@@ -8,10 +8,15 @@ from config.constants import VULNERABILIDAD_EVALUATORS
 
 def render_pending_reports_tab(data, selected_module):
     """Renderizar pestaña de reportes pendientes."""
+    st.header("Dashboard de Pendientes")
+    
+    # Filtrar solo los pendientes
+    data = data[data['Evaluado'] == 'NO']
+    
     # Obtener evaluadores según el módulo
-    active_evaluators = get_active_evaluators(selected_module)
+    active_evaluators = get_active_evaluators(selected_module, data)
     inactive_evaluators = INACTIVE_EVALUATORS.get(selected_module, [])
-    vulnerability_evaluators = get_vulnerability_evaluators(selected_module)
+    vulnerability_evaluators = VULNERABILIDAD_EVALUATORS.get(selected_module, [])
     
     # Crear selectbox para tipo de evaluadores
     evaluator_type = st.radio(
@@ -33,21 +38,17 @@ def render_pending_reports_tab(data, selected_module):
     # Mostrar datos filtrados
     display_pending_data(filtered_data)
 
-def get_active_evaluators(selected_module):
+def get_active_evaluators(selected_module, data):
     """Obtener evaluadores activos para el módulo seleccionado."""
-    if selected_module in ['CCM', 'CCM-ESP', 'CCM-LEY']:
-        return INACTIVE_EVALUATORS.get('CCM', [])
-    elif selected_module == 'PRR':
-        return INACTIVE_EVALUATORS.get('PRR', [])
-    return []
-
-def get_vulnerability_evaluators(selected_module):
-    """Obtener evaluadores vulnerables para el módulo seleccionado."""
-    if selected_module in ['CCM', 'CCM-ESP', 'CCM-LEY']:
-        return VULNERABILIDAD_EVALUATORS.get('CCM', [])
-    elif selected_module == 'PRR':
-        return VULNERABILIDAD_EVALUATORS.get('PRR', [])
-    return []
+    # Obtener todos los evaluadores del módulo
+    all_evaluators = set(data['EVALASIGN'].dropna().unique())
+    
+    # Obtener evaluadores inactivos y vulnerables
+    inactive = set(INACTIVE_EVALUATORS.get(selected_module, []))
+    vulnerable = set(VULNERABILIDAD_EVALUATORS.get(selected_module, []))
+    
+    # Los evaluadores activos son aquellos que no están ni inactivos ni vulnerables
+    return list(all_evaluators - (inactive | vulnerable))
 
 def display_pending_data(filtered_data):
     """Mostrar datos filtrados."""

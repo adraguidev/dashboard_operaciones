@@ -7,14 +7,42 @@ MONTH_NAMES = {
 }
 
 # Constantes para evaluadores vulnerables
-VULNERABILIDAD_EVALUATORS = [
-    "Quispe Orosco, Karina Wendy",
-    "Lucero Martinez, Carlos Martin",
-    "Gomez Vera, Marcos Alberto",
-    "Aponte Sanchez, Paola Lita",
-    "Santibañez Chafalote, Lila Mariella",
-    "VULNERABILIDAD"
-]
+VULNERABILIDAD_EVALUATORS = {
+    'CCM': [
+        "Quispe Orosco, Karina Wendy",
+        "Lucero Martinez, Carlos Martin",
+        "Gomez Vera, Marcos Alberto",
+        "Aponte Sanchez, Paola Lita",
+        "Santibañez Chafalote, Lila Mariella",
+        "VULNERABILIDAD"
+    ],
+    'CCM-ESP': [
+        "Quispe Orosco, Karina Wendy",
+        "Lucero Martinez, Carlos Martin",
+        "Gomez Vera, Marcos Alberto",
+        "Aponte Sanchez, Paola Lita",
+        "Santibañez Chafalote, Lila Mariella",
+        "VULNERABILIDAD"
+    ],
+    'CCM-LEY': [
+        "Quispe Orosco, Karina Wendy",
+        "Lucero Martinez, Carlos Martin",
+        "Gomez Vera, Marcos Alberto",
+        "Aponte Sanchez, Paola Lita",
+        "Santibañez Chafalote, Lila Mariella",
+        "VULNERABILIDAD"
+    ],
+    'PRR': [
+        "Quispe Orosco, Karina Wendy",
+        "Lucero Martinez, Carlos Martin",
+        "Gomez Vera, Marcos Alberto",
+        "Aponte Sanchez, Paola Lita",
+        "Santibañez Chafalote, Lila Mariella",
+        "VULNERABILIDAD"
+    ],
+    'SOL': [],
+    'SPE': []
+}
 
 # Constantes para estados
 ESTADOS = {

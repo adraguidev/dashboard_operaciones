@@ -1,10 +1,5 @@
 import os
 
-# Rutas base
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-CREDENTIALS_DIR = os.path.join(BASE_DIR, 'credentials')
-GOOGLE_CREDENTIALS_FILE = os.path.join(CREDENTIALS_DIR, 'migra2024-77aaf61899d3.json')
-
 # Configuración de módulos
 MODULES = {
     'CCM': '📊 CCM',

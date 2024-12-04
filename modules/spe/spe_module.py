@@ -727,27 +727,32 @@ class SPEModule:
             )
             st.plotly_chart(fig_semanas, use_container_width=True)
 
-        # 2. Análisis Estadístico Avanzado
+        # 2. Análisis Estadístico
         st.subheader("2. Análisis Estadístico")
-        
-        # Calcular estadísticas por día hábil vs no hábil
-        stats_dias = data.groupby('es_dia_habil').agg({
-            'EXPEDIENTE': ['count', 'mean', 'std']
+
+        # Calcular estadísticas por tipo de día
+        ingresos_por_tipo_dia = data.groupby(['FECHA _ INGRESO', 'es_dia_habil']).size().reset_index(name='cantidad')
+        stats_dias = ingresos_por_tipo_dia.groupby('es_dia_habil').agg({
+            'cantidad': ['mean', 'std']
         }).round(2)
-        
+
         col1, col2 = st.columns(2)
         
         with col1:
+            promedio_habil = stats_dias.loc[True, ('cantidad', 'mean')]
+            std_habil = stats_dias.loc[True, ('cantidad', 'std')]
             st.metric(
                 "Promedio Días Hábiles",
-                f"{stats_dias.loc[True, ('EXPEDIENTE', 'mean')]:.0f}",
-                f"±{stats_dias.loc[True, ('EXPEDIENTE', 'std')]:.0f} σ"
+                f"{promedio_habil:.0f}",
+                f"±{std_habil:.0f} σ"
             )
         with col2:
+            promedio_no_habil = stats_dias.loc[False, ('cantidad', 'mean')]
+            std_no_habil = stats_dias.loc[False, ('cantidad', 'std')]
             st.metric(
                 "Promedio Días No Hábiles",
-                f"{stats_dias.loc[False, ('EXPEDIENTE', 'mean')]:.0f}",
-                f"±{stats_dias.loc[False, ('EXPEDIENTE', 'std')]:.0f} σ"
+                f"{promedio_no_habil:.0f}",
+                f"±{std_no_habil:.0f} σ"
             )
 
         # 3. Análisis de Tendencias y Predicciones

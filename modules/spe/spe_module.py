@@ -540,6 +540,7 @@ class SPEModule:
             'EXPEDIENTE': 'EXPEDIENTE',
             'ETAPA': 'ETAPA_EVALUACIÓN',
             'ESTADO': 'ESTADO',
+            'PROCESO': 'PROCESO',
             'FECHA_INGRESO': 'FECHA _ INGRESO',
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
@@ -550,11 +551,11 @@ class SPEModule:
         col1, col2 = st.columns(2)
         
         with col1:
-            # Selección de filas
+            # Selección de filas (ahora opcional)
             filas = st.multiselect(
-                "Seleccionar campos para filas:",
+                "Seleccionar campos para filas (opcional):",
                 options=list(COLUMNAS_DISPONIBLES.keys()),
-                default=['EVALUADOR']
+                default=[]
             )
             
             # Selección de valor a contar/sumar
@@ -565,11 +566,11 @@ class SPEModule:
             )
 
         with col2:
-            # Selección de columnas
+            # Selección de columnas (opcional)
             columnas = st.multiselect(
-                "Seleccionar campos para columnas:",
+                "Seleccionar campos para columnas (opcional):",
                 options=list(COLUMNAS_DISPONIBLES.keys()),
-                default=['ESTADO']
+                default=[]
             )
             
             # Selección de función de agregación
@@ -585,7 +586,7 @@ class SPEModule:
         filtros_aplicados = {}
         for campo in COLUMNAS_DISPONIBLES:
             if campo not in filas + columnas:
-                valores_unicos = data[COLUMNAS_DISPONIBLES[campo]].unique()
+                valores_unicos = sorted(data[COLUMNAS_DISPONIBLES[campo]].unique())
                 if len(valores_unicos) > 0:
                     filtros = st.multiselect(
                         f"Filtrar por {campo}:",
@@ -601,11 +602,15 @@ class SPEModule:
             data_filtrada = data_filtrada[data_filtrada[campo].isin(valores)]
 
         # Crear tabla dinámica
-        if filas and valor_conteo:
-            try:
-                indices = [COLUMNAS_DISPONIBLES[f] for f in filas]
-                cols = [COLUMNAS_DISPONIBLES[c] for c in columnas] if columnas else None
-                
+        try:
+            indices = [COLUMNAS_DISPONIBLES[f] for f in filas] if filas else None
+            cols = [COLUMNAS_DISPONIBLES[c] for c in columnas] if columnas else None
+            
+            # Si no hay filas ni columnas, mostrar solo el conteo total
+            if not indices and not cols:
+                total = len(data_filtrada) if funcion_agg == 'count' else data_filtrada[COLUMNAS_DISPONIBLES[valor_conteo]].nunique()
+                pivot_table = pd.DataFrame({'Total': [total]})
+            else:
                 pivot_table = pd.pivot_table(
                     data_filtrada,
                     index=indices,
@@ -616,58 +621,58 @@ class SPEModule:
                     margins_name='Total'
                 )
 
-                # Mostrar resultados
-                st.subheader("Resultados")
-                st.dataframe(
-                    pivot_table,
-                    use_container_width=True,
-                    height=400
+            # Mostrar resultados
+            st.subheader("Resultados")
+            st.dataframe(
+                pivot_table,
+                use_container_width=True,
+                height=400
+            )
+
+            # Opción para descargar
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                pivot_table.to_excel(writer, sheet_name='Análisis_Dinámico')
+            
+            st.download_button(
+                label="📥 Descargar Análisis",
+                data=output.getvalue(),
+                file_name="analisis_dinamico.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            # Visualización gráfica si es posible y hay más de un dato
+            if len(pivot_table) > 1 and not pivot_table.empty:
+                st.subheader("Visualización")
+                tipo_grafico = st.selectbox(
+                    "Tipo de gráfico:",
+                    options=['Barras', 'Líneas', 'Calor'],
+                    key="tipo_grafico"
                 )
 
-                # Opción para descargar
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    pivot_table.to_excel(writer, sheet_name='Análisis_Dinámico')
-                
-                st.download_button(
-                    label="📥 Descargar Análisis",
-                    data=output.getvalue(),
-                    file_name="analisis_dinamico.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
-                # Visualización gráfica si es posible
-                if len(pivot_table.index) > 1 and len(pivot_table.columns) > 1:
-                    st.subheader("Visualización")
-                    tipo_grafico = st.selectbox(
-                        "Tipo de gráfico:",
-                        options=['Barras', 'Líneas', 'Calor'],
-                        key="tipo_grafico"
+                if tipo_grafico == 'Barras':
+                    fig = px.bar(
+                        pivot_table.reset_index() if isinstance(pivot_table.index, pd.MultiIndex) else pivot_table,
+                        x=pivot_table.index.name if pivot_table.index.name else 'index',
+                        y=pivot_table.columns[0] if len(pivot_table.columns) > 0 else None,
+                        title="Análisis Gráfico",
+                        barmode='group'
+                    )
+                elif tipo_grafico == 'Líneas':
+                    fig = px.line(
+                        pivot_table.reset_index() if isinstance(pivot_table.index, pd.MultiIndex) else pivot_table,
+                        x=pivot_table.index.name if pivot_table.index.name else 'index',
+                        y=pivot_table.columns[0] if len(pivot_table.columns) > 0 else None,
+                        title="Análisis Gráfico"
+                    )
+                else:  # Calor
+                    fig = px.imshow(
+                        pivot_table,
+                        title="Mapa de Calor"
                     )
 
-                    if tipo_grafico == 'Barras':
-                        fig = px.bar(
-                            pivot_table.reset_index(),
-                            x=pivot_table.index.names[0],
-                            y=pivot_table.columns[0] if len(pivot_table.columns) > 0 else None,
-                            title="Análisis Gráfico",
-                            barmode='group'
-                        )
-                    elif tipo_grafico == 'Líneas':
-                        fig = px.line(
-                            pivot_table.reset_index(),
-                            x=pivot_table.index.names[0],
-                            y=pivot_table.columns[0] if len(pivot_table.columns) > 0 else None,
-                            title="Análisis Gráfico"
-                        )
-                    else:  # Calor
-                        fig = px.imshow(
-                            pivot_table,
-                            title="Mapa de Calor"
-                        )
+                st.plotly_chart(fig, use_container_width=True)
 
-                    st.plotly_chart(fig, use_container_width=True)
-
-            except Exception as e:
-                st.error(f"Error al generar el análisis: {str(e)}")
-                st.info("Sugerencia: Intente con una combinación diferente de campos")
+        except Exception as e:
+            st.error(f"Error al generar el análisis: {str(e)}")
+            st.info("Sugerencia: Intente con una combinación diferente de campos")

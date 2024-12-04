@@ -95,47 +95,40 @@ class SPEModule:
             errors='coerce'
         )
 
-        # Ignorar datos del día actual
-        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual]
-
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
+        ultima_fecha = ultima_fecha_db.date() if ultima_fecha_db else None
 
-        # Obtener datos históricos de MongoDB (EXPLÍCITAMENTE hasta ayer)
-        registros_historicos = list(collection.find({
-            "modulo": "SPE",
-            "fecha": {"$lt": pd.Timestamp(fecha_actual)}  # Solo registros anteriores a hoy
-        }).sort("fecha", -1))
+        # Obtener datos históricos de MongoDB
+        registros_historicos = list(collection.find({"modulo": "SPE"}).sort("fecha", -1))
         
         # Preparar DataFrame histórico desde MongoDB
         df_historico = pd.DataFrame()
         fechas_guardadas = set()
         
-        # Procesar solo registros hasta ayer
+        # Procesar registros históricos
         if registros_historicos:
             for registro in registros_historicos:
                 fecha = pd.Timestamp(registro['fecha'])
-                if fecha.date() < fecha_actual:  # Verificación adicional
-                    fechas_guardadas.add(fecha.date())
-                    fecha_str = fecha.strftime('%d/%m')
-                    df_temp = pd.DataFrame(registro['datos'])
-                    if not df_temp.empty:
-                        evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
-                        df_pivot = pd.DataFrame({
-                            'EVALUADOR': df_temp[evaluador_col].tolist(),
-                            fecha_str: df_temp['cantidad'].tolist()
-                        })
-                        if df_historico.empty:
-                            df_historico = df_pivot
-                        else:
-                            df_historico = df_historico.merge(
-                                df_pivot, on='EVALUADOR', how='outer'
-                            )
+                fechas_guardadas.add(fecha.date())
+                fecha_str = fecha.strftime('%d/%m')
+                df_temp = pd.DataFrame(registro['datos'])
+                if not df_temp.empty:
+                    evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
+                    df_pivot = pd.DataFrame({
+                        'EVALUADOR': df_temp[evaluador_col].tolist(),
+                        fecha_str: df_temp['cantidad'].tolist()
+                    })
+                    if df_historico.empty:
+                        df_historico = df_pivot
+                    else:
+                        df_historico = df_historico.merge(
+                            df_pivot, on='EVALUADOR', how='outer'
+                        )
 
-        # Procesar datos del día anterior desde Google Sheets
+        # Solo procesar datos del día anterior si no están guardados
         datos_ayer = None
         if fecha_ayer not in fechas_guardadas:
-            # Filtrar explícitamente solo datos del día anterior
             datos_dia_anterior = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha_ayer]
             if not datos_dia_anterior.empty:
                 datos_ayer = datos_dia_anterior.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
@@ -154,41 +147,23 @@ class SPEModule:
         # Mostrar tabla de ranking
         if not df_historico.empty:
             df_historico = df_historico.fillna(0)
-            
-            # Filtrar explícitamente las columnas para excluir el día actual
             cols_fecha = [col for col in df_historico.columns if col != 'EVALUADOR']
-            fecha_actual_str = fecha_actual.strftime('%d/%m')
-            cols_fecha = [col for col in cols_fecha if col != fecha_actual_str and col != 'Total']
             
             # Ordenar columnas
             cols_ordenadas = ['EVALUADOR'] + sorted(
-                cols_fecha,
+                [col for col in cols_fecha if col != 'Total'],
                 key=lambda x: pd.to_datetime(x + f"/{datetime.now().year}", format='%d/%m/%Y'),
                 reverse=False
             ) + ['Total']
             
-            # Usar solo las columnas que existen y no son del día actual
-            cols_ordenadas = [col for col in cols_ordenadas if col in df_historico.columns and col != fecha_actual_str]
-            df_historico = df_historico[cols_ordenadas]
-            
-            # Calcular total y ordenar
+            df_historico = df_historico.reindex(columns=cols_ordenadas)
             df_historico['Total'] = df_historico.iloc[:, 1:-1].sum(axis=1)
             df_historico = df_historico.sort_values('Total', ascending=False)
-            
-            # Mostrar tabla
             st.dataframe(df_historico)
 
         # Mostrar información de última fecha y botones
         if ultima_fecha_db:
-            fecha_ultima = ultima_fecha_db.date()
-            
-            # Si hay registros del día actual o posteriores, mostrar advertencia
-            if fecha_ultima >= fecha_actual:
-                st.error(f"⚠️ Hay registros de fechas futuras ({fecha_ultima.strftime('%d/%m/%Y')}). Por favor, resetee la última fecha.")
-                # Deshabilitar el botón de guardar
-                datos_ayer = None
-            else:
-                st.info(f"Última fecha registrada en BD: {fecha_ultima.strftime('%d/%m/%Y')}")
+            st.info(f"Última fecha registrada en BD: {ultima_fecha.strftime('%d/%m/%Y')}")
         else:
             st.warning("No hay registros en la base de datos")
 
@@ -200,10 +175,9 @@ class SPEModule:
         with col1:
             if datos_ayer is not None:
                 # Solo permitir guardar si la última fecha es anterior al día anterior
-                if not ultima_fecha_db or ultima_fecha_db.date() < fecha_ayer:
+                if ultima_fecha is None or ultima_fecha < fecha_ayer:
                     if st.button("💾 Guardar producción", key="guardar_produccion"):
                         try:
-                            # Guardar nuevo registro
                             nuevo_registro = {
                                 "fecha": pd.Timestamp(fecha_ayer),
                                 "datos": datos_ayer.to_dict('records'),
@@ -215,7 +189,7 @@ class SPEModule:
                         except Exception as e:
                             st.error(f"Error al guardar los datos: {str(e)}")
                 else:
-                    st.warning("Ya existe un registro para esta fecha o posterior. Use el botón de resetear si necesita modificar.")
+                    st.warning(f"Ya existe un registro para el {ultima_fecha.strftime('%d/%m/%Y')}. Use el botón de resetear si necesita modificar.")
 
         # Botón de resetear última fecha
         with col2:

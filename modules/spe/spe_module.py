@@ -907,10 +907,10 @@ class SPEModule:
             )
 
         # 5. Conclusiones y Recomendaciones
-        st.subheader("5. Conclusiones y Recomendaciones")
+        st.subheader("5. Conclusiones")
         st.write("""
         Basado en el análisis de los datos, se presentan las siguientes conclusiones
-        y recomendaciones para optimizar la gestión de expedientes:
+        sobre la tendencia de ingresos:
         """)
 
         conclusiones = []
@@ -919,11 +919,11 @@ class SPEModule:
         if tendencia_corto_plazo > 5:
             conclusiones.append("📈 Tendencia al alza significativa en los últimos 7 días.")
         elif tendencia_corto_plazo < -5:
-            conclusiones.append("📉 Tendencia a la baja significativa en los ��ltimos 7 días.")
+            conclusiones.append("📉 Tendencia a la baja significativa en los últimos 7 días.")
         
         # Análisis de volatilidad
         if volatilidad > 50:
-            conclusiones.append("⚠️ Alta volatilidad en los ingresos. Se recomienda planificación flexible.")
+            conclusiones.append("⚠️ Alta volatilidad en los ingresos.")
         
         # Predicción próxima semana
         proxima_semana = model.predict(poly.transform([[X.max() + 7]]))[0]
@@ -936,23 +936,3 @@ class SPEModule:
         # Mostrar conclusiones
         for conclusion in conclusiones:
             st.write(conclusion)
-
-        # Recomendaciones basadas en análisis
-        st.subheader("Recomendaciones Operativas")
-        
-        recomendaciones = []
-        if tendencia_corto_plazo > 5:
-            recomendaciones.extend([
-                "- Preparar recursos adicionales para manejar el incremento",
-                "- Priorizar expedientes más antiguos",
-                "- Considerar redistribución de carga entre evaluadores"
-            ])
-        else:
-            recomendaciones.extend([
-                "- Aprovechar para reducir backlog",
-                "- Realizar capacitaciones y mejoras de proceso",
-                "- Preparar estrategias para futuros incrementos"
-            ])
-
-        for rec in recomendaciones:
-            st.write(rec)

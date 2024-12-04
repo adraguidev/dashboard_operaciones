@@ -687,6 +687,11 @@ class SPEModule:
     def render_predictive_analysis(self, data):
         """Renderizar análisis predictivo de ingresos usando ML y análisis estadístico avanzado."""
         st.header("Análisis Predictivo de Ingresos 2024")
+        
+        st.write("""
+        Este análisis muestra los patrones de ingreso de expedientes y realiza predicciones basadas en datos históricos del 2024.
+        Los insights generados ayudarán en la planificación y distribución de recursos.
+        """)
 
         # Preparación de datos
         data['FECHA _ INGRESO'] = pd.to_datetime(data['FECHA _ INGRESO'], format='%d/%m/%Y', errors='coerce')
@@ -702,6 +707,11 @@ class SPEModule:
 
         # 1. Análisis de Patrones Temporales
         st.subheader("1. Patrones Temporales")
+        st.write("""
+        Análisis de la distribución de ingresos según diferentes períodos de tiempo.
+        Esto nos permite identificar los días y semanas con mayor carga de trabajo.
+        """)
+        
         col1, col2 = st.columns(2)
 
         with col1:
@@ -712,9 +722,13 @@ class SPEModule:
                 x=dias,
                 y=ingresos_dia_semana,
                 title='Distribución por Día de Semana',
-                labels={'x': 'Día', 'y': 'Cantidad'}
+                labels={'x': 'Día', 'y': 'Cantidad de Expedientes'}
             )
             st.plotly_chart(fig_dias, use_container_width=True)
+            st.write("""
+            Este gráfico muestra el volumen promedio de ingresos por cada día de la semana.
+            Permite identificar los días con mayor carga laboral y planificar recursos acordemente.
+            """)
 
         with col2:
             # Análisis por semana del mes
@@ -723,12 +737,20 @@ class SPEModule:
                 x=['Semana ' + str(i) for i in range(1, 6)],
                 y=ingresos_semana,
                 title='Distribución por Semana del Mes',
-                labels={'x': 'Semana', 'y': 'Cantidad'}
+                labels={'x': 'Semana', 'y': 'Cantidad de Expedientes'}
             )
             st.plotly_chart(fig_semanas, use_container_width=True)
+            st.write("""
+            Muestra la distribución de ingresos por semana del mes.
+            Ayuda a identificar si existen patrones cíclicos en los ingresos mensuales.
+            """)
 
         # 2. Análisis Estadístico
         st.subheader("2. Análisis Estadístico")
+        st.write("""
+        Comparación estadística entre días hábiles y no hábiles.
+        Los valores σ (sigma) indican la variabilidad de los datos: valores más altos indican mayor variabilidad.
+        """)
 
         # Calcular estadísticas por tipo de día
         ingresos_por_tipo_dia = data.groupby(['FECHA _ INGRESO', 'es_dia_habil']).size().reset_index(name='cantidad')
@@ -757,16 +779,28 @@ class SPEModule:
 
         # 3. Análisis de Tendencias y Predicciones
         st.subheader("3. Predicciones y Tendencias")
+        st.write("""
+        Análisis de la tendencia histórica y predicción de ingresos futuros.
+        La línea punteada muestra la tendencia esperada basada en el comportamiento histórico.
+        """)
 
-        from sklearn.linear_model import LinearRegression
-        from sklearn.preprocessing import PolynomialFeatures
-
-        # Preparar datos para predicción
+        # Preparar datos para predicción con ajustes
         daily_counts = data.groupby('FECHA _ INGRESO').size().reset_index()
         daily_counts.columns = ['fecha', 'cantidad']
+        
+        # Asegurar que tenemos todas las fechas
+        fecha_completa = pd.date_range(
+            start=daily_counts['fecha'].min(),
+            end=daily_counts['fecha'].max(),
+            freq='D'
+        )
+        daily_counts = daily_counts.set_index('fecha').reindex(fecha_completa).fillna(0).reset_index()
+        daily_counts.columns = ['fecha', 'cantidad']
+        
+        # Preparar datos para el modelo
         daily_counts['dias_transcurridos'] = (daily_counts['fecha'] - daily_counts['fecha'].min()).dt.days
-
-        # Crear modelo polinomial
+        
+        # Ajustar el modelo
         X = daily_counts['dias_transcurridos'].values.reshape(-1, 1)
         y = daily_counts['cantidad'].values
         poly = PolynomialFeatures(degree=2)
@@ -774,31 +808,64 @@ class SPEModule:
         model = LinearRegression()
         model.fit(X_poly, y)
 
-        # Generar predicciones
-        X_future = np.linspace(X.min(), X.max() + 15, 100).reshape(-1, 1)
+        # Generar predicciones para los próximos 30 días
+        dias_futuros = 30
+        X_future = np.linspace(X.min(), X.max() + dias_futuros, X.max() + dias_futuros).reshape(-1, 1)
         X_future_poly = poly.transform(X_future)
         y_pred = model.predict(X_future_poly)
 
         # Gráfico de tendencia y predicción
         fig_trend = go.Figure()
+        
+        # Datos reales
         fig_trend.add_trace(go.Scatter(
             x=daily_counts['fecha'],
             y=daily_counts['cantidad'],
             mode='markers',
-            name='Datos reales'
+            name='Datos reales',
+            marker=dict(size=6)
         ))
+        
+        # Tendencia y predicción
+        fechas_prediccion = pd.date_range(
+            start=daily_counts['fecha'].min(),
+            periods=len(y_pred),
+            freq='D'
+        )
+        
         fig_trend.add_trace(go.Scatter(
-            x=pd.date_range(daily_counts['fecha'].min(), periods=100),
+            x=fechas_prediccion,
             y=y_pred,
             mode='lines',
             name='Tendencia y predicción',
-            line=dict(dash='dash')
+            line=dict(dash='dash', color='red')
         ))
-        fig_trend.update_layout(title='Tendencia y Predicción de Ingresos')
+        
+        fig_trend.update_layout(
+            title='Tendencia y Predicción de Ingresos',
+            xaxis_title='Fecha',
+            yaxis_title='Cantidad de Expedientes',
+            hovermode='x unified'
+        )
+        
         st.plotly_chart(fig_trend, use_container_width=True)
+        
+        st.write("""
+        **Interpretación del gráfico:**
+        - Los puntos azules representan los ingresos diarios reales
+        - La línea punteada roja muestra la tendencia y predicción
+        - La predicción se extiende 30 días más allá de los datos actuales
+        - Las áreas donde la línea sube indican tendencia al alza, y viceversa
+        """)
 
         # 4. Indicadores Clave y Alertas
         st.subheader("4. Indicadores Clave y Alertas")
+        st.write("""
+        Métricas importantes para monitorear el comportamiento de los ingresos:
+        - **Tendencia Últimos 7 días**: Compara el promedio de la última semana con la semana anterior
+        - **Volatilidad**: Indica qué tan variables son los ingresos (mayor % = más variable)
+        - **Días Atípicos**: Días con ingresos inusualmente altos
+        """)
 
         # Calcular indicadores
         tendencia_corto_plazo = (daily_counts['cantidad'].tail(7).mean() / 
@@ -839,6 +906,10 @@ class SPEModule:
 
         # 5. Conclusiones y Recomendaciones
         st.subheader("5. Conclusiones y Recomendaciones")
+        st.write("""
+        Basado en el análisis de los datos, se presentan las siguientes conclusiones
+        y recomendaciones para optimizar la gestión de expedientes:
+        """)
 
         conclusiones = []
         

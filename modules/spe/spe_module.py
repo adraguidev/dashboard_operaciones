@@ -13,6 +13,8 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 from st_aggrid.shared import JsCode
 import numpy as np
 import plotly.graph_objects as go
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
 
 class SPEModule:
     SCOPES = [
@@ -917,7 +919,7 @@ class SPEModule:
         if tendencia_corto_plazo > 5:
             conclusiones.append("📈 Tendencia al alza significativa en los últimos 7 días.")
         elif tendencia_corto_plazo < -5:
-            conclusiones.append("📉 Tendencia a la baja significativa en los últimos 7 días.")
+            conclusiones.append("📉 Tendencia a la baja significativa en los ��ltimos 7 días.")
         
         # Análisis de volatilidad
         if volatilidad > 50:

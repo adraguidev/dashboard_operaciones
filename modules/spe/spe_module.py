@@ -171,7 +171,10 @@ class SPEModule:
 
         # Mostrar información de última fecha y botones
         if ultima_fecha_db:
-            st.info(f"Última fecha registrada en BD: {ultima_fecha_db.strftime('%d/%m/%Y')}")
+            if ultima_fecha_db.date() > fecha_ayer:
+                st.warning(f"Hay registros futuros en la BD. Por favor, resetee la última fecha.")
+            else:
+                st.info(f"Última fecha registrada en BD: {ultima_fecha_db.strftime('%d/%m/%Y')}")
         else:
             st.warning("No hay registros en la base de datos")
 
@@ -220,8 +223,15 @@ class SPEModule:
 
     def _get_last_date_from_db(self, collection):
         """Obtener la última fecha registrada en la base de datos."""
+        fecha_actual = datetime.now().date()
+        fecha_ayer = fecha_actual - timedelta(days=1)
+        
+        # Buscar el último registro que sea anterior o igual al día anterior
         ultimo_registro = collection.find_one(
-            {"modulo": "SPE"}, 
+            {
+                "modulo": "SPE",
+                "fecha": {"$lte": pd.Timestamp(fecha_ayer)}
+            }, 
             sort=[("fecha", -1)]
         )
         return ultimo_registro['fecha'] if ultimo_registro else None

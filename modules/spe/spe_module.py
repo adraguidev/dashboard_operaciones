@@ -188,55 +188,6 @@ class SPEModule:
         button_container = st.container()
         col1, col2, col3 = button_container.columns([1, 1, 2])
 
-        def verify_password_and_confirm(self, datos=None, is_reset=False, collection=None, ultima_fecha_db=None):
-            """Verificar contraseña y mostrar confirmación."""
-            with st.form("password_form"):
-                st.subheader("🔒 Verificación de Administrador")
-                password = st.text_input("Ingrese la contraseña", type="password")
-                submitted = st.form_submit_button("Verificar")
-                
-                if submitted:
-                    if password == st.secrets["passwords"]["admin_password"]:
-                        st.success("✅ Contraseña correcta")
-                        
-                        if is_reset:
-                            # Mostrar datos que se van a eliminar
-                            st.warning("⚠️ Se eliminarán los siguientes datos:")
-                            st.info(f"Fecha: {ultima_fecha_db.strftime('%d/%m/%Y')}")
-                            
-                            # Obtener y mostrar los datos a eliminar
-                            datos_a_eliminar = collection.find_one({
-                                "modulo": "SPE",
-                                "fecha": ultima_fecha_db
-                            })
-                            if datos_a_eliminar:
-                                df_eliminar = pd.DataFrame(datos_a_eliminar['datos'])
-                                st.dataframe(
-                                    df_eliminar.sort_values('cantidad', ascending=False),
-                                    use_container_width=True
-                                )
-                            
-                            if st.form_submit_button("🗑️ Confirmar Eliminación"):
-                                return True
-                        else:
-                            # Mostrar datos que se van a guardar
-                            st.info("📋 Se guardarán los siguientes datos:")
-                            total_registros = 0
-                            for fecha, ranking in datos.items():
-                                st.markdown(f"**Fecha: {fecha.strftime('%d/%m/%Y')}**")
-                                st.dataframe(
-                                    ranking.sort_values('cantidad', ascending=False),
-                                    use_container_width=True
-                                )
-                                total_registros += len(ranking)
-                            st.info(f"Total de registros a guardar: {total_registros}")
-                            
-                            if st.form_submit_button("✅ Confirmar y Guardar"):
-                                return True
-                    else:
-                        st.error("❌ Contraseña incorrecta")
-            return False
-
         # Verificar datos pendientes de guardar
         datos_pendientes = {fecha: datos for fecha, datos in datos_no_guardados.items() 
                           if fecha <= fecha_ayer}
@@ -256,8 +207,6 @@ class SPEModule:
                             collection.insert_one(nuevo_registro)
                         st.success(f"✅ Producción guardada exitosamente para las fechas: {fechas_str}")
                         st.rerun()
-            elif ultima_fecha_db and ultima_fecha_db.date() == fecha_ayer:
-                st.info("La producción de ayer ya está guardada")
 
         # Botón de reset
         with col2:
@@ -586,3 +535,52 @@ class SPEModule:
                 
         except Exception as e:
             st.error(f"Error al migrar datos: {str(e)}") 
+
+    def verify_password_and_confirm(self, datos=None, is_reset=False, collection=None, ultima_fecha_db=None):
+        """Verificar contraseña y mostrar confirmación."""
+        with st.form("password_form"):
+            st.subheader("🔒 Verificación de Administrador")
+            password = st.text_input("Ingrese la contraseña", type="password")
+            submitted = st.form_submit_button("Verificar")
+            
+            if submitted:
+                if password == st.secrets["passwords"]["admin_password"]:
+                    st.success("✅ Contraseña correcta")
+                    
+                    if is_reset:
+                        # Mostrar datos que se van a eliminar
+                        st.warning("⚠️ Se eliminarán los siguientes datos:")
+                        st.info(f"Fecha: {ultima_fecha_db.strftime('%d/%m/%Y')}")
+                        
+                        # Obtener y mostrar los datos a eliminar
+                        datos_a_eliminar = collection.find_one({
+                            "modulo": "SPE",
+                            "fecha": ultima_fecha_db
+                        })
+                        if datos_a_eliminar:
+                            df_eliminar = pd.DataFrame(datos_a_eliminar['datos'])
+                            st.dataframe(
+                                df_eliminar.sort_values('cantidad', ascending=False),
+                                use_container_width=True
+                            )
+                        
+                        if st.form_submit_button("🗑️ Confirmar Eliminación"):
+                            return True
+                    else:
+                        # Mostrar datos que se van a guardar
+                        st.info("📋 Se guardarán los siguientes datos:")
+                        total_registros = 0
+                        for fecha, ranking in datos.items():
+                            st.markdown(f"**Fecha: {fecha.strftime('%d/%m/%Y')}**")
+                            st.dataframe(
+                                ranking.sort_values('cantidad', ascending=False),
+                                use_container_width=True
+                            )
+                            total_registros += len(ranking)
+                        st.info(f"Total de registros a guardar: {total_registros}")
+                        
+                        if st.form_submit_button("✅ Confirmar y Guardar"):
+                            return True
+                else:
+                    st.error("❌ Contraseña incorrecta")
+        return False

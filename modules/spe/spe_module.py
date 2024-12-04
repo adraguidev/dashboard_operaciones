@@ -684,23 +684,23 @@ class SPEModule:
 
     def render_predictive_analysis(self, data):
         """Renderizar análisis predictivo de ingresos."""
-        st.header("Análisis Predictivo de Ingresos")
+        st.header("Análisis Predictivo de Ingresos 2024")
 
         # Convertir fecha de ingreso a datetime
         data['FECHA _ INGRESO'] = pd.to_datetime(data['FECHA _ INGRESO'], format='%d/%m/%Y', errors='coerce')
         
-        # Filtrar datos válidos
+        # Filtrar datos válidos y solo de 2024
         data = data.dropna(subset=['FECHA _ INGRESO'])
+        data = data[data['FECHA _ INGRESO'].dt.year == 2024]
         
         # Obtener fecha actual y fecha hace 30 días
         fecha_actual = pd.Timestamp.now()
         fecha_30_dias = fecha_actual - pd.Timedelta(days=30)
         
-        # Preparar datos históricos
+        # Preparar datos históricos de 2024
         df_historico = data.copy()
-        df_historico['Año'] = df_historico['FECHA _ INGRESO'].dt.year
-        df_historico['Mes'] = df_historico['FECHA _ INGRESO'].dt.month
-        df_historico['Día'] = df_historico['FECHA _ INGRESO'].dt.day
+        df_historico['Mes'] = df_historico['FECHA _ INGRESO'].dt.strftime('%B')  # Nombre del mes
+        df_historico['Semana'] = df_historico['FECHA _ INGRESO'].dt.isocalendar().week
         
         # Análisis de últimos 30 días
         st.subheader("Ingresos en los Últimos 30 Días")
@@ -718,101 +718,101 @@ class SPEModule:
         fig_diarios.update_traces(line_color='#2E86C1')
         st.plotly_chart(fig_diarios, use_container_width=True)
         
-        # Análisis de tendencia histórica
-        st.subheader("Tendencia Histórica por Año")
-        ingresos_anuales = df_historico.groupby('Año').size().reset_index(name='Cantidad')
+        # Análisis por mes (2024)
+        st.subheader("Tendencia Mensual 2024")
+        ingresos_mensuales = df_historico.groupby('Mes').size().reset_index(name='Cantidad')
         
-        fig_anuales = px.line(
-            ingresos_anuales,
-            x='Año',
-            y='Cantidad',
-            title='Ingresos Anuales',
-            markers=True
-        )
-        st.plotly_chart(fig_anuales, use_container_width=True)
-        
-        # Análisis estacional
-        st.subheader("Patrón Estacional")
-        ingresos_mensuales = df_historico.groupby(['Año', 'Mes']).size().reset_index(name='Cantidad')
-        ingresos_mensuales['Fecha'] = pd.to_datetime(ingresos_mensuales[['Año', 'Mes']].assign(DAY=1))
-        
-        fig_estacional = px.line(
+        fig_mensual = px.bar(
             ingresos_mensuales,
-            x='Fecha',
+            x='Mes',
             y='Cantidad',
-            title='Ingresos Mensuales Históricos',
+            title='Ingresos por Mes (2024)',
+            text='Cantidad'
+        )
+        fig_mensual.update_traces(textposition='outside')
+        st.plotly_chart(fig_mensual, use_container_width=True)
+        
+        # Análisis semanal
+        st.subheader("Tendencia Semanal 2024")
+        ingresos_semanales = df_historico.groupby('Semana').size().reset_index(name='Cantidad')
+        
+        fig_semanal = px.line(
+            ingresos_semanales,
+            x='Semana',
+            y='Cantidad',
+            title='Ingresos por Semana (2024)',
             markers=True
         )
-        st.plotly_chart(fig_estacional, use_container_width=True)
+        st.plotly_chart(fig_semanal, use_container_width=True)
         
         # Análisis de tendencia
         st.subheader("Análisis de Tendencia")
         
-        # Calcular tendencias
-        promedio_actual = ingresos_diarios['Cantidad'].mean()
-        tendencia_anual = ingresos_anuales['Cantidad'].pct_change().iloc[-1] * 100
+        # Calcular métricas
+        promedio_diario = ingresos_diarios['Cantidad'].mean()
+        promedio_semanal = ingresos_semanales['Cantidad'].mean()
+        tendencia_semanal = ingresos_semanales['Cantidad'].pct_change().mean() * 100
         
         # Métricas clave
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric(
-                "Promedio Diario (30 días)",
-                f"{promedio_actual:.1f}",
+                "Promedio Diario",
+                f"{promedio_diario:.1f}",
                 f"{ingresos_diarios['Cantidad'].std():.1f} σ"
             )
         with col2:
             st.metric(
-                "Tendencia Anual",
-                f"{tendencia_anual:.1f}%",
-                delta_color="normal"
+                "Promedio Semanal",
+                f"{promedio_semanal:.1f}",
+                f"{ingresos_semanales['Cantidad'].std():.1f} σ"
             )
         with col3:
-            total_mes_actual = ingresos_diarios['Cantidad'].sum()
             st.metric(
-                "Total Último Mes",
-                f"{total_mes_actual:,.0f}",
-                f"vs {ingresos_mensuales['Cantidad'].mean():.0f} promedio"
+                "Total Mes Actual",
+                f"{ingresos_diarios['Cantidad'].sum():,.0f}",
+                f"vs {ingresos_mensuales['Cantidad'].mean():.0f} promedio mensual"
             )
         
         # Análisis y conclusiones
         st.subheader("Análisis y Predicciones")
         
-        # Calcular tendencias y patrones
+        # Calcular tendencias recientes
         tendencia_ultimos_dias = ingresos_diarios['Cantidad'].pct_change().mean() * 100
-        estacionalidad = ingresos_mensuales.groupby('Mes')['Cantidad'].mean()
-        mes_actual = fecha_actual.month
-        tendencia_estacional = (estacionalidad[mes_actual] / estacionalidad.mean() - 1) * 100
         
-        # Generar conclusiones
+        # Generar conclusiones basadas en datos de 2024
         conclusiones = []
         
+        # Tendencia diaria
         if tendencia_ultimos_dias > 0:
-            conclusiones.append("📈 La tendencia de los últimos días es al alza.")
+            conclusiones.append("📈 La tendencia de los últimos días muestra un incremento en los ingresos.")
         else:
-            conclusiones.append("📉 La tendencia de los últimos días es a la baja.")
-            
-        if tendencia_estacional > 0:
-            conclusiones.append(f"🗓️ Históricamente, este mes suele tener un {tendencia_estacional:.1f}% más de ingresos que el promedio.")
-        else:
-            conclusiones.append(f"🗓️ Históricamente, este mes suele tener un {-tendencia_estacional:.1f}% menos de ingresos que el promedio.")
+            conclusiones.append("📉 La tendencia de los últimos días muestra una disminución en los ingresos.")
         
-        # Predicción simple
-        prediccion_siguiente_mes = promedio_actual * 30 * (1 + tendencia_estacional/100)
-        conclusiones.append(f"🔮 Para el próximo mes, se proyecta aproximadamente {prediccion_siguiente_mes:.0f} ingresos.")
+        # Comparación con promedio
+        ultimo_valor = ingresos_diarios['Cantidad'].iloc[-1]
+        if ultimo_valor > promedio_diario:
+            conclusiones.append(f"📊 El último día registrado ({ultimo_valor:.0f}) está por encima del promedio diario ({promedio_diario:.0f}).")
+        else:
+            conclusiones.append(f"📊 El último día registrado ({ultimo_valor:.0f}) está por debajo del promedio diario ({promedio_diario:.0f}).")
+        
+        # Predicción simple para próxima semana
+        prediccion_siguiente_semana = promedio_diario * 5  # Días laborables
+        conclusiones.append(f"🔮 Para la próxima semana, se proyectan aproximadamente {prediccion_siguiente_semana:.0f} ingresos.")
         
         # Mostrar conclusiones
         for conclusion in conclusiones:
             st.write(conclusion)
         
-        # Recomendaciones
+        # Recomendaciones basadas en tendencia actual
         st.subheader("Recomendaciones")
         if tendencia_ultimos_dias > 0:
             st.write("📋 Dado el incremento en ingresos, se recomienda:")
-            st.write("- Reforzar la capacidad de evaluación")
-            st.write("- Priorizar expedientes según antigüedad")
-            st.write("- Monitorear tiempos de respuesta")
+            st.write("- Optimizar la distribución de expedientes")
+            st.write("- Monitorear la carga de trabajo diaria")
+            st.write("- Priorizar según fecha de ingreso")
         else:
             st.write("📋 Dado el descenso en ingresos, se recomienda:")
-            st.write("- Aprovechar para reducir pendientes")
-            st.write("- Revisar y actualizar procedimientos")
-            st.write("- Preparar mejoras en procesos")
+            st.write("- Enfocarse en reducir expedientes pendientes")
+            st.write("- Analizar la distribución actual de trabajo")
+            st.write("- Prepararse para posibles incrementos futuros")

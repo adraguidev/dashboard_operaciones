@@ -617,6 +617,6 @@ class SPEModule:
                         if total_registros > 0:
                             if st.form_submit_button("✅ Confirmar y Guardar"):
                                 return True
-                    else:
-                        st.error("❌ Contraseña incorrecta")
-            return False
+                        else:
+                            st.error("❌ Contraseña incorrecta")
+                return False

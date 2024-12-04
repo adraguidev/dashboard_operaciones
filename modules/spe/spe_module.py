@@ -180,16 +180,15 @@ class SPEModule:
 
         # Mostrar información de última fecha y botones
         if ultima_fecha_db:
-            if ultima_fecha_db.date() > fecha_ayer:
-                # Eliminar automáticamente registros futuros
-                collection.delete_many({
-                    "modulo": "SPE",
-                    "fecha": {"$gt": pd.Timestamp(fecha_ayer)}
-                })
-                st.warning("Se han eliminado registros futuros de la BD.")
-                st.rerun()
+            fecha_ultima = ultima_fecha_db.date()
+            
+            # Si hay registros del día actual o posteriores, mostrar advertencia
+            if fecha_ultima >= fecha_actual:
+                st.error(f"⚠️ Hay registros de fechas futuras ({fecha_ultima.strftime('%d/%m/%Y')}). Por favor, resetee la última fecha.")
+                # Deshabilitar el botón de guardar
+                datos_ayer = None
             else:
-                st.info(f"Última fecha registrada en BD: {ultima_fecha_db.strftime('%d/%m/%Y')}")
+                st.info(f"Última fecha registrada en BD: {fecha_ultima.strftime('%d/%m/%Y')}")
         else:
             st.warning("No hay registros en la base de datos")
 
@@ -200,27 +199,23 @@ class SPEModule:
         # Botón de guardar (solo para el día anterior)
         with col1:
             if datos_ayer is not None:
-                if st.button("💾 Guardar producción", key="guardar_produccion"):
-                    try:
-                        # Si existe registro del día anterior, eliminarlo
-                        if ultima_fecha_db and ultima_fecha_db.date() == fecha_ayer:
-                            collection.delete_many({
-                                "modulo": "SPE",
-                                "fecha": ultima_fecha_db
-                            })
-                        
-                        # Guardar nuevo registro
-                        nuevo_registro = {
-                            "fecha": pd.Timestamp(fecha_ayer),
-                            "datos": datos_ayer.to_dict('records'),
-                            "modulo": "SPE"
-                        }
-                        collection.insert_one(nuevo_registro)
-                        
-                        st.success(f"✅ Producción guardada exitosamente para la fecha: {fecha_ayer.strftime('%d/%m/%Y')}")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al guardar los datos: {str(e)}")
+                # Solo permitir guardar si la última fecha es anterior al día anterior
+                if not ultima_fecha_db or ultima_fecha_db.date() < fecha_ayer:
+                    if st.button("💾 Guardar producción", key="guardar_produccion"):
+                        try:
+                            # Guardar nuevo registro
+                            nuevo_registro = {
+                                "fecha": pd.Timestamp(fecha_ayer),
+                                "datos": datos_ayer.to_dict('records'),
+                                "modulo": "SPE"
+                            }
+                            collection.insert_one(nuevo_registro)
+                            st.success(f"✅ Producción guardada exitosamente para la fecha: {fecha_ayer.strftime('%d/%m/%Y')}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al guardar los datos: {str(e)}")
+                else:
+                    st.warning("Ya existe un registro para esta fecha o posterior. Use el botón de resetear si necesita modificar.")
 
         # Botón de resetear última fecha
         with col2:
@@ -238,15 +233,9 @@ class SPEModule:
 
     def _get_last_date_from_db(self, collection):
         """Obtener la última fecha registrada en la base de datos."""
-        fecha_actual = datetime.now().date()
-        fecha_ayer = fecha_actual - timedelta(days=1)
-        
-        # Buscar el último registro que sea anterior o igual al día anterior
+        # Buscar el último registro sin filtro de fecha primero
         ultimo_registro = collection.find_one(
-            {
-                "modulo": "SPE",
-                "fecha": {"$lte": pd.Timestamp(fecha_ayer)}
-            }, 
+            {"modulo": "SPE"}, 
             sort=[("fecha", -1)]
         )
         return ultimo_registro['fecha'] if ultimo_registro else None

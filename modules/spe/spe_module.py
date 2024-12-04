@@ -192,40 +192,46 @@ class SPEModule:
         datos_pendientes = {fecha: datos for fecha, datos in datos_no_guardados.items() 
                           if fecha <= fecha_ayer}
 
-        # Botón de guardar (sin verificación de contraseña)
+        # Botón de guardar (sin ningún tipo de verificación)
         with col1:
             if datos_pendientes:
                 fechas_str = ", ".join(fecha.strftime('%d/%m/%Y') for fecha in datos_pendientes.keys())
-                if st.button("💾 Guardar producción"):
-                    for fecha, ranking in datos_pendientes.items():
-                        # Si es el último día, eliminar registro existente
-                        if ultima_fecha_db and fecha == ultima_fecha_db.date():
-                            collection.delete_many({
-                                "modulo": "SPE",
-                                "fecha": ultima_fecha_db
-                            })
+                if st.button("💾 Guardar producción", key="guardar_produccion"):
+                    try:
+                        for fecha, ranking in datos_pendientes.items():
+                            # Si es el último día, eliminar registro existente
+                            if ultima_fecha_db and fecha == ultima_fecha_db.date():
+                                collection.delete_many({
+                                    "modulo": "SPE",
+                                    "fecha": ultima_fecha_db
+                                })
+                            
+                            # Guardar nuevo registro
+                            nuevo_registro = {
+                                "fecha": pd.Timestamp(fecha),
+                                "datos": ranking.to_dict('records'),
+                                "modulo": "SPE"
+                            }
+                            collection.insert_one(nuevo_registro)
                         
-                        # Guardar nuevo registro
-                        nuevo_registro = {
-                            "fecha": pd.Timestamp(fecha),
-                            "datos": ranking.to_dict('records'),
-                            "modulo": "SPE"
-                        }
-                        collection.insert_one(nuevo_registro)
-                    
-                    st.success(f"✅ Producción guardada exitosamente para las fechas: {fechas_str}")
-                    st.rerun()
+                        st.success(f"✅ Producción guardada exitosamente para las fechas: {fechas_str}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al guardar los datos: {str(e)}")
 
         # Botón de resetear última fecha
         with col2:
             if ultima_fecha_db:
-                if st.button("🔄 Resetear última fecha"):
-                    collection.delete_many({
-                        "modulo": "SPE",
-                        "fecha": ultima_fecha_db
-                    })
-                    st.success("✅ Última fecha eliminada correctamente")
-                    st.rerun()
+                if st.button("🔄 Resetear última fecha", key="resetear_fecha"):
+                    try:
+                        collection.delete_many({
+                            "modulo": "SPE",
+                            "fecha": ultima_fecha_db
+                        })
+                        st.success("✅ Última fecha eliminada correctamente")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al resetear la última fecha: {str(e)}")
 
     def _get_last_date_from_db(self, collection):
         """Obtener la última fecha registrada en la base de datos."""

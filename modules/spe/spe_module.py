@@ -548,39 +548,75 @@ class SPEModule:
                     st.success("✅ Contraseña correcta")
                     
                     if is_reset:
-                        # Mostrar datos que se van a eliminar
-                        st.warning("⚠️ Se eliminarán los siguientes datos:")
-                        st.info(f"Fecha: {ultima_fecha_db.strftime('%d/%m/%Y')}")
-                        
-                        # Obtener y mostrar los datos a eliminar
-                        datos_a_eliminar = collection.find_one({
-                            "modulo": "SPE",
-                            "fecha": ultima_fecha_db
-                        })
-                        if datos_a_eliminar:
-                            df_eliminar = pd.DataFrame(datos_a_eliminar['datos'])
-                            st.dataframe(
-                                df_eliminar.sort_values('cantidad', ascending=False),
-                                use_container_width=True
-                            )
-                        
-                        if st.form_submit_button("🗑️ Confirmar Eliminación"):
-                            return True
+                        # Verificar que solo se pueda resetear el último día
+                        if ultima_fecha_db and ultima_fecha_db.date() == (datetime.now().date() - timedelta(days=1)):
+                            st.warning("⚠️ Se eliminarán los siguientes datos:")
+                            st.info(f"Fecha: {ultima_fecha_db.strftime('%d/%m/%Y')}")
+                            
+                            datos_a_eliminar = collection.find_one({
+                                "modulo": "SPE",
+                                "fecha": ultima_fecha_db
+                            })
+                            if datos_a_eliminar:
+                                df_eliminar = pd.DataFrame(datos_a_eliminar['datos'])
+                                st.dataframe(
+                                    df_eliminar.sort_values('cantidad', ascending=False),
+                                    use_container_width=True
+                                )
+                            
+                            if st.form_submit_button("🗑️ Confirmar Eliminación"):
+                                return True
+                        else:
+                            st.error("❌ Solo se puede resetear el último día registrado")
                     else:
-                        # Mostrar datos que se van a guardar
-                        st.info("📋 Se guardarán los siguientes datos:")
+                        # Verificar datos existentes y mostrar comparación
+                        st.info("📋 Resumen de datos:")
                         total_registros = 0
                         for fecha, ranking in datos.items():
                             st.markdown(f"**Fecha: {fecha.strftime('%d/%m/%Y')}**")
-                            st.dataframe(
-                                ranking.sort_values('cantidad', ascending=False),
-                                use_container_width=True
-                            )
+                            
+                            # Verificar si ya existen datos para esta fecha
+                            datos_existentes = collection.find_one({
+                                "modulo": "SPE",
+                                "fecha": pd.Timestamp(fecha)
+                            })
+                            
+                            if datos_existentes:
+                                df_existente = pd.DataFrame(datos_existentes['datos'])
+                                
+                                # Solo permitir sobreescribir el último día
+                                if fecha == ultima_fecha_db.date():
+                                    st.warning("⚠️ Ya existen datos para esta fecha")
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown("**Datos Existentes:**")
+                                        st.dataframe(
+                                            df_existente.sort_values('cantidad', ascending=False),
+                                            use_container_width=True
+                                        )
+                                    with col2:
+                                        st.markdown("**Nuevos Datos:**")
+                                        st.dataframe(
+                                            ranking.sort_values('cantidad', ascending=False),
+                                            use_container_width=True
+                                        )
+                                else:
+                                    st.error(f"❌ Ya existen datos para {fecha.strftime('%d/%m/%Y')} y no se pueden sobreescribir")
+                                    continue
+                            else:
+                                st.success("✅ Nuevos datos a guardar:")
+                                st.dataframe(
+                                    ranking.sort_values('cantidad', ascending=False),
+                                    use_container_width=True
+                                )
+                            
                             total_registros += len(ranking)
-                        st.info(f"Total de registros a guardar: {total_registros}")
                         
-                        if st.form_submit_button("✅ Confirmar y Guardar"):
-                            return True
-                else:
-                    st.error("❌ Contraseña incorrecta")
-        return False
+                        st.info(f"Total de registros a guardar/actualizar: {total_registros}")
+                        
+                        if total_registros > 0:
+                            if st.form_submit_button("✅ Confirmar y Guardar"):
+                                return True
+                    else:
+                        st.error("❌ Contraseña incorrecta")
+            return False

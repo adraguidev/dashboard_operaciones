@@ -8,7 +8,7 @@ import pymongo
 from datetime import datetime, timedelta
 from config.spe_config import SPE_SETTINGS
 from src.utils.database import get_google_credentials
-from config.settings import INACTIVE_EVALUATORS, MONGODB_CONFIG
+from config.settings import INACTIVE_EVALUATORS, MONGODB_CONFIG, ADMIN_PASSWORD
 
 class SPEModule:
     SCOPES = [
@@ -190,15 +190,21 @@ class SPEModule:
 
         def verify_password():
             """Verificar contraseña de administrador."""
-            with st.popup("Verificación de Administrador"):
-                password = st.text_input("Contraseña", type="password")
-                if st.button("Verificar"):
-                    if password == st.secrets["admin_password"]:
-                        return True
+            password_correct = False
+            
+            with st.form("password_form"):
+                st.subheader(" Verificación de Administrador")
+                password = st.text_input("Ingrese la contraseña", type="password")
+                submitted = st.form_submit_button("Verificar")
+                
+                if submitted:
+                    if password == ADMIN_PASSWORD:
+                        password_correct = True
+                        st.success("✅ Contraseña correcta")
                     else:
-                        st.error("Contraseña incorrecta")
-                        return False
-            return False
+                        st.error("❌ Contraseña incorrecta")
+            
+            return password_correct
 
         # Verificar datos pendientes de guardar
         datos_pendientes = {fecha: datos for fecha, datos in datos_no_guardados.items() 
@@ -209,7 +215,7 @@ class SPEModule:
             if datos_pendientes:
                 fechas_str = ", ".join(fecha.strftime('%d/%m/%Y') for fecha in datos_pendientes.keys())
                 if st.button(" Guardar producción"):
-                    if verify_password():
+                    if verify_password():  # Verificar contraseña antes de guardar
                         for fecha, ranking in datos_pendientes.items():
                             ranking_data = ranking.rename(columns={COLUMNAS['EVALUADOR']: 'EVALUADOR'})
                             nuevo_registro = {
@@ -227,7 +233,7 @@ class SPEModule:
         with col2:
             if ultima_fecha_db and ultima_fecha_db.date() == fecha_ayer:
                 if st.button("🔄 Resetear día"):
-                    if verify_password():
+                    if verify_password():  # Verificar contraseña antes de resetear
                         collection.delete_many({
                             "modulo": "SPE",
                             "fecha": ultima_fecha_db

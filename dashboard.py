@@ -17,6 +17,108 @@ st.set_page_config(layout="wide")
 def init_connection():
     return pymongo.MongoClient(st.secrets["connections"]["mongodb"]["uri"])
 
+def render_sidebar():
+    """Renderiza el sidebar con un diseño mejorado."""
+    with st.sidebar:
+        st.markdown("""
+        <style>
+        .sidebar-module {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 3px solid;
+            background-color: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+        }
+        .sidebar-module:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: translateX(5px);
+        }
+        .module-icon {
+            font-size: 1.2em;
+            margin-right: 10px;
+        }
+        .module-title {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .module-description {
+            font-size: 0.9em;
+            color: #888;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        st.title("📊 Dashboard")
+        st.markdown("---")
+
+        # Agrupar módulos por categoría
+        module_categories = {
+            "Principal": ["CCM", "PRR", "CCM-ESP"],
+            "Especiales": ["CCM-LEY", "SOL", "SPE"]
+        }
+
+        selected_module = None
+        
+        for category, modules in module_categories.items():
+            st.markdown(f"### {category}")
+            
+            for module in modules:
+                config = MODULES_CONFIG[module]
+                
+                # Crear un contenedor clickeable para cada módulo
+                module_html = f"""
+                <div class="sidebar-module" style="border-left-color: {get_module_color(module)}">
+                    <div class="module-title">
+                        <span class="module-icon">{config.icon}</span>
+                        {config.name}
+                    </div>
+                    <div class="module-description">
+                        {get_module_description(module)}
+                    </div>
+                </div>
+                """
+                
+                if st.markdown(module_html, unsafe_allow_html=True):
+                    selected_module = module
+
+        # Información adicional en el sidebar
+        st.markdown("---")
+        st.markdown("### 📌 Información")
+        with st.expander("ℹ️ Ayuda"):
+            st.markdown("""
+            - Selecciona un módulo para ver sus datos
+            - Los datos se actualizan cada hora
+            - Para más información, contacta a soporte
+            """)
+
+        return selected_module
+
+def get_module_color(module):
+    """Retorna un color específico para cada módulo."""
+    colors = {
+        "CCM": "#FF6B6B",
+        "PRR": "#4ECDC4",
+        "CCM-ESP": "#45B7D1",
+        "CCM-LEY": "#96CEB4",
+        "SOL": "#FFEEAD",
+        "SPE": "#D4A5A5"
+    }
+    return colors.get(module, "#888888")
+
+def get_module_description(module):
+    """Retorna una descripción corta para cada módulo."""
+    descriptions = {
+        "CCM": "Control de Calidad Migratoria",
+        "PRR": "Prórroga de Residencia",
+        "CCM-ESP": "Control de Calidad Especial",
+        "CCM-LEY": "Control de Calidad Legal",
+        "SOL": "Solicitudes",
+        "SPE": "Sistema de Pendientes de Evaluación"
+    }
+    return descriptions.get(module, "")
+
 def main():
     # Inicializar conexiones
     client = init_connection()
@@ -32,18 +134,11 @@ def main():
 
     st.title("Gestión de Expedientes")
 
-    # Selección de módulo
-    selected_module = st.sidebar.radio(
-        "Selecciona un módulo",
-        options=list(MODULES.keys()),
-        format_func=lambda x: MODULES[x]
-    )
+    # Renderizar sidebar y obtener módulo seleccionado
+    selected_module = render_sidebar()
 
-    # Cargar datos según el módulo seleccionado
-    if selected_module == 'SPE':
-        spe = SPEModule()
-        spe.render_module()
-    else:
+    if selected_module:
+        # Cargar datos según el módulo seleccionado
         data = load_module_data(selected_module)
         if data is None:
             st.error("No se encontró el archivo consolidado para este módulo.")

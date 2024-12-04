@@ -8,7 +8,7 @@ import pymongo
 from datetime import datetime, timedelta
 from config.spe_config import SPE_SETTINGS
 from src.utils.database import get_google_credentials
-from config.settings import INACTIVE_EVALUATORS, MONGODB_CONFIG
+from config.settings import INACTIVE_EVALUATORS, MONGODB_CONFIG, ADMIN_PASSWORD
 
 class SPEModule:
     SCOPES = [
@@ -551,75 +551,84 @@ class SPEModule:
 
     def verify_password_and_confirm(self, datos=None, is_reset=False, collection=None, ultima_fecha_db=None):
         """Verificar contraseña y mostrar confirmación."""
-        # Container para el formulario de contraseña
-        with st.container():
-            st.subheader("🔒 Verificación de Administrador")
-            password = st.text_input("Ingrese la contraseña", type="password")
-            
-            if password == st.secrets["passwords"]["admin_password"]:
-                st.success("✅ Contraseña correcta")
+        if 'password_verified' not in st.session_state:
+            st.session_state.password_verified = False
+
+        # Paso 1: Verificar contraseña
+        if not st.session_state.password_verified:
+            with st.form("password_form"):
+                st.subheader("🔒 Verificación de Administrador")
+                password = st.text_input("Ingrese la contraseña", type="password")
+                submitted = st.form_submit_button("Verificar")
                 
-                # Mostrar resumen de cambios
-                st.info("📋 Resumen de cambios a realizar:")
-                
-                can_save = True  # Flag para controlar si se puede guardar
-                
-                for fecha, ranking in datos.items():
-                    st.markdown(f"### Fecha: {fecha.strftime('%d/%m/%Y')}")
-                    
-                    # Verificar datos existentes
-                    datos_existentes = collection.find_one({
-                        "modulo": "SPE",
-                        "fecha": pd.Timestamp(fecha)
-                    })
-                    
-                    if datos_existentes:
-                        df_existente = pd.DataFrame(datos_existentes['datos'])
-                        
-                        # Solo permitir modificar el último día
-                        if fecha != ultima_fecha_db.date():
-                            st.error(f"❌ No se puede modificar la fecha {fecha.strftime('%d/%m/%Y')} porque no es el último día registrado")
-                            can_save = False
-                            continue
-                        
-                        st.warning("⚠️ Ya existen datos para esta fecha")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown("**Datos Actuales:**")
-                            st.dataframe(df_existente.sort_values('cantidad', ascending=False))
-                        with col2:
-                            st.markdown("**Nuevos Datos:**")
-                            st.dataframe(ranking.sort_values('cantidad', ascending=False))
-                        
-                        # Mostrar diferencias
-                        df_merged = df_existente.merge(
-                            ranking, 
-                            on='EVALUADOR', 
-                            suffixes=('_actual', '_nuevo')
-                        )
-                        df_merged['diferencia'] = df_merged['cantidad_nuevo'] - df_merged['cantidad_actual']
-                        
-                        if not df_merged[df_merged['diferencia'] != 0].empty:
-                            st.markdown("**Cambios detectados:**")
-                            st.dataframe(
-                                df_merged[df_merged['diferencia'] != 0][
-                                    ['EVALUADOR', 'cantidad_actual', 'cantidad_nuevo', 'diferencia']
-                                ]
-                            )
+                if submitted:
+                    if password == st.secrets["passwords"]["admin_password"]:
+                        st.session_state.password_verified = True
+                        st.success("✅ Contraseña correcta")
+                        st.rerun()
                     else:
-                        st.success("✅ Nuevos datos a guardar:")
-                        st.dataframe(ranking.sort_values('cantidad', ascending=False))
+                        st.error("❌ Contraseña incorrecta")
+                return False
+
+        # Paso 2: Mostrar datos a confirmar
+        if st.session_state.password_verified:
+            st.success("✅ Contraseña verificada")
+            st.info("📋 Resumen de cambios a realizar:")
+            
+            can_save = True
+            for fecha, ranking in datos.items():
+                st.markdown(f"### Fecha: {fecha.strftime('%d/%m/%Y')}")
                 
-                # Botones de acción
-                if can_save:
+                datos_existentes = collection.find_one({
+                    "modulo": "SPE",
+                    "fecha": pd.Timestamp(fecha)
+                })
+                
+                if datos_existentes:
+                    df_existente = pd.DataFrame(datos_existentes['datos'])
+                    if fecha != ultima_fecha_db.date():
+                        st.error(f"❌ No se puede modificar la fecha {fecha.strftime('%d/%m/%Y')} porque no es el último día registrado")
+                        can_save = False
+                        continue
+                    
+                    st.warning("⚠️ Ya existen datos para esta fecha")
                     col1, col2 = st.columns(2)
                     with col1:
-                        if st.button("✅ Confirmar y Guardar"):
-                            return True
+                        st.markdown("**Datos Actuales:**")
+                        st.dataframe(df_existente.sort_values('cantidad', ascending=False))
                     with col2:
-                        if st.button("❌ Cancelar"):
-                            st.rerun()
-            elif password:
-                st.error("❌ Contraseña incorrecta")
+                        st.markdown("**Nuevos Datos:**")
+                        st.dataframe(ranking.sort_values('cantidad', ascending=False))
+                    
+                    # Mostrar diferencias
+                    df_merged = df_existente.merge(
+                        ranking, 
+                        on='EVALUADOR', 
+                        suffixes=('_actual', '_nuevo')
+                    )
+                    df_merged['diferencia'] = df_merged['cantidad_nuevo'] - df_merged['cantidad_actual']
+                    
+                    if not df_merged[df_merged['diferencia'] != 0].empty:
+                        st.markdown("**Cambios detectados:**")
+                        st.dataframe(
+                            df_merged[df_merged['diferencia'] != 0][
+                                ['EVALUADOR', 'cantidad_actual', 'cantidad_nuevo', 'diferencia']
+                            ]
+                        )
+                else:
+                    st.success("✅ Nuevos datos a guardar:")
+                    st.dataframe(ranking.sort_values('cantidad', ascending=False))
+
+            # Botones de acción
+            if can_save:
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Confirmar y Guardar"):
+                        st.session_state.password_verified = False
+                        return True
+                with col2:
+                    if st.button("❌ Cancelar"):
+                        st.session_state.password_verified = False
+                        st.rerun()
         
         return False

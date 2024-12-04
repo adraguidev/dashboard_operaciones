@@ -13,6 +13,12 @@ def render_ranking_report_tab(data, selected_module, collection):
             st.warning(f"No se encontraron datos para el módulo {selected_module}.")
             return
 
+        # Obtener fecha de ayer
+        yesterday = pd.Timestamp.now().normalize() - pd.Timedelta(days=1)
+        
+        # Filtrar datos hasta ayer
+        data_until_yesterday = data[data['FechaPre'] <= yesterday]
+        
         # Obtener última fecha registrada
         ultima_fecha_db = get_last_date_from_db(selected_module, collection)
         
@@ -22,14 +28,24 @@ def render_ranking_report_tab(data, selected_module, collection):
             with col1:
                 st.info(f"Última fecha registrada: {ultima_fecha_db.strftime('%d/%m/%Y')}")
             with col2:
-                if st.button("Resetear último día"):
-                    # Eliminar registros del último día
-                    collection.delete_many({
-                        "modulo": selected_module,
-                        "fecha": ultima_fecha_db
-                    })
-                    st.success("Último día eliminado. Los datos se actualizarán al recargar.")
-                    st.rerun()
+                if st.button("Resetear Último día"):
+                    try:
+                        # Filtrar registros del día anterior
+                        registros_ultimo_dia = data[
+                            (data['FechaPre'].dt.normalize() == yesterday)
+                        ]
+                        
+                        if not registros_ultimo_dia.empty:
+                            # Eliminar registros del día anterior
+                            collection.delete_many({
+                                "fecha": yesterday.strftime("%Y-%m-%d")
+                            })
+                            st.success(f"Registros del {yesterday.strftime('%Y-%m-%d')} eliminados correctamente")
+                        else:
+                            st.warning(f"No hay registros para el {yesterday.strftime('%Y-%m-%d')}")
+                            
+                    except Exception as e:
+                        st.error(f"Error al resetear el último día: {str(e)}")
 
         # Resto del código original...
         fecha_actual = datetime.now().date()

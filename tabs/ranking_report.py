@@ -1,3 +1,4 @@
+import pytz
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -8,16 +9,22 @@ def render_ranking_report_tab(data, selected_module, collection):
     st.header("Ranking de Expedientes Trabajados")
 
     try:
+        # Configurar zona horaria de Perú
+        peru_tz = pytz.timezone('America/Lima')
+        now = datetime.now(peru_tz)
+        
+        # Obtener fecha de ayer (hora Perú)
+        yesterday = pd.Timestamp(now).normalize() - pd.Timedelta(days=1)
+        yesterday = yesterday.tz_localize(None)  # Remover zona horaria para comparaciones
+        
         # Verificar si hay datos del módulo
         if data is None:
             st.warning(f"No se encontraron datos para el módulo {selected_module}.")
             return
 
-        # Obtener fecha de ayer
-        yesterday = pd.Timestamp.now().normalize() - pd.Timedelta(days=1)
-        
         # Filtrar datos hasta ayer
-        data_until_yesterday = data[data['FechaPre'] <= yesterday]
+        data['FechaPre'] = pd.to_datetime(data['FechaPre'])
+        data_until_yesterday = data[data['FechaPre'].dt.normalize() <= yesterday]
         
         # Obtener última fecha registrada
         ultima_fecha_db = get_last_date_from_db(selected_module, collection)
@@ -31,32 +38,24 @@ def render_ranking_report_tab(data, selected_module, collection):
                 if st.button("Resetear Último día"):
                     try:
                         # Filtrar registros del día anterior
-                        registros_ultimo_dia = data[
-                            (data['FechaPre'].dt.normalize() == yesterday)
-                        ]
-                        
-                        if not registros_ultimo_dia.empty:
-                            # Eliminar registros del día anterior
-                            collection.delete_many({
-                                "fecha": yesterday.strftime("%Y-%m-%d")
-                            })
-                            st.success(f"Registros del {yesterday.strftime('%Y-%m-%d')} eliminados correctamente")
-                        else:
-                            st.warning(f"No hay registros para el {yesterday.strftime('%Y-%m-%d')}")
-                            
+                        collection.delete_many({
+                            "fecha": yesterday.strftime("%Y-%m-%d"),
+                            "modulo": selected_module
+                        })
+                        st.success(f"Registros del {yesterday.strftime('%d/%m/%Y')} eliminados correctamente")
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Error al resetear el último día: {str(e)}")
 
-        # Resto del código original...
-        fecha_actual = datetime.now().date()
-        fecha_ayer = fecha_actual - pd.Timedelta(days=1)
+        # Modificar el procesamiento de fechas para usar solo hasta ayer
+        fecha_actual = now.date()
+        fecha_ayer = yesterday.date()
         fecha_inicio_excel = fecha_actual - pd.Timedelta(days=7)
 
         # Convertir y filtrar datos por fechas relevantes
         data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
         datos_nuevos = data[
-            (data['FECHA DE TRABAJO'].dt.date >= fecha_inicio_excel) &
-            (data['FECHA DE TRABAJO'].dt.date <= fecha_ayer)
+            (data['FECHA DE TRABAJO'].dt.date == fecha_ayer)  # Solo procesar datos de ayer
         ]
 
         # Obtener última fecha registrada en la base de datos
@@ -262,8 +261,13 @@ def render_ranking_report_tab(data, selected_module, collection):
 
 def get_last_date_from_db(module, collection):
     """Obtener la última fecha registrada para el módulo."""
-    ultimo_registro = collection.find_one({"modulo": module}, sort=[("fecha", -1)])
-    return ultimo_registro['fecha'] if ultimo_registro else None 
+    ultimo_registro = collection.find_one(
+        {"modulo": module}, 
+        sort=[("fecha", -1)]
+    )
+    if ultimo_registro:
+        return pd.to_datetime(ultimo_registro['fecha'])
+    return None
 
 def prepare_inconsistencias_dataframe(datos_validos):
     """Prepara el DataFrame de inconsistencias para su visualización."""

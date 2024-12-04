@@ -22,30 +22,55 @@ def render_ranking_report_tab(data, selected_module, collection):
             st.warning(f"No se encontraron datos para el módulo {selected_module}.")
             return
 
-        # Filtrar datos hasta ayer
+        # Convertir FechaPre a datetime si no lo está ya
         data['FechaPre'] = pd.to_datetime(data['FechaPre'])
-        data_until_yesterday = data[data['FechaPre'].dt.normalize() <= yesterday]
+        data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
+
+        # Filtrar datos de ayer
+        datos_ayer = data[data['FECHA DE TRABAJO'].dt.normalize() == yesterday]
         
         # Obtener última fecha registrada
         ultima_fecha_db = get_last_date_from_db(selected_module, collection)
         
-        if ultima_fecha_db:
-            # Agregar opción para resetear último día
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.info(f"Última fecha registrada: {ultima_fecha_db.strftime('%d/%m/%Y')}")
-            with col2:
-                if st.button("Resetear Último día"):
-                    try:
-                        # Filtrar registros del día anterior
-                        collection.delete_many({
-                            "fecha": yesterday.strftime("%Y-%m-%d"),
-                            "modulo": selected_module
-                        })
-                        st.success(f"Registros del {yesterday.strftime('%d/%m/%Y')} eliminados correctamente")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al resetear el último día: {str(e)}")
+        # Verificar si hay datos de ayer para procesar
+        if not datos_ayer.empty:
+            # Preparar datos para guardar
+            ranking_dia = datos_ayer.groupby('EVALASIGN').size().reset_index(name='cantidad')
+            ranking_dia.columns = ['evaluador', 'cantidad']
+            
+            nuevo_registro = {
+                "fecha": yesterday.strftime("%Y-%m-%d"),
+                "datos": ranking_dia.to_dict('records'),
+                "modulo": selected_module
+            }
+            
+            # Verificar si ya existe registro para ayer
+            registro_existente = collection.find_one({
+                "fecha": yesterday.strftime("%Y-%m-%d"),
+                "modulo": selected_module
+            })
+            
+            if registro_existente:
+                # Mostrar opción para resetear
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.info(f"Última fecha registrada: {yesterday.strftime('%d/%m/%Y')}")
+                with col2:
+                    if st.button("Resetear Último día"):
+                        try:
+                            collection.delete_many({
+                                "fecha": yesterday.strftime("%Y-%m-%d"),
+                                "modulo": selected_module
+                            })
+                            st.success(f"Registros del {yesterday.strftime('%d/%m/%Y')} eliminados correctamente")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al resetear el último día: {str(e)}")
+            else:
+                # Guardar nuevo registro
+                collection.insert_one(nuevo_registro)
+                st.success(f"Datos del {yesterday.strftime('%d/%m/%Y')} guardados correctamente")
+                st.rerun()
 
         # Modificar el procesamiento de fechas para usar solo hasta ayer
         fecha_actual = now.date()

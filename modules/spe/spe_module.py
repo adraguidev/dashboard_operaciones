@@ -545,20 +545,36 @@ class SPEModule:
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
+        # Convertir columnas de fecha a datetime
+        COLUMNAS_FECHA = ['FECHA_INGRESO', 'FECHA_TRABAJO']
+        for col in COLUMNAS_FECHA:
+            data[COLUMNAS_DISPONIBLES[col]] = pd.to_datetime(
+                data[COLUMNAS_DISPONIBLES[col]], 
+                format='%d/%m/%Y',
+                dayfirst=True,
+                errors='coerce'
+            )
+
         # Configuración del análisis
         st.subheader("Configuración del Análisis")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            # Selección de filas (ahora opcional)
             filas = st.multiselect(
                 "Seleccionar campos para filas (opcional):",
                 options=list(COLUMNAS_DISPONIBLES.keys()),
                 default=[]
             )
             
-            # Selección de valor a contar/sumar
+            # Si se seleccionó una columna de fecha en filas, mostrar opciones de agrupación
+            if any(f in COLUMNAS_FECHA for f in filas):
+                agrupacion_filas = st.selectbox(
+                    "Agrupar fechas por:",
+                    options=['Día', 'Mes', 'Año'],
+                    key="agrupacion_filas"
+                )
+            
             valor_conteo = st.selectbox(
                 "Seleccionar valor a contar:",
                 options=['EXPEDIENTE'],
@@ -566,19 +582,54 @@ class SPEModule:
             )
 
         with col2:
-            # Selección de columnas (opcional)
             columnas = st.multiselect(
                 "Seleccionar campos para columnas (opcional):",
                 options=list(COLUMNAS_DISPONIBLES.keys()),
                 default=[]
             )
             
-            # Selección de función de agregación
+            # Si se seleccionó una columna de fecha en columnas, mostrar opciones de agrupación
+            if any(c in COLUMNAS_FECHA for c in columnas):
+                agrupacion_columnas = st.selectbox(
+                    "Agrupar fechas por:",
+                    options=['Día', 'Mes', 'Año'],
+                    key="agrupacion_columnas"
+                )
+            
             funcion_agg = st.selectbox(
                 "Función de agregación:",
                 options=['count', 'nunique'],
                 format_func=lambda x: "Contar" if x == 'count' else "Contar únicos"
             )
+
+        # Aplicar agrupación de fechas si es necesario
+        data_procesada = data.copy()
+        
+        def aplicar_formato_fecha(df, campo, tipo_agrupacion):
+            if tipo_agrupacion == 'Mes':
+                return df[COLUMNAS_DISPONIBLES[campo]].dt.strftime('%Y-%m')
+            elif tipo_agrupacion == 'Año':
+                return df[COLUMNAS_DISPONIBLES[campo]].dt.strftime('%Y')
+            else:  # Día
+                return df[COLUMNAS_DISPONIBLES[campo]].dt.strftime('%Y-%m-%d')
+
+        # Aplicar formato a columnas de fecha en filas
+        for f in filas:
+            if f in COLUMNAS_FECHA:
+                data_procesada[COLUMNAS_DISPONIBLES[f]] = aplicar_formato_fecha(
+                    data_procesada, 
+                    f, 
+                    agrupacion_filas if 'agrupacion_filas' in locals() else 'Día'
+                )
+
+        # Aplicar formato a columnas de fecha en columnas
+        for c in columnas:
+            if c in COLUMNAS_FECHA:
+                data_procesada[COLUMNAS_DISPONIBLES[c]] = aplicar_formato_fecha(
+                    data_procesada, 
+                    c, 
+                    agrupacion_columnas if 'agrupacion_columnas' in locals() else 'Día'
+                )
 
         # Filtros adicionales
         st.subheader("Filtros")
@@ -586,7 +637,7 @@ class SPEModule:
         filtros_aplicados = {}
         for campo in COLUMNAS_DISPONIBLES:
             if campo not in filas + columnas:
-                valores_unicos = sorted(data[COLUMNAS_DISPONIBLES[campo]].unique())
+                valores_unicos = sorted(data_procesada[COLUMNAS_DISPONIBLES[campo]].unique())
                 if len(valores_unicos) > 0:
                     filtros = st.multiselect(
                         f"Filtrar por {campo}:",
@@ -597,16 +648,15 @@ class SPEModule:
                         filtros_aplicados[COLUMNAS_DISPONIBLES[campo]] = filtros
 
         # Aplicar filtros
-        data_filtrada = data.copy()
+        data_filtrada = data_procesada.copy()
         for campo, valores in filtros_aplicados.items():
             data_filtrada = data_filtrada[data_filtrada[campo].isin(valores)]
 
-        # Crear tabla dinámica
+        # Crear tabla dinámica con los datos procesados
         try:
             indices = [COLUMNAS_DISPONIBLES[f] for f in filas] if filas else None
             cols = [COLUMNAS_DISPONIBLES[c] for c in columnas] if columnas else None
             
-            # Si no hay filas ni columnas, mostrar solo el conteo total
             if not indices and not cols:
                 total = len(data_filtrada) if funcion_agg == 'count' else data_filtrada[COLUMNAS_DISPONIBLES[valor_conteo]].nunique()
                 pivot_table = pd.DataFrame({'Total': [total]})

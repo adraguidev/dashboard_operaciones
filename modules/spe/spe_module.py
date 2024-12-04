@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from config.spe_config import SPE_SETTINGS
 from src.utils.database import get_google_credentials
 from config.settings import INACTIVE_EVALUATORS, MONGODB_CONFIG
+from st_aggrid import AgGrid, GridOptionsBuilder
+from st_aggrid.shared import JsCode
 
 class SPEModule:
     SCOPES = [
@@ -530,6 +532,54 @@ class SPEModule:
         except Exception as e:
             st.error(f"Error al migrar datos: {str(e)}") 
 
+    def crear_filtro_fecha_jerarquico(self, df, columna_fecha):
+        """Crear filtro jerárquico para fechas (Año > Mes > Día)."""
+        fechas = pd.to_datetime(df[columna_fecha])
+        
+        # Obtener años únicos
+        años = sorted(fechas.dt.year.unique())
+        año_seleccionado = st.selectbox(
+            f'Año ({columna_fecha})',
+            options=['Todos'] + años,
+            key=f'año_{columna_fecha}'
+        )
+        
+        if año_seleccionado != 'Todos':
+            # Filtrar por año
+            mask_año = fechas.dt.year == año_seleccionado
+            df_filtrado = df[mask_año]
+            
+            # Obtener meses únicos del año seleccionado
+            meses = sorted(fechas[mask_año].dt.strftime('%m-%B').unique())
+            mes_seleccionado = st.selectbox(
+                f'Mes ({columna_fecha})',
+                options=['Todos'] + meses,
+                key=f'mes_{columna_fecha}'
+            )
+            
+            if mes_seleccionado != 'Todos':
+                # Filtrar por mes
+                mes_num = mes_seleccionado.split('-')[0]
+                mask_mes = fechas[mask_año].dt.strftime('%m') == mes_num
+                df_filtrado = df_filtrado[mask_mes]
+                
+                # Obtener días únicos del mes seleccionado
+                dias = sorted(fechas[mask_año & mask_mes].dt.strftime('%d').unique())
+                dia_seleccionado = st.selectbox(
+                    f'Día ({columna_fecha})',
+                    options=['Todos'] + dias,
+                    key=f'dia_{columna_fecha}'
+                )
+                
+                if dia_seleccionado != 'Todos':
+                    # Filtrar por día
+                    mask_dia = fechas[mask_año & mask_mes].dt.strftime('%d') == dia_seleccionado
+                    df_filtrado = df_filtrado[mask_dia]
+        else:
+            df_filtrado = df
+        
+        return df_filtrado
+
     def render_dynamic_analysis(self, data):
         """Renderizar análisis dinámico tipo tabla dinámica."""
         st.header("Análisis Dinámico")
@@ -555,174 +605,179 @@ class SPEModule:
                 errors='coerce'
             )
 
-        # Configuración del análisis
-        st.subheader("Configuración del Análisis")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            filas = st.multiselect(
-                "Seleccionar campos para filas (opcional):",
-                options=list(COLUMNAS_DISPONIBLES.keys()),
-                default=[]
-            )
-            
-            # Si se seleccionó una columna de fecha en filas, mostrar opciones de agrupación
-            if any(f in COLUMNAS_FECHA for f in filas):
-                agrupacion_filas = st.selectbox(
-                    "Agrupar fechas por:",
-                    options=['Día', 'Mes', 'Año'],
-                    key="agrupacion_filas"
-                )
-            
-            valor_conteo = st.selectbox(
-                "Seleccionar valor a contar:",
-                options=['EXPEDIENTE'],
-                format_func=lambda x: f"Cantidad de {x}s"
-            )
+        # Crear columnas adicionales para fechas
+        for col in COLUMNAS_FECHA:
+            fecha_col = COLUMNAS_DISPONIBLES[col]
+            data[f'{col}_AÑO'] = data[fecha_col].dt.year
+            data[f'{col}_MES'] = data[fecha_col].dt.strftime('%B-%Y')  # Nombre del mes y año
+            data[f'{col}_DIA'] = data[fecha_col].dt.strftime('%d-%B-%Y')  # Día, mes y año
 
-        with col2:
-            columnas = st.multiselect(
-                "Seleccionar campos para columnas (opcional):",
-                options=list(COLUMNAS_DISPONIBLES.keys()),
-                default=[]
+        # Configuración de AgGrid
+        gb = GridOptionsBuilder.from_dataframe(data)
+
+        # Configurar columnas principales
+        for col in COLUMNAS_DISPONIBLES.values():
+            gb.configure_column(col, filter=True, sorteable=True)
+
+        # Configurar columnas de fecha con filtros especiales
+        for col in COLUMNAS_FECHA:
+            # Ocultar columna original de fecha
+            gb.configure_column(COLUMNAS_DISPONIBLES[col], hide=True)
+            
+            # Configurar columnas de fecha desglosadas
+            gb.configure_column(
+                f'{col}_AÑO',
+                header_name=f'Año ({col})',
+                filter='agNumberColumnFilter',
+                sorteable=True
             )
-            
-            # Si se seleccionó una columna de fecha en columnas, mostrar opciones de agrupación
-            if any(c in COLUMNAS_FECHA for c in columnas):
-                agrupacion_columnas = st.selectbox(
-                    "Agrupar fechas por:",
-                    options=['Día', 'Mes', 'Año'],
-                    key="agrupacion_columnas"
-                )
-            
-            funcion_agg = st.selectbox(
-                "Función de agregación:",
-                options=['count', 'nunique'],
-                format_func=lambda x: "Contar" if x == 'count' else "Contar únicos"
+            gb.configure_column(
+                f'{col}_MES',
+                header_name=f'Mes ({col})',
+                filter='agTextColumnFilter',
+                sorteable=True
+            )
+            gb.configure_column(
+                f'{col}_DIA',
+                header_name=f'Día ({col})',
+                filter='agTextColumnFilter',
+                sorteable=True
             )
 
-        # Aplicar agrupación de fechas si es necesario
-        data_procesada = data.copy()
-        
-        def aplicar_formato_fecha(df, campo, tipo_agrupacion):
-            if tipo_agrupacion == 'Mes':
-                return df[COLUMNAS_DISPONIBLES[campo]].dt.strftime('%Y-%m')
-            elif tipo_agrupacion == 'Año':
-                return df[COLUMNAS_DISPONIBLES[campo]].dt.strftime('%Y')
-            else:  # Día
-                return df[COLUMNAS_DISPONIBLES[campo]].dt.strftime('%Y-%m-%d')
+        # Configuraciones adicionales del grid
+        gb.configure_default_column(
+            groupable=True,
+            value=True,
+            enableRowGroup=True,
+            enablePivot=True,
+            enableValue=True
+        )
+        gb.configure_side_bar()
+        gb.configure_selection(selection_mode='multiple', use_checkbox=True)
+        gb.configure_grid_options(
+            domLayout='normal',
+            enableRangeSelection=True,
+            enableCharts=True
+        )
 
-        # Aplicar formato a columnas de fecha en filas
-        for f in filas:
-            if f in COLUMNAS_FECHA:
-                data_procesada[COLUMNAS_DISPONIBLES[f]] = aplicar_formato_fecha(
-                    data_procesada, 
-                    f, 
-                    agrupacion_filas if 'agrupacion_filas' in locals() else 'Día'
+        grid_options = gb.build()
+
+        # Mostrar grid interactivo
+        st.subheader("Filtrado y Análisis Avanzado")
+        grid_response = AgGrid(
+            data,
+            grid_options,
+            enable_enterprise_modules=True,
+            update_mode='MODEL_CHANGED',
+            data_return_mode='FILTERED_AND_SORTED',
+            fit_columns_on_grid_load=False,
+            theme='streamlit',
+            height=500,
+            allow_unsafe_jscode=True
+        )
+
+        # Obtener datos filtrados
+        data_filtrada = pd.DataFrame(grid_response['data'])
+        
+        if not data_filtrada.empty:
+            st.subheader("Resumen de Datos Filtrados")
+            
+            # Mostrar conteos básicos
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Expedientes", len(data_filtrada))
+            with col2:
+                st.metric("Expedientes Únicos", data_filtrada['EXPEDIENTE'].nunique())
+            with col3:
+                st.metric("Evaluadores", data_filtrada['EVALUADOR'].nunique())
+
+            # Opción para agrupar datos
+            st.subheader("Análisis Agrupado")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                agrupar_por = st.multiselect(
+                    "Agrupar por:",
+                    options=[k for k in COLUMNAS_DISPONIBLES.keys() if k != 'EXPEDIENTE'],
+                    default=['EVALUADOR']
+                )
+            
+            with col2:
+                metrica = st.selectbox(
+                    "Métrica:",
+                    options=['Cantidad de Expedientes', 'Expedientes Únicos'],
+                    index=0
                 )
 
-        # Aplicar formato a columnas de fecha en columnas
-        for c in columnas:
-            if c in COLUMNAS_FECHA:
-                data_procesada[COLUMNAS_DISPONIBLES[c]] = aplicar_formato_fecha(
-                    data_procesada, 
-                    c, 
-                    agrupacion_columnas if 'agrupacion_columnas' in locals() else 'Día'
-                )
-
-        # Filtros adicionales
-        st.subheader("Filtros")
-        
-        filtros_aplicados = {}
-        for campo in COLUMNAS_DISPONIBLES:
-            if campo not in filas + columnas:
-                valores_unicos = sorted(data_procesada[COLUMNAS_DISPONIBLES[campo]].unique())
-                if len(valores_unicos) > 0:
-                    filtros = st.multiselect(
-                        f"Filtrar por {campo}:",
-                        options=valores_unicos,
-                        default=[]
+            if agrupar_por:
+                # Crear tabla pivote según selección
+                indices = [COLUMNAS_DISPONIBLES[col] for col in agrupar_por]
+                
+                if metrica == 'Cantidad de Expedientes':
+                    pivot = pd.pivot_table(
+                        data_filtrada,
+                        index=indices,
+                        values='EXPEDIENTE',
+                        aggfunc='count',
+                        margins=True,
+                        margins_name='Total'
                     )
-                    if filtros:
-                        filtros_aplicados[COLUMNAS_DISPONIBLES[campo]] = filtros
-
-        # Aplicar filtros
-        data_filtrada = data_procesada.copy()
-        for campo, valores in filtros_aplicados.items():
-            data_filtrada = data_filtrada[data_filtrada[campo].isin(valores)]
-
-        # Crear tabla dinámica con los datos procesados
-        try:
-            indices = [COLUMNAS_DISPONIBLES[f] for f in filas] if filas else None
-            cols = [COLUMNAS_DISPONIBLES[c] for c in columnas] if columnas else None
-            
-            if not indices and not cols:
-                total = len(data_filtrada) if funcion_agg == 'count' else data_filtrada[COLUMNAS_DISPONIBLES[valor_conteo]].nunique()
-                pivot_table = pd.DataFrame({'Total': [total]})
-            else:
-                pivot_table = pd.pivot_table(
-                    data_filtrada,
-                    index=indices,
-                    columns=cols,
-                    values=COLUMNAS_DISPONIBLES[valor_conteo],
-                    aggfunc=funcion_agg,
-                    margins=True,
-                    margins_name='Total'
-                )
-
-            # Mostrar resultados
-            st.subheader("Resultados")
-            st.dataframe(
-                pivot_table,
-                use_container_width=True,
-                height=400
-            )
-
-            # Opción para descargar
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                pivot_table.to_excel(writer, sheet_name='Análisis_Dinámico')
-            
-            st.download_button(
-                label="📥 Descargar Análisis",
-                data=output.getvalue(),
-                file_name="analisis_dinamico.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-            # Visualización gráfica si es posible y hay más de un dato
-            if len(pivot_table) > 1 and not pivot_table.empty:
-                st.subheader("Visualización")
-                tipo_grafico = st.selectbox(
-                    "Tipo de gráfico:",
-                    options=['Barras', 'Líneas', 'Calor'],
-                    key="tipo_grafico"
-                )
-
-                if tipo_grafico == 'Barras':
-                    fig = px.bar(
-                        pivot_table.reset_index() if isinstance(pivot_table.index, pd.MultiIndex) else pivot_table,
-                        x=pivot_table.index.name if pivot_table.index.name else 'index',
-                        y=pivot_table.columns[0] if len(pivot_table.columns) > 0 else None,
-                        title="Análisis Gráfico",
-                        barmode='group'
-                    )
-                elif tipo_grafico == 'Líneas':
-                    fig = px.line(
-                        pivot_table.reset_index() if isinstance(pivot_table.index, pd.MultiIndex) else pivot_table,
-                        x=pivot_table.index.name if pivot_table.index.name else 'index',
-                        y=pivot_table.columns[0] if len(pivot_table.columns) > 0 else None,
-                        title="Análisis Gráfico"
-                    )
-                else:  # Calor
-                    fig = px.imshow(
-                        pivot_table,
-                        title="Mapa de Calor"
+                else:
+                    pivot = pd.pivot_table(
+                        data_filtrada,
+                        index=indices,
+                        values='EXPEDIENTE',
+                        aggfunc='nunique',
+                        margins=True,
+                        margins_name='Total'
                     )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.dataframe(pivot, use_container_width=True)
 
-        except Exception as e:
-            st.error(f"Error al generar el análisis: {str(e)}")
-            st.info("Sugerencia: Intente con una combinación diferente de campos")
+                # Opción para descargar
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    pivot.to_excel(writer, sheet_name='Análisis_Agrupado')
+                    data_filtrada.to_excel(writer, sheet_name='Datos_Filtrados', index=False)
+                
+                st.download_button(
+                    label="📥 Descargar Análisis",
+                    data=output.getvalue(),
+                    file_name="analisis_dinamico.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+                # Visualización
+                if len(pivot) > 1:
+                    st.subheader("Visualización")
+                    tipo_grafico = st.selectbox(
+                        "Tipo de gráfico:",
+                        options=['Barras', 'Líneas', 'Torta', 'Calor'],
+                        key="tipo_grafico"
+                    )
+
+                    pivot_plot = pivot.iloc[:-1]  # Excluir la fila de Total
+                    if tipo_grafico == 'Barras':
+                        fig = px.bar(
+                            pivot_plot,
+                            title="Análisis Gráfico"
+                        )
+                    elif tipo_grafico == 'Líneas':
+                        fig = px.line(
+                            pivot_plot,
+                            title="Análisis Gráfico"
+                        )
+                    elif tipo_grafico == 'Torta':
+                        fig = px.pie(
+                            pivot_plot,
+                            values=pivot_plot.columns[0],
+                            names=pivot_plot.index,
+                            title="Análisis Gráfico"
+                        )
+                    else:  # Calor
+                        fig = px.imshow(
+                            pivot_plot,
+                            title="Mapa de Calor"
+                        )
+
+                    st.plotly_chart(fig, use_container_width=True)

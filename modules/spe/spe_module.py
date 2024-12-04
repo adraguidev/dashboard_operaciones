@@ -915,7 +915,7 @@ class SPEModule:
                 help="Días con ingresos inusualmente altos"
             )
 
-        # 5. Conclusiones y Recomendaciones
+        # 5. Conclusiones
         st.subheader("5. Conclusiones")
         st.write("""
         Basado en el análisis de los datos, se presentan las siguientes conclusiones
@@ -934,13 +934,23 @@ class SPEModule:
         if volatilidad > 50:
             conclusiones.append("⚠️ Alta volatilidad en los ingresos.")
         
-        # Predicción próxima semana
-        proxima_semana = model.predict(poly.transform([[X.max() + 7]]))[0]
-        conclusiones.append(f"🔮 Predicción para próxima semana: {proxima_semana:.0f} ingresos diarios en promedio.")
+        # Predicción próxima semana usando el modelo Prophet
+        proxima_semana_forecast = forecast['yhat'].iloc[-1]
+        conclusiones.append(f"🔮 Predicción para próximo mes: {proxima_semana_forecast:.0f} ingresos en promedio.")
         
-        # Días críticos
-        dias_mas_carga = dias[ingresos_dia_semana.argmax()]
-        conclusiones.append(f"📊 {dias_mas_carga} es el día con mayor volumen de ingresos.")
+        # Análisis de patrones semanales
+        promedio_por_dia = data.groupby(data['FECHA _ INGRESO'].dt.dayofweek).size()
+        dia_mas_ingresos = promedio_por_dia.idxmax()
+        dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+        conclusiones.append(f"📊 {dias[dia_mas_ingresos]} es el día con mayor volumen de ingresos histórico.")
+
+        # Tendencia mensual
+        tendencia_mensual = (ingresos_mensuales['cantidad'].iloc[-1] / 
+                           ingresos_mensuales['cantidad'].iloc[-2] - 1) * 100
+        if tendencia_mensual > 0:
+            conclusiones.append(f"📈 El último mes muestra un incremento del {tendencia_mensual:.1f}% respecto al mes anterior.")
+        else:
+            conclusiones.append(f"📉 El último mes muestra una disminución del {-tendencia_mensual:.1f}% respecto al mes anterior.")
 
         # Mostrar conclusiones
         for conclusion in conclusiones:

@@ -34,11 +34,24 @@ def render_sidebar():
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             padding-bottom: 5px;
         }
+        .stButton > button {
+            background-color: transparent;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            text-align: left;
+        }
+        .stButton > button:hover {
+            border-color: #00acee;
+            background-color: rgba(0, 172, 238, 0.1);
+        }
         </style>
         """, unsafe_allow_html=True)
 
-        st.image("assets/logo.png", width=100)  # Asegúrate de tener el logo en assets/
         st.title("Dashboard")
+        st.markdown("---")
         
         # Agrupar módulos por categoría
         module_groups = {
@@ -64,13 +77,21 @@ def render_sidebar():
             """, unsafe_allow_html=True)
             
             for module_key, module_label in modules.items():
-                if st.sidebar.button(
+                if st.button(
                     module_label,
                     key=f"btn_{module_key}",
                     help=f"Ver dashboard de {module_label}",
                     use_container_width=True
                 ):
                     selected_module = module_key
+        
+        st.markdown("---")
+        with st.expander("ℹ️ Ayuda"):
+            st.markdown("""
+            - Selecciona un módulo para ver sus datos
+            - Los datos se actualizan cada hora
+            - Para más información, contacta a soporte
+            """)
         
         return selected_module
 

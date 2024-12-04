@@ -137,3 +137,38 @@ def display_multiple_years_report(data, selected_years, selected_evaluators):
         file_name="pendientes_detallado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+def display_single_year_report(data, selected_year, selected_evaluators):
+    """Mostrar reporte para un solo año."""
+    # Filtrar datos según año y evaluadores seleccionados
+    filtered_data = data[
+        (data['Anio'] == selected_year) & 
+        (data['EVALASIGN'].isin(selected_evaluators))
+    ]
+    
+    table = generate_table_single_year(filtered_data, selected_year)
+    total_pendientes = table['Total'].sum()
+    st.metric("Total de Expedientes Pendientes", total_pendientes)
+    render_table(table, "Pendientes por Evaluador")
+
+    # Descarga como Excel
+    excel_buf = download_table_as_excel(table, "Pendientes_Un_Año")
+    st.download_button(
+        "Descargar como Excel",
+        excel_buf,
+        file_name="pendientes_un_ano.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    # Descarga Detallada
+    filters = {
+        'Anio': [selected_year],
+        'EVALASIGN': selected_evaluators
+    }
+    detailed_buf = download_detailed_list(filtered_data, filters)
+    st.download_button(
+        "Descargar Detallado (Pendientes - Todos los Filtros)",
+        detailed_buf,
+        file_name="pendientes_detallado.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )

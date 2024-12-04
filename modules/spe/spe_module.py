@@ -8,7 +8,7 @@ import pymongo
 from datetime import datetime, timedelta
 from config.spe_config import SPE_SETTINGS
 from src.utils.database import get_google_credentials
-from config.settings import INACTIVE_EVALUATORS, MONGODB_CONFIG, ADMIN_PASSWORD
+from config.settings import INACTIVE_EVALUATORS, MONGODB_CONFIG
 
 class SPEModule:
     SCOPES = [

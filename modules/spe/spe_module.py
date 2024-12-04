@@ -11,6 +11,8 @@ from src.utils.database import get_google_credentials
 from config.settings import INACTIVE_EVALUATORS, MONGODB_CONFIG
 from st_aggrid import AgGrid, GridOptionsBuilder
 from st_aggrid.shared import JsCode
+import numpy as np
+import plotly.graph_objects as go
 
 class SPEModule:
     SCOPES = [
@@ -683,153 +685,196 @@ class SPEModule:
         )
 
     def render_predictive_analysis(self, data):
-        """Renderizar análisis predictivo de ingresos."""
+        """Renderizar análisis predictivo de ingresos usando ML y análisis estadístico avanzado."""
         st.header("Análisis Predictivo de Ingresos 2024")
 
-        # Convertir fecha de ingreso a datetime
+        # Preparación de datos
         data['FECHA _ INGRESO'] = pd.to_datetime(data['FECHA _ INGRESO'], format='%d/%m/%Y', errors='coerce')
-        
-        # Filtrar datos válidos y solo de 2024
         data = data.dropna(subset=['FECHA _ INGRESO'])
         data = data[data['FECHA _ INGRESO'].dt.year == 2024]
+
+        # Enriquecer datos con características temporales
+        data['dia_semana'] = data['FECHA _ INGRESO'].dt.dayofweek
+        data['es_dia_habil'] = data['dia_semana'] < 5
+        data['semana_mes'] = data['FECHA _ INGRESO'].dt.day.apply(lambda x: (x-1)//7 + 1)
+        data['dia_mes'] = data['FECHA _ INGRESO'].dt.day
+        data['mes'] = data['FECHA _ INGRESO'].dt.month
+
+        # 1. Análisis de Patrones Temporales
+        st.subheader("1. Patrones Temporales")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Análisis por día de la semana
+            ingresos_dia_semana = data.groupby('dia_semana').size()
+            dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+            fig_dias = px.bar(
+                x=dias,
+                y=ingresos_dia_semana,
+                title='Distribución por Día de Semana',
+                labels={'x': 'Día', 'y': 'Cantidad'}
+            )
+            st.plotly_chart(fig_dias, use_container_width=True)
+
+        with col2:
+            # Análisis por semana del mes
+            ingresos_semana = data.groupby('semana_mes').size()
+            fig_semanas = px.bar(
+                x=['Semana ' + str(i) for i in range(1, 6)],
+                y=ingresos_semana,
+                title='Distribución por Semana del Mes',
+                labels={'x': 'Semana', 'y': 'Cantidad'}
+            )
+            st.plotly_chart(fig_semanas, use_container_width=True)
+
+        # 2. Análisis Estadístico Avanzado
+        st.subheader("2. Análisis Estadístico")
         
-        # Obtener fecha actual y fecha hace 30 días
-        fecha_actual = pd.Timestamp.now()
-        mes_actual = fecha_actual.month
-        fecha_30_dias = fecha_actual - pd.Timedelta(days=30)
+        # Calcular estadísticas por día hábil vs no hábil
+        stats_dias = data.groupby('es_dia_habil').agg({
+            'EXPEDIENTE': ['count', 'mean', 'std']
+        }).round(2)
         
-        # Preparar datos históricos de 2024
-        df_historico = data.copy()
-        # Usar número de mes para ordenamiento correcto
-        df_historico['Mes_num'] = df_historico['FECHA _ INGRESO'].dt.month
-        df_historico['Mes'] = df_historico['FECHA _ INGRESO'].dt.strftime('%B')
-        df_historico['Semana'] = df_historico['FECHA _ INGRESO'].dt.isocalendar().week
+        col1, col2 = st.columns(2)
         
-        # Análisis de últimos 30 días
-        st.subheader("Ingresos en los Últimos 30 Días")
-        datos_recientes = df_historico[df_historico['FECHA _ INGRESO'] >= fecha_30_dias]
-        ingresos_diarios = datos_recientes.groupby('FECHA _ INGRESO').size().reset_index(name='Cantidad')
-        
-        # Gráfico de ingresos diarios
-        fig_diarios = px.line(
-            ingresos_diarios,
-            x='FECHA _ INGRESO',
-            y='Cantidad',
-            title='Ingresos Diarios (Últimos 30 días)',
-            markers=True
-        )
-        fig_diarios.update_traces(line_color='#2E86C1')
-        st.plotly_chart(fig_diarios, use_container_width=True)
-        
-        # Análisis por mes (2024)
-        st.subheader("Tendencia Mensual 2024")
-        ingresos_mensuales = df_historico.groupby(['Mes_num', 'Mes']).agg({
-            'EXPEDIENTE': 'count'
-        }).reset_index()
-        ingresos_mensuales.columns = ['Mes_num', 'Mes', 'Cantidad']
-        ingresos_mensuales = ingresos_mensuales.sort_values('Mes_num')  # Ordenar por número de mes
-        
-        fig_mensual = px.bar(
-            ingresos_mensuales,
-            x='Mes',
-            y='Cantidad',
-            title='Ingresos por Mes (2024)',
-            text='Cantidad'
-        )
-        fig_mensual.update_traces(textposition='outside')
-        st.plotly_chart(fig_mensual, use_container_width=True)
-        
-        # Análisis semanal
-        st.subheader("Tendencia Semanal 2024")
-        ingresos_semanales = df_historico.groupby('Semana').size().reset_index(name='Cantidad')
-        
-        fig_semanal = px.line(
-            ingresos_semanales,
-            x='Semana',
-            y='Cantidad',
-            title='Ingresos por Semana (2024)',
-            markers=True
-        )
-        st.plotly_chart(fig_semanal, use_container_width=True)
-        
-        # Análisis de tendencia
-        st.subheader("Análisis de Tendencia")
-        
-        # Calcular métricas del mes actual
-        datos_mes_actual = df_historico[df_historico['Mes_num'] == mes_actual]
-        dias_mes_actual = datos_mes_actual['FECHA _ INGRESO'].dt.day.nunique()
-        total_mes_actual = len(datos_mes_actual)
-        promedio_diario_mes_actual = total_mes_actual / dias_mes_actual if dias_mes_actual > 0 else 0
-        
-        # Calcular promedio diario de los últimos 30 días
-        promedio_diario_30dias = len(datos_recientes) / min(30, datos_recientes['FECHA _ INGRESO'].dt.day.nunique())
-        
-        # Métricas clave
-        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric(
-                "Promedio Diario (Mes Actual)",
-                f"{promedio_diario_mes_actual:.1f}",
-                f"{datos_mes_actual.groupby(datos_mes_actual['FECHA _ INGRESO'].dt.date).size().std():.1f} σ"
+                "Promedio Días Hábiles",
+                f"{stats_dias.loc[True, ('EXPEDIENTE', 'mean')]:.0f}",
+                f"±{stats_dias.loc[True, ('EXPEDIENTE', 'std')]:.0f} σ"
             )
         with col2:
             st.metric(
-                "Promedio Diario (30 días)",
-                f"{promedio_diario_30dias:.1f}",
-                f"{ingresos_diarios['Cantidad'].std():.1f} σ"
+                "Promedio Días No Hábiles",
+                f"{stats_dias.loc[False, ('EXPEDIENTE', 'mean')]:.0f}",
+                f"±{stats_dias.loc[False, ('EXPEDIENTE', 'std')]:.0f} σ"
             )
-        with col3:
-            promedio_mensual = ingresos_mensuales['Cantidad'].mean()
+
+        # 3. Análisis de Tendencias y Predicciones
+        st.subheader("3. Predicciones y Tendencias")
+
+        from sklearn.linear_model import LinearRegression
+        from sklearn.preprocessing import PolynomialFeatures
+
+        # Preparar datos para predicción
+        daily_counts = data.groupby('FECHA _ INGRESO').size().reset_index()
+        daily_counts.columns = ['fecha', 'cantidad']
+        daily_counts['dias_transcurridos'] = (daily_counts['fecha'] - daily_counts['fecha'].min()).dt.days
+
+        # Crear modelo polinomial
+        X = daily_counts['dias_transcurridos'].values.reshape(-1, 1)
+        y = daily_counts['cantidad'].values
+        poly = PolynomialFeatures(degree=2)
+        X_poly = poly.fit_transform(X)
+        model = LinearRegression()
+        model.fit(X_poly, y)
+
+        # Generar predicciones
+        X_future = np.linspace(X.min(), X.max() + 15, 100).reshape(-1, 1)
+        X_future_poly = poly.transform(X_future)
+        y_pred = model.predict(X_future_poly)
+
+        # Gráfico de tendencia y predicción
+        fig_trend = go.Figure()
+        fig_trend.add_trace(go.Scatter(
+            x=daily_counts['fecha'],
+            y=daily_counts['cantidad'],
+            mode='markers',
+            name='Datos reales'
+        ))
+        fig_trend.add_trace(go.Scatter(
+            x=pd.date_range(daily_counts['fecha'].min(), periods=100),
+            y=y_pred,
+            mode='lines',
+            name='Tendencia y predicción',
+            line=dict(dash='dash')
+        ))
+        fig_trend.update_layout(title='Tendencia y Predicción de Ingresos')
+        st.plotly_chart(fig_trend, use_container_width=True)
+
+        # 4. Indicadores Clave y Alertas
+        st.subheader("4. Indicadores Clave y Alertas")
+
+        # Calcular indicadores
+        tendencia_corto_plazo = (daily_counts['cantidad'].tail(7).mean() / 
+                                daily_counts['cantidad'].tail(14).head(7).mean() - 1) * 100
+        
+        volatilidad = daily_counts['cantidad'].std() / daily_counts['cantidad'].mean() * 100
+        
+        # Calcular percentiles para detección de anomalías
+        p25, p75 = np.percentile(daily_counts['cantidad'], [25, 75])
+        iqr = p75 - p25
+        limite_superior = p75 + 1.5 * iqr
+        
+        dias_atipicos = daily_counts[daily_counts['cantidad'] > limite_superior]
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
             st.metric(
-                "Total Mes Actual",
-                f"{total_mes_actual:,.0f}",
-                f"{((total_mes_actual/promedio_mensual - 1) * 100):.1f}% vs promedio"
+                "Tendencia Últimos 7 días",
+                f"{tendencia_corto_plazo:.1f}%",
+                delta=tendencia_corto_plazo,
+                delta_color="normal"
             )
         
-        # Análisis y conclusiones
-        st.subheader("Análisis y Predicciones")
+        with col2:
+            st.metric(
+                "Volatilidad",
+                f"{volatilidad:.1f}%",
+                help="Coeficiente de variación de los ingresos"
+            )
         
-        # Calcular tendencias considerando solo días hábiles
-        dias_habiles_mes = datos_mes_actual['FECHA _ INGRESO'].dt.dayofweek < 5  # Lunes a Viernes
-        promedio_dias_habiles = datos_mes_actual[dias_habiles_mes].groupby(
-            datos_mes_actual[dias_habiles_mes]['FECHA _ INGRESO'].dt.date
-        ).size().mean()
-        
-        # Generar conclusiones
+        with col3:
+            st.metric(
+                "Días Atípicos",
+                len(dias_atipicos),
+                help="Días con ingresos inusualmente altos"
+            )
+
+        # 5. Conclusiones y Recomendaciones
+        st.subheader("5. Conclusiones y Recomendaciones")
+
         conclusiones = []
         
-        # Tendencia mensual
-        tendencia_mensual = ingresos_mensuales['Cantidad'].pct_change().iloc[-1] * 100
-        if tendencia_mensual > 0:
-            conclusiones.append(f"📈 El mes actual muestra un incremento del {tendencia_mensual:.1f}% respecto al mes anterior.")
-        else:
-            conclusiones.append(f"📉 El mes actual muestra una disminución del {-tendencia_mensual:.1f}% respecto al mes anterior.")
+        # Análisis de tendencia
+        if tendencia_corto_plazo > 5:
+            conclusiones.append("📈 Tendencia al alza significativa en los últimos 7 días.")
+        elif tendencia_corto_plazo < -5:
+            conclusiones.append("📉 Tendencia a la baja significativa en los últimos 7 días.")
         
-        # Comparación con promedio
-        if promedio_diario_mes_actual > promedio_diario_30dias:
-            conclusiones.append(f"📊 El promedio diario del mes actual ({promedio_diario_mes_actual:.1f}) está por encima del promedio de los últimos 30 días ({promedio_diario_30dias:.1f}).")
-        else:
-            conclusiones.append(f"📊 El promedio diario del mes actual ({promedio_diario_mes_actual:.1f}) está por debajo del promedio de los últimos 30 días ({promedio_diario_30dias:.1f}).")
+        # Análisis de volatilidad
+        if volatilidad > 50:
+            conclusiones.append("⚠️ Alta volatilidad en los ingresos. Se recomienda planificación flexible.")
         
-        # Predicción para el resto del mes
-        dias_habiles_restantes = 20 - dias_mes_actual  # Asumiendo 20 días hábiles por mes
-        if dias_habiles_restantes > 0:
-            prediccion_mes = total_mes_actual + (dias_habiles_restantes * promedio_dias_habiles)
-            conclusiones.append(f"🔮 Proyección para fin de mes: {prediccion_mes:.0f} expedientes.")
+        # Predicción próxima semana
+        proxima_semana = model.predict(poly.transform([[X.max() + 7]]))[0]
+        conclusiones.append(f"🔮 Predicción para próxima semana: {proxima_semana:.0f} ingresos diarios en promedio.")
         
+        # Días críticos
+        dias_mas_carga = dias[ingresos_dia_semana.argmax()]
+        conclusiones.append(f"📊 {dias_mas_carga} es el día con mayor volumen de ingresos.")
+
         # Mostrar conclusiones
         for conclusion in conclusiones:
             st.write(conclusion)
+
+        # Recomendaciones basadas en análisis
+        st.subheader("Recomendaciones Operativas")
         
-        # Recomendaciones basadas en tendencia actual
-        st.subheader("Recomendaciones")
-        if promedio_diario_mes_actual > promedio_diario_30dias:
-            st.write("📋 Dado el incremento en ingresos, se recomienda:")
-            st.write("- Optimizar la distribución diaria de expedientes")
-            st.write("- Monitorear la carga de trabajo por evaluador")
-            st.write("- Priorizar expedientes según antigüedad")
+        recomendaciones = []
+        if tendencia_corto_plazo > 5:
+            recomendaciones.extend([
+                "- Preparar recursos adicionales para manejar el incremento",
+                "- Priorizar expedientes más antiguos",
+                "- Considerar redistribución de carga entre evaluadores"
+            ])
         else:
-            st.write("📋 Dado el descenso en ingresos, se recomienda:")
-            st.write("- Aprovechar para reducir expedientes pendientes")
-            st.write("- Revisar la distribución actual de trabajo")
-            st.write("- Preparar estrategias para futuros incrementos")
+            recomendaciones.extend([
+                "- Aprovechar para reducir backlog",
+                "- Realizar capacitaciones y mejoras de proceso",
+                "- Preparar estrategias para futuros incrementos"
+            ])
+
+        for rec in recomendaciones:
+            st.write(rec)

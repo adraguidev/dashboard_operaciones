@@ -214,11 +214,11 @@ def render_ranking_report_tab(data, selected_module, collection):
                 
                 # Filtrar datos de los últimos 30 días
                 fecha_30_dias = pd.Timestamp.now() - pd.Timedelta(days=30)
-                datos_recientes = data[data['FechaPre'] >= fecha_30_dias].copy()
+                datos_recientes = data[data['FechaPre'] >= fecha_30_dias].copy(deep=True)
                 
                 # Convertir fechas si no lo están
-                datos_recientes['FECHA DE TRABAJO'] = pd.to_datetime(datos_recientes['FECHA DE TRABAJO'], errors='coerce')
-                datos_recientes['FechaPre'] = pd.to_datetime(datos_recientes['FechaPre'], errors='coerce')
+                datos_recientes.loc[:, 'FECHA DE TRABAJO'] = pd.to_datetime(datos_recientes['FECHA DE TRABAJO'], errors='coerce')
+                datos_recientes.loc[:, 'FechaPre'] = pd.to_datetime(datos_recientes['FechaPre'], errors='coerce')
                 
                 # Filtrar primero los registros que tienen ambas fechas (no nulos)
                 datos_validos = datos_recientes.dropna(subset=['FECHA DE TRABAJO', 'FechaPre'])
@@ -233,8 +233,10 @@ def render_ranking_report_tab(data, selected_module, collection):
                 
                 if not inconsistencias.empty:
                     # Formatear fechas para visualización
-                    inconsistencias['FECHA DE TRABAJO'] = inconsistencias['FECHA DE TRABAJO'].dt.strftime('%d/%m/%Y')
-                    inconsistencias['FechaPre'] = inconsistencias['FechaPre'].dt.strftime('%d/%m/%Y')
+                    inconsistencias['FECHA DE TRABAJO'] = inconsistencias['FECHA DE TRABAJO'].dt.strftime('%Y-%m-%d')
+                    inconsistencias['FechaPre'] = inconsistencias['FechaPre'].dt.strftime('%Y-%m-%d')
+                    inconsistencias['DiferenciaDias'] = inconsistencias['DiferenciaDias'].astype(int)
+                    inconsistencias['DESCRIPCION'] = inconsistencias['DESCRIPCION'].astype(str)
                     
                     # Renombrar columnas para mejor visualización
                     inconsistencias.columns = [

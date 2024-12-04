@@ -232,55 +232,7 @@ def render_ranking_report_tab(data, selected_module, collection):
                 inconsistencias = datos_validos.loc[mask, columnas].copy()
                 
                 if not inconsistencias.empty:
-                    # Formatear fechas para visualización
-                    inconsistencias = inconsistencias.copy()  # Crear una copia explícita
-                    inconsistencias.loc[:, 'FECHA DE TRABAJO'] = inconsistencias['FECHA DE TRABAJO'].dt.strftime('%Y-%m-%d')
-                    inconsistencias.loc[:, 'FechaPre'] = inconsistencias['FechaPre'].dt.strftime('%Y-%m-%d')
-                    inconsistencias.loc[:, 'DiferenciaDias'] = inconsistencias['DiferenciaDias'].astype(int)
-                    inconsistencias.loc[:, 'DESCRIPCION'] = inconsistencias['DESCRIPCION'].astype(str)
-                    
-                    # Renombrar columnas usando un método más seguro
-                    new_columns = {
-                        'NumeroTramite': 'N° Expediente',
-                        'EVALASIGN': 'Evaluador',
-                        'FECHA DE TRABAJO': 'Fecha de Trabajo',
-                        'FechaPre': 'Fecha Pre',
-                        'DiferenciaDias': 'Diferencia en Días',
-                        'ESTADO': 'Estado',
-                        'DESCRIPCION': 'Descripción'
-                    }
-                    inconsistencias = inconsistencias.rename(columns=new_columns)
-                    
-                    # Ordenar por diferencia de días (mayor a menor)
-                    inconsistencias = inconsistencias.sort_values('Diferencia en Días', ascending=False)
-                    
-                    # Asegurarnos que todas las columnas sean compatibles con Arrow antes de mostrar
-                    def prepare_inconsistencias_dataframe(df):
-                        """Prepara el DataFrame de inconsistencias para su visualización."""
-                        # Crear una copia limpia
-                        df = df.copy()
-                        
-                        # Formatear fechas y tipos de datos
-                        df.loc[:, 'FECHA DE TRABAJO'] = df['FECHA DE TRABAJO'].dt.strftime('%Y-%m-%d')
-                        df.loc[:, 'FechaPre'] = df['FechaPre'].dt.strftime('%Y-%m-%d')
-                        df.loc[:, 'DiferenciaDias'] = df['DiferenciaDias'].astype(int)
-                        df.loc[:, 'DESCRIPCION'] = df['DESCRIPCION'].astype(str)
-                        
-                        # Renombrar columnas
-                        new_columns = {
-                            'NumeroTramite': 'N° Expediente',
-                            'EVALASIGN': 'Evaluador',
-                            'FECHA DE TRABAJO': 'Fecha de Trabajo',
-                            'FechaPre': 'Fecha Pre',
-                            'DiferenciaDias': 'Diferencia en Días',
-                            'ESTADO': 'Estado',
-                            'DESCRIPCION': 'Descripción'
-                        }
-                        df = df.rename(columns=new_columns)
-                        
-                        return df
-
-                    # Usar la función
+                    # Mostrar el dataframe
                     inconsistencias = prepare_inconsistencias_dataframe(inconsistencias)
                     st.dataframe(inconsistencias, use_container_width=True, height=400)
                     
@@ -312,3 +264,34 @@ def get_last_date_from_db(module, collection):
     """Obtener la última fecha registrada para el módulo."""
     ultimo_registro = collection.find_one({"modulo": module}, sort=[("fecha", -1)])
     return ultimo_registro['fecha'] if ultimo_registro else None 
+
+def prepare_inconsistencias_dataframe(datos_validos):
+    """Prepara el DataFrame de inconsistencias para su visualización."""
+    # Filtrar y crear una copia única al inicio
+    mask = datos_validos['DiferenciaDias'] > 2
+    columnas = ['NumeroTramite', 'EVALASIGN', 'FECHA DE TRABAJO', 'FechaPre', 'DiferenciaDias', 'ESTADO', 'DESCRIPCION']
+    df = datos_validos.loc[mask, columnas].copy()
+    
+    if not df.empty:
+        # Formatear fechas y tipos de datos
+        df.loc[:, 'FECHA DE TRABAJO'] = df['FECHA DE TRABAJO'].dt.strftime('%Y-%m-%d')
+        df.loc[:, 'FechaPre'] = df['FechaPre'].dt.strftime('%Y-%m-%d')
+        df.loc[:, 'DiferenciaDias'] = df['DiferenciaDias'].astype(int)
+        df.loc[:, 'DESCRIPCION'] = df['DESCRIPCION'].astype(str)
+        
+        # Renombrar columnas
+        new_columns = {
+            'NumeroTramite': 'N° Expediente',
+            'EVALASIGN': 'Evaluador',
+            'FECHA DE TRABAJO': 'Fecha de Trabajo',
+            'FechaPre': 'Fecha Pre',
+            'DiferenciaDias': 'Diferencia en Días',
+            'ESTADO': 'Estado',
+            'DESCRIPCION': 'Descripción'
+        }
+        df = df.rename(columns=new_columns)
+        
+        # Ordenar por diferencia de días
+        df = df.sort_values('Diferencia en Días', ascending=False)
+    
+    return df 

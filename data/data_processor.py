@@ -9,7 +9,7 @@ def process_date_columns(data):
     
     for col in date_columns:
         if col in data.columns:
-            data[col] = pd.to_datetime(data[col], errors='coerce')
+            data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', dayfirst=True, errors='coerce')
     
     return data
 

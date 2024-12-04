@@ -227,9 +227,9 @@ def render_ranking_report_tab(data, selected_module, collection):
                 datos_validos['DiferenciaDias'] = abs((datos_validos['FECHA DE TRABAJO'] - datos_validos['FechaPre']).dt.days)
                 
                 # Encontrar inconsistencias (diferencia mayor a 2 días)
-                inconsistencias = datos_validos[
-                    datos_validos['DiferenciaDias'] > 2
-                ][['NumeroTramite', 'EVALASIGN', 'FECHA DE TRABAJO', 'FechaPre', 'DiferenciaDias', 'ESTADO', 'DESCRIPCION']].copy()
+                mask = datos_validos['DiferenciaDias'] > 2
+                columnas = ['NumeroTramite', 'EVALASIGN', 'FECHA DE TRABAJO', 'FechaPre', 'DiferenciaDias', 'ESTADO', 'DESCRIPCION']
+                inconsistencias = datos_validos.loc[mask, columnas].copy()
                 
                 if not inconsistencias.empty:
                     # Formatear fechas para visualización
@@ -252,12 +252,19 @@ def render_ranking_report_tab(data, selected_module, collection):
                     # Ordenar por diferencia de días (mayor a menor)
                     inconsistencias = inconsistencias.sort_values('Diferencia en Días', ascending=False)
                     
-                    # Mostrar tabla de inconsistencias con ancho personalizado
-                    st.dataframe(
-                        inconsistencias,
-                        use_container_width=True,  # Usar todo el ancho disponible
-                        height=400  # Altura fija para mejor visualización
-                    )
+                    # Asegurarnos que todas las columnas sean compatibles con Arrow antes de mostrar
+                    def prepare_dataframe_for_display(df):
+                        df = df.copy()
+                        for col in df.columns:
+                            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                                df[col] = df[col].dt.strftime('%Y-%m-%d')
+                            elif pd.api.types.is_object_dtype(df[col]):
+                                df[col] = df[col].astype(str)
+                        return df
+
+                    # Usar la función antes de mostrar el dataframe
+                    inconsistencias = prepare_dataframe_for_display(inconsistencias)
+                    st.dataframe(inconsistencias, use_container_width=True, height=400)
                     
                     # Botón para descargar inconsistencias
                     output_inconsistencias = BytesIO()

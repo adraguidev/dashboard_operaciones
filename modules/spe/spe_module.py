@@ -97,7 +97,7 @@ class SPEModule:
         )
         
         # Filtrar datos solo hasta el día anterior desde el inicio
-        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer]
+        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual]
 
         # Excluir evaluadores inactivos
         data = data[~data[COLUMNAS['EVALUADOR']].isin(INACTIVE_EVALUATORS['SPE'])]
@@ -108,7 +108,7 @@ class SPEModule:
         # Obtener datos históricos de MongoDB (solo hasta ayer)
         registros_historicos = list(collection.find({
             "modulo": "SPE",
-            "fecha": {"$lte": pd.Timestamp(fecha_ayer)}
+            "fecha": {"$lt": pd.Timestamp(fecha_actual)}
         }).sort("fecha", -1))
         
         # Preparar DataFrame histórico desde MongoDB
@@ -118,8 +118,8 @@ class SPEModule:
         if registros_historicos:
             for registro in registros_historicos:
                 fecha = pd.Timestamp(registro['fecha'])
-                # Solo procesar si la fecha es anterior o igual a ayer
-                if fecha.date() <= fecha_ayer:
+                # Solo procesar si la fecha es anterior al día actual
+                if fecha.date() < fecha_actual:
                     fechas_guardadas.add(fecha.date())
                     fecha_str = fecha.strftime('%d/%m')
                     df_temp = pd.DataFrame(registro['datos'])

@@ -710,10 +710,13 @@ class SPEModule:
         # 1. Análisis Diario (últimos 30 días)
         st.write("### Evolución Diaria (Últimos 30 días)")
         
-        # Preparar datos diarios
+        # Preparar datos diarios - excluir el día actual
         fecha_actual = pd.Timestamp.now()
         fecha_30_dias = fecha_actual - pd.Timedelta(days=30)
-        datos_diarios = data[data['FECHA _ INGRESO'] >= fecha_30_dias]
+        datos_diarios = data[
+            (data['FECHA _ INGRESO'] >= fecha_30_dias) & 
+            (data['FECHA _ INGRESO'].dt.date < fecha_actual.date())
+        ]
         ingresos_diarios = datos_diarios.groupby('FECHA _ INGRESO').size().reset_index(name='cantidad')
         
         # Aplicar modelo LOESS para suavizado de tendencia diaria
@@ -754,9 +757,14 @@ class SPEModule:
         # 2. Análisis Semanal
         st.write("### Evolución Semanal")
         
-        # Preparar datos semanales
-        ingresos_semanales = data.groupby(pd.Grouper(key='FECHA _ INGRESO', freq='W')).size().reset_index(name='cantidad')
+        # Preparar datos semanales - excluir la semana en curso
+        ultima_semana_completa = fecha_actual - pd.Timedelta(days=fecha_actual.weekday() + 1)
+        ingresos_semanales = data[
+            data['FECHA _ INGRESO'].dt.date <= ultima_semana_completa.date()
+        ].groupby(pd.Grouper(key='FECHA _ INGRESO', freq='W')).size().reset_index(name='cantidad')
         
+        st.info("Nota: El análisis semanal excluye la semana en curso para evitar distorsiones en las tendencias.")
+
         # Aplicar modelo de regresión polinomial para tendencia semanal
         X_semanal = (ingresos_semanales['FECHA _ INGRESO'] - ingresos_semanales['FECHA _ INGRESO'].min()).dt.days.values.reshape(-1, 1)
         model_semanal = make_pipeline(PolynomialFeatures(3), Ridge(alpha=0.1))
@@ -799,10 +807,15 @@ class SPEModule:
         # 3. Análisis Mensual
         st.write("### Evolución Mensual")
         
-        # Preparar datos mensuales
-        ingresos_mensuales = data.groupby(pd.Grouper(key='FECHA _ INGRESO', freq='M')).size().reset_index(name='cantidad')
+        # Preparar datos mensuales - excluir el mes en curso
+        ultimo_mes_completo = fecha_actual.replace(day=1) - pd.Timedelta(days=1)
+        ingresos_mensuales = data[
+            data['FECHA _ INGRESO'].dt.date <= ultimo_mes_completo.date()
+        ].groupby(pd.Grouper(key='FECHA _ INGRESO', freq='M')).size().reset_index(name='cantidad')
         
-        # Aplicar modelo Prophet para tendencia mensual
+        st.info("Nota: El análisis mensual excluye el mes en curso para mantener la consistencia en las comparaciones.")
+
+        # Modificar el modelo Prophet para considerar solo meses completos
         df_prophet = pd.DataFrame({
             'ds': ingresos_mensuales['FECHA _ INGRESO'],
             'y': ingresos_mensuales['cantidad']
@@ -944,13 +957,24 @@ class SPEModule:
         dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
         conclusiones.append(f"📊 {dias[dia_mas_ingresos]} es el día con mayor volumen de ingresos histórico.")
 
-        # Tendencia mensual
-        tendencia_mensual = (ingresos_mensuales['cantidad'].iloc[-1] / 
-                           ingresos_mensuales['cantidad'].iloc[-2] - 1) * 100
-        if tendencia_mensual > 0:
-            conclusiones.append(f"📈 El último mes muestra un incremento del {tendencia_mensual:.1f}% respecto al mes anterior.")
-        else:
-            conclusiones.append(f"📉 El último mes muestra una disminución del {-tendencia_mensual:.1f}% respecto al mes anterior.")
+        # Ajustar cálculos de tendencias para usar solo períodos completos
+        tendencia_corto_plazo = (
+            ingresos_diarios[ingresos_diarios['FECHA _ INGRESO'].dt.date < (fecha_actual - pd.Timedelta(days=fecha_actual.weekday())).date()]
+            ['cantidad'].tail(5).mean() / 
+            ingresos_diarios[ingresos_diarios['FECHA _ INGRESO'].dt.date < (fecha_actual - pd.Timedelta(days=fecha_actual.weekday())).date()]
+            ['cantidad'].tail(10).head(5).mean() - 1
+        ) * 100
+
+        # Ajustar tendencia mensual para usar solo meses completos
+        if len(ingresos_mensuales) >= 2:
+            tendencia_mensual = (
+                ingresos_mensuales['cantidad'].iloc[-1] / 
+                ingresos_mensuales['cantidad'].iloc[-2] - 1
+            ) * 100
+            if tendencia_mensual > 0:
+                conclusiones.append(f"📈 El último mes completo muestra un incremento del {tendencia_mensual:.1f}% respecto al mes anterior.")
+            else:
+                conclusiones.append(f"📉 El último mes completo muestra una disminución del {-tendencia_mensual:.1f}% respecto al mes anterior.")
 
         # Mostrar conclusiones
         for conclusion in conclusiones:

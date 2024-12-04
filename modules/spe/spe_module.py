@@ -197,16 +197,30 @@ class SPEModule:
             if datos_pendientes:
                 fechas_str = ", ".join(fecha.strftime('%d/%m/%Y') for fecha in datos_pendientes.keys())
                 if st.button("💾 Guardar producción"):
-                    if self.verify_password_and_confirm(datos=datos_pendientes):
-                        for fecha, ranking in datos_pendientes.items():
-                            nuevo_registro = {
-                                "fecha": pd.Timestamp(fecha),
-                                "datos": ranking.to_dict('records'),
-                                "modulo": "SPE"
-                            }
-                            collection.insert_one(nuevo_registro)
-                        st.success(f"✅ Producción guardada exitosamente para las fechas: {fechas_str}")
-                        st.rerun()
+                    if self.verify_password_and_confirm(datos=datos_pendientes, collection=collection, ultima_fecha_db=ultima_fecha_db):
+                        try:
+                            # Eliminar registros existentes del último día si existen
+                            if ultima_fecha_db:
+                                collection.delete_many({
+                                    "modulo": "SPE",
+                                    "fecha": ultima_fecha_db
+                                })
+                            
+                            # Guardar los nuevos registros
+                            for fecha, ranking in datos_pendientes.items():
+                                nuevo_registro = {
+                                    "fecha": pd.Timestamp(fecha),
+                                    "datos": ranking.to_dict('records'),
+                                    "modulo": "SPE"
+                                }
+                                collection.insert_one(nuevo_registro)
+                            
+                            st.success(f"✅ Producción guardada exitosamente para las fechas: {fechas_str}")
+                            st.session_state.password_verified = False  # Resetear estado
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al guardar datos: {str(e)}")
+                            st.session_state.password_verified = False
 
         # Botón de reset
         with col2:
@@ -538,9 +552,12 @@ class SPEModule:
 
     def verify_password_and_confirm(self, datos=None, is_reset=False, collection=None, ultima_fecha_db=None):
         """Verificar contraseña y mostrar confirmación."""
-        # Inicializar estado de sesión si no existe
         if 'password_verified' not in st.session_state:
             st.session_state.password_verified = False
+        if 'show_comparison' not in st.session_state:
+            st.session_state.show_comparison = False
+        if 'overwrite_confirmed' not in st.session_state:
+            st.session_state.overwrite_confirmed = False
 
         # Paso 1: Verificar contraseña
         if not st.session_state.password_verified:
@@ -552,75 +569,65 @@ class SPEModule:
                 if verify_submitted:
                     if password == st.secrets["passwords"]["admin_password"]:
                         st.session_state.password_verified = True
+                        st.session_state.show_comparison = True
                         st.rerun()
                     else:
                         st.error("❌ Contraseña incorrecta")
             return False
 
-        # Paso 2: Mostrar confirmación y datos
-        with st.form("confirm_form"):
+        # Paso 2: Mostrar comparación de datos
+        if st.session_state.show_comparison:
             st.success("✅ Contraseña verificada")
+            st.info("📋 Resumen de cambios a realizar:")
             
-            if is_reset:
-                if ultima_fecha_db and ultima_fecha_db.date() == (datetime.now().date() - timedelta(days=1)):
-                    st.warning("⚠️ Se eliminarán los siguientes datos:")
-                    st.info(f"Fecha: {ultima_fecha_db.strftime('%d/%m/%Y')}")
-                    
-                    datos_a_eliminar = collection.find_one({
-                        "modulo": "SPE",
-                        "fecha": ultima_fecha_db
-                    })
-                    if datos_a_eliminar:
-                        df_eliminar = pd.DataFrame(datos_a_eliminar['datos'])
-                        st.dataframe(df_eliminar.sort_values('cantidad', ascending=False))
-                    
-                    if st.form_submit_button("🗑️ Confirmar Eliminación"):
-                        st.session_state.password_verified = False
-                        return True
-                else:
-                    st.error("❌ Solo se puede resetear el último día registrado")
-            else:
-                st.info("📋 Resumen de datos:")
-                can_save = False
-                total_registros = 0
+            for fecha, ranking in datos.items():
+                st.markdown(f"### Fecha: {fecha.strftime('%d/%m/%Y')}")
                 
-                for fecha, ranking in datos.items():
-                    st.markdown(f"**Fecha: {fecha.strftime('%d/%m/%Y')}**")
+                datos_existentes = collection.find_one({
+                    "modulo": "SPE",
+                    "fecha": pd.Timestamp(fecha)
+                })
+                
+                if datos_existentes:
+                    df_existente = pd.DataFrame(datos_existentes['datos'])
+                    st.warning("⚠️ Ya existen datos para esta fecha")
                     
-                    datos_existentes = collection.find_one({
-                        "modulo": "SPE",
-                        "fecha": pd.Timestamp(fecha)
-                    })
-                    
-                    if datos_existentes:
-                        df_existente = pd.DataFrame(datos_existentes['datos'])
-                        if fecha == ultima_fecha_db.date():
-                            st.warning("⚠️ Ya existen datos para esta fecha")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown("**Datos Existentes:**")
-                                st.dataframe(df_existente.sort_values('cantidad', ascending=False))
-                            with col2:
-                                st.markdown("**Nuevos Datos:**")
-                                st.dataframe(ranking.sort_values('cantidad', ascending=False))
-                            can_save = True
-                            total_registros += len(ranking)
-                        else:
-                            st.error(f"❌ Ya existen datos para {fecha.strftime('%d/%m/%Y')} y no se pueden sobreescribir")
-                    else:
-                        st.success("✅ Nuevos datos a guardar:")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**Datos Actuales en BD:**")
+                        st.dataframe(df_existente.sort_values('cantidad', ascending=False))
+                    with col2:
+                        st.markdown("**Nuevos Datos:**")
                         st.dataframe(ranking.sort_values('cantidad', ascending=False))
-                        can_save = True
-                        total_registros += len(ranking)
-                
-                if total_registros > 0 and can_save:
-                    st.info(f"Total de registros a guardar/actualizar: {total_registros}")
-                    if st.form_submit_button("✅ Confirmar y Guardar"):
-                        st.session_state.password_verified = False
-                        return True
+                    
+                    # Mostrar diferencias
+                    df_merged = df_existente.merge(
+                        ranking, 
+                        on='EVALUADOR', 
+                        suffixes=('_actual', '_nuevo')
+                    )
+                    df_merged['diferencia'] = df_merged['cantidad_nuevo'] - df_merged['cantidad_actual']
+                    st.markdown("**Cambios detectados:**")
+                    st.dataframe(
+                        df_merged[df_merged['diferencia'] != 0][
+                            ['EVALUADOR', 'cantidad_actual', 'cantidad_nuevo', 'diferencia']
+                        ]
+                    )
+                else:
+                    st.success("✅ Nuevos datos a guardar:")
+                    st.dataframe(ranking.sort_values('cantidad', ascending=False))
 
-            if st.form_submit_button("❌ Cancelar"):
-                st.session_state.password_verified = False
-                st.rerun()
+            # Botones de acción
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Confirmar y Guardar"):
+                    st.session_state.show_comparison = False
+                    st.session_state.password_verified = False
+                    return True
+            with col2:
+                if st.button("❌ Cancelar"):
+                    st.session_state.show_comparison = False
+                    st.session_state.password_verified = False
+                    st.rerun()
                 
         return False

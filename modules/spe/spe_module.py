@@ -88,58 +88,46 @@ class SPEModule:
         fecha_ayer = fecha_actual - timedelta(days=1)
         fecha_inicio = fecha_actual - timedelta(days=15)
 
-        # Convertir fecha de trabajo a datetime y FILTRAR datos del día actual desde el inicio
+        # Convertir fecha de trabajo a datetime
         data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
             data[COLUMNAS['FECHA_TRABAJO']], 
             format='%d/%m/%Y',
             dayfirst=True,
             errors='coerce'
         )
-        
-        # Filtrar INMEDIATAMENTE los datos del día actual del Google Sheets
-        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer]
-
-        # Excluir evaluadores inactivos
-        data = data[~data[COLUMNAS['EVALUADOR']].isin(INACTIVE_EVALUATORS['SPE'])]
 
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
 
-        # Obtener datos históricos de MongoDB (SOLO hasta ayer)
-        registros_historicos = list(collection.find({
-            "modulo": "SPE",
-            "fecha": {"$lt": pd.Timestamp(fecha_actual)}  # Aseguramos que no incluya el día actual
-        }).sort("fecha", -1))
+        # Obtener datos históricos de MongoDB
+        registros_historicos = list(collection.find({"modulo": "SPE"}).sort("fecha", -1))
         
         # Preparar DataFrame histórico desde MongoDB
         df_historico = pd.DataFrame()
         fechas_guardadas = set()
         
+        # Procesar registros históricos
         if registros_historicos:
             for registro in registros_historicos:
                 fecha = pd.Timestamp(registro['fecha'])
-                # Solo procesar si la fecha es anterior al día actual
-                if fecha.date() < fecha_actual:  # Verificación adicional
-                    fechas_guardadas.add(fecha.date())
-                    fecha_str = fecha.strftime('%d/%m')
-                    df_temp = pd.DataFrame(registro['datos'])
-                    if not df_temp.empty:
-                        evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
-                        df_pivot = pd.DataFrame({
-                            'EVALUADOR': df_temp[evaluador_col].tolist(),
-                            fecha_str: df_temp['cantidad'].tolist()
-                        })
-                        if df_historico.empty:
-                            df_historico = df_pivot
-                        else:
-                            df_historico = df_historico.merge(
-                                df_pivot, on='EVALUADOR', how='outer'
-                            )
+                fechas_guardadas.add(fecha.date())
+                fecha_str = fecha.strftime('%d/%m')
+                df_temp = pd.DataFrame(registro['datos'])
+                if not df_temp.empty:
+                    evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
+                    df_pivot = pd.DataFrame({
+                        'EVALUADOR': df_temp[evaluador_col].tolist(),
+                        fecha_str: df_temp['cantidad'].tolist()
+                    })
+                    if df_historico.empty:
+                        df_historico = df_pivot
+                    else:
+                        df_historico = df_historico.merge(
+                            df_pivot, on='EVALUADOR', how='outer'
+                        )
 
-        # Obtener datos no guardados solo del día anterior
-        datos_ayer = None
+        # Agregar solo datos del día anterior si no están guardados
         if fecha_ayer not in fechas_guardadas:
-            # Solo procesar datos del día anterior
             datos_dia_anterior = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha_ayer]
             if not datos_dia_anterior.empty:
                 datos_ayer = datos_dia_anterior.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
@@ -160,13 +148,17 @@ class SPEModule:
             # Reemplazar NaN con ceros
             df_historico = df_historico.fillna(0)
             
-            # Ordenar columnas (del más antiguo al más reciente)
+            # Ordenar columnas y excluir explícitamente la fecha actual
             cols_fecha = [col for col in df_historico.columns if col != 'EVALUADOR']
+            fecha_actual_str = fecha_actual.strftime('%d/%m')
+            cols_fecha = [col for col in cols_fecha if col != fecha_actual_str]  # Excluir fecha actual
+            
             cols_ordenadas = ['EVALUADOR'] + sorted(
                 [col for col in cols_fecha if col != 'Total'],
                 key=lambda x: pd.to_datetime(x + f"/{datetime.now().year}", format='%d/%m/%Y'),
                 reverse=False
             ) + ['Total']
+            
             df_historico = df_historico.reindex(columns=cols_ordenadas)
             
             # Calcular total y ordenar

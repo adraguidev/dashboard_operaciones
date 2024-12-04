@@ -77,7 +77,7 @@ class SPEModule:
         """Renderizar pestaña de ranking de expedientes trabajados."""
         st.header("Ranking de Expedientes Trabajados")
 
-        # Mapeo de columnas
+        # Mapeo de columnas - Estandarizar a mayúsculas
         COLUMNAS = {
             'EVALUADOR': 'EVALUADOR',
             'EXPEDIENTE': 'EXPEDIENTE',
@@ -117,8 +117,10 @@ class SPEModule:
                 fecha_str = fecha.strftime('%d/%m')
                 df_temp = pd.DataFrame(registro['datos'])
                 if not df_temp.empty:
+                    # Manejar ambos casos: 'evaluador' y 'EVALUADOR'
+                    evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
                     df_pivot = pd.DataFrame({
-                        'EVALUADOR': df_temp['evaluador'].tolist(),
+                        'EVALUADOR': df_temp[evaluador_col].tolist(),
                         fecha_str: df_temp['cantidad'].tolist()
                     })
                     if df_historico.empty:
@@ -196,9 +198,11 @@ class SPEModule:
                 fechas_str = ", ".join(fecha.strftime('%d/%m/%Y') for fecha in datos_pendientes.keys())
                 if st.button(" Guardar producción"):
                     for fecha, ranking in datos_pendientes.items():
+                        # Asegurarnos que los datos se guarden con el nombre de columna en mayúsculas
+                        ranking_data = ranking.rename(columns={COLUMNAS['EVALUADOR']: 'EVALUADOR'})
                         nuevo_registro = {
                             "fecha": pd.Timestamp(fecha),
-                            "datos": ranking.to_dict('records'),
+                            "datos": ranking_data.to_dict('records'),
                             "modulo": "SPE"
                         }
                         collection.insert_one(nuevo_registro)
@@ -509,3 +513,27 @@ class SPEModule:
             file_name="Pendientes_SPE.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ) 
+
+    def _migrate_evaluador_field(self, collection):
+        """Migrar registros antiguos para usar 'EVALUADOR' en mayúsculas."""
+        try:
+            # Buscar registros que usan 'evaluador' en minúsculas
+            registros_antiguos = collection.find({
+                "modulo": "SPE",
+                "datos": {"$elemMatch": {"evaluador": {"$exists": True}}}
+            })
+            
+            for registro in registros_antiguos:
+                datos_actualizados = []
+                for dato in registro['datos']:
+                    if 'evaluador' in dato:
+                        dato['EVALUADOR'] = dato.pop('evaluador')
+                    datos_actualizados.append(dato)
+                
+                collection.update_one(
+                    {"_id": registro["_id"]},
+                    {"$set": {"datos": datos_actualizados}}
+                )
+                
+        except Exception as e:
+            st.error(f"Error al migrar datos: {str(e)}") 

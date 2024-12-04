@@ -113,22 +113,23 @@ class SPEModule:
         if registros_historicos:
             for registro in registros_historicos:
                 fecha = pd.Timestamp(registro['fecha'])
-                fechas_guardadas.add(fecha.date())
-                fecha_str = fecha.strftime('%d/%m')
-                df_temp = pd.DataFrame(registro['datos'])
-                if not df_temp.empty:
-                    # Manejar ambos casos: 'evaluador' y 'EVALUADOR'
-                    evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
-                    df_pivot = pd.DataFrame({
-                        'EVALUADOR': df_temp[evaluador_col].tolist(),
-                        fecha_str: df_temp['cantidad'].tolist()
-                    })
-                    if df_historico.empty:
-                        df_historico = df_pivot
-                    else:
-                        df_historico = df_historico.merge(
-                            df_pivot, on='EVALUADOR', how='outer'
-                        )
+                # Solo procesar fechas hasta ayer
+                if fecha.date() <= fecha_ayer:
+                    fechas_guardadas.add(fecha.date())
+                    fecha_str = fecha.strftime('%d/%m')
+                    df_temp = pd.DataFrame(registro['datos'])
+                    if not df_temp.empty:
+                        evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
+                        df_pivot = pd.DataFrame({
+                            'EVALUADOR': df_temp[evaluador_col].tolist(),
+                            fecha_str: df_temp['cantidad'].tolist()
+                        })
+                        if df_historico.empty:
+                            df_historico = df_pivot
+                        else:
+                            df_historico = df_historico.merge(
+                                df_pivot, on='EVALUADOR', how='outer'
+                            )
 
         # Obtener datos no guardados de Google Sheets
         fecha_inicio = fecha_actual - timedelta(days=15)
@@ -143,23 +144,25 @@ class SPEModule:
         # Procesar datos no guardados
         datos_no_guardados = {}
         for fecha, grupo in datos_sheets.groupby(datos_sheets[COLUMNAS['FECHA_TRABAJO']].dt.date):
+            # Solo procesar fechas hasta ayer que no estén guardadas
             if fecha <= fecha_ayer and fecha not in fechas_guardadas:
                 ranking_dia = grupo.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
                 datos_no_guardados[fecha] = ranking_dia
 
         # Agregar datos no guardados al DataFrame histórico
         for fecha, ranking in datos_no_guardados.items():
-            fecha_str = fecha.strftime('%d/%m')
-            df_pivot = pd.DataFrame({
-                'EVALUADOR': ranking['EVALUADOR'].tolist(),
-                fecha_str: ranking['cantidad'].tolist()
-            })
-            if df_historico.empty:
-                df_historico = df_pivot
-            else:
-                df_historico = df_historico.merge(
-                    df_pivot, on='EVALUADOR', how='outer'
-                )
+            if fecha <= fecha_ayer:  # Verificación adicional
+                fecha_str = fecha.strftime('%d/%m')
+                df_pivot = pd.DataFrame({
+                    'EVALUADOR': ranking['EVALUADOR'].tolist(),
+                    fecha_str: ranking['cantidad'].tolist()
+                })
+                if df_historico.empty:
+                    df_historico = df_pivot
+                else:
+                    df_historico = df_historico.merge(
+                        df_pivot, on='EVALUADOR', how='outer'
+                    )
 
         if not df_historico.empty:
             # Reemplazar NaN con ceros

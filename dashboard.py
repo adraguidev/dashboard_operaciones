@@ -1,6 +1,6 @@
 import streamlit as st
 import pymongo
-from config.settings import MODULES
+from config.settings import MODULES_CONFIG
 from data.data_loader import load_consolidated_cached, load_ccm_ley_data, load_spe_data
 from tabs.pending_reports import render_pending_reports_tab
 from tabs.entry_analysis import render_entry_analysis_tab
@@ -80,8 +80,9 @@ def render_sidebar():
                 </div>
                 """
                 
-                if st.markdown(module_html, unsafe_allow_html=True):
+                if st.button(module, key=f"btn_{module}"):
                     selected_module = module
+                    return selected_module
 
         # Información adicional en el sidebar
         st.markdown("---")

@@ -84,28 +84,29 @@ class SPEModule:
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
-        fecha_actual = datetime.now().date()
+        # Usar timezone de Peru para las fechas
+        fecha_actual = pd.Timestamp.now(tz='America/Lima').date()
         fecha_ayer = fecha_actual - timedelta(days=1)
 
-        # Convertir fecha de trabajo a datetime
+        # Convertir fecha de trabajo a datetime considerando timezone
         data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
             data[COLUMNAS['FECHA_TRABAJO']], 
             format='%d/%m/%Y',
             dayfirst=True,
             errors='coerce'
-        )
+        ).dt.tz_localize('America/Lima')
 
-        # IMPORTANTE: Filtrar TODOS los datos del día actual desde el inicio
+        # Filtrar datos del día actual
         data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual]
 
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
         ultima_fecha = ultima_fecha_db.date() if ultima_fecha_db else None
 
-        # Obtener datos históricos de MongoDB (explícitamente excluyendo el día actual)
+        # Obtener datos históricos de MongoDB considerando timezone
         registros_historicos = list(collection.find({
             "modulo": "SPE",
-            "fecha": {"$lt": pd.Timestamp(fecha_actual)}  # Excluir explícitamente registros del día actual
+            "fecha": {"$lt": pd.Timestamp(fecha_actual, tz='America/Lima')}
         }).sort("fecha", -1))
         
         # Preparar DataFrame histórico desde MongoDB
@@ -229,13 +230,13 @@ class SPEModule:
 
     def _get_last_date_from_db(self, collection):
         """Obtener la última fecha registrada en la base de datos."""
-        fecha_actual = datetime.now().date()
+        fecha_actual = pd.Timestamp.now(tz='America/Lima').date()
         
         # Buscar el último registro que NO sea del día actual
         ultimo_registro = collection.find_one(
             {
                 "modulo": "SPE",
-                "fecha": {"$lt": pd.Timestamp(fecha_actual)}
+                "fecha": {"$lt": pd.Timestamp(fecha_actual, tz='America/Lima')}
             }, 
             sort=[("fecha", -1)]
         )

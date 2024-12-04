@@ -844,24 +844,51 @@ class SPEModule:
         # 3. Análisis Mensual
         st.write("### Evolución Mensual")
         
-        # Preparar datos mensuales - excluir el mes en curso
-        ultimo_mes_completo = fecha_actual.replace(day=1) - pd.Timedelta(days=1)
-        ingresos_mensuales = data[
+        # Preparar datos mensuales incluyendo mes actual
+        ingresos_mensuales_completos = data[
             data['FECHA _ INGRESO'].dt.date <= ultimo_mes_completo.date()
         ].groupby(pd.Grouper(key='FECHA _ INGRESO', freq='M')).size().reset_index(name='cantidad')
         
-        st.info("Nota: El análisis mensual excluye el mes en curso para mantener la consistencia en las comparaciones.")
+        # Calcular datos del mes actual
+        mes_actual_data = data[data['FECHA _ INGRESO'].dt.month == fecha_actual.month]
+        dias_transcurridos_mes = fecha_actual.day
+        dias_habiles_transcurridos = len(mes_actual_data['FECHA _ INGRESO'].dt.date.unique())
+        total_mes_actual = len(mes_actual_data)
+        
+        # Proyección del mes actual basada en días transcurridos
+        promedio_diario_mes_actual = total_mes_actual / dias_habiles_transcurridos if dias_habiles_transcurridos > 0 else 0
+        dias_habiles_mes = 20  # Aproximación de días hábiles en un mes
+        proyeccion_mes_actual = promedio_diario_mes_actual * dias_habiles_mes
 
-        # Modificar el modelo Prophet para considerar solo meses completos
+        # Agregar mes actual con proyección
+        mes_actual_row = pd.DataFrame({
+            'FECHA _ INGRESO': [pd.Timestamp(fecha_actual.year, fecha_actual.month, 1)],
+            'cantidad': [proyeccion_mes_actual],
+            'cantidad_actual': [total_mes_actual],
+            'dias_transcurridos': [dias_transcurridos_mes],
+            'proyeccion': [True]
+        })
+        
+        # Combinar datos históricos con proyección
+        ingresos_mensuales = pd.concat([
+            ingresos_mensuales_completos,
+            mes_actual_row
+        ]).reset_index(drop=True)
+
+        # Modificar el modelo Prophet considerando datos parciales
         df_prophet = pd.DataFrame({
             'ds': ingresos_mensuales['FECHA _ INGRESO'],
-            'y': ingresos_mensuales['cantidad']
+            'y': ingresos_mensuales['cantidad'],
+            'floor': 0  # Asegurar predicciones no negativas
         })
+        
+        # Ajustar el modelo con más peso en datos recientes
         model_mensual = Prophet(
             changepoint_prior_scale=0.5,
             yearly_seasonality=False,
             weekly_seasonality=False,
-            daily_seasonality=False
+            daily_seasonality=False,
+            growth='linear'
         )
         model_mensual.fit(df_prophet)
         
@@ -869,16 +896,46 @@ class SPEModule:
         future_dates = model_mensual.make_future_dataframe(periods=2, freq='M')
         forecast = model_mensual.predict(future_dates)
 
-        # Gráfico mensual
+        # Gráfico mensual mejorado
         fig_mensual = go.Figure()
+
+        # Datos históricos completos
         fig_mensual.add_trace(go.Scatter(
-            x=ingresos_mensuales['FECHA _ INGRESO'],
-            y=ingresos_mensuales['cantidad'],
+            x=ingresos_mensuales_completos['FECHA _ INGRESO'],
+            y=ingresos_mensuales_completos['cantidad'],
             mode='markers+lines',
-            name='Ingresos Mensuales',
+            name='Ingresos Mensuales Históricos',
             line=dict(color='blue', width=2),
             marker=dict(size=10)
         ))
+
+        # Mes actual (datos parciales)
+        fig_mensual.add_trace(go.Scatter(
+            x=[mes_actual_row['FECHA _ INGRESO'].iloc[0]],
+            y=[mes_actual_row['cantidad_actual'].iloc[0]],
+            mode='markers',
+            name='Mes Actual (Parcial)',
+            marker=dict(
+                color='yellow',
+                size=12,
+                symbol='diamond'
+            )
+        ))
+
+        # Proyección mes actual
+        fig_mensual.add_trace(go.Scatter(
+            x=[mes_actual_row['FECHA _ INGRESO'].iloc[0]],
+            y=[mes_actual_row['cantidad'].iloc[0]],
+            mode='markers',
+            name='Proyección Mes Actual',
+            marker=dict(
+                color='orange',
+                size=12,
+                symbol='star'
+            )
+        ))
+
+        # Tendencia y predicción
         fig_mensual.add_trace(go.Scatter(
             x=forecast['ds'],
             y=forecast['yhat'],
@@ -886,6 +943,8 @@ class SPEModule:
             name='Tendencia y Predicción',
             line=dict(color='red', dash='dash', width=2)
         ))
+
+        # Intervalos de confianza
         fig_mensual.add_trace(go.Scatter(
             x=forecast['ds'],
             y=forecast['yhat_upper'],
@@ -901,22 +960,34 @@ class SPEModule:
             fill='tonexty',
             line=dict(color='rgba(255,0,0,0.2)', width=0)
         ))
+
+        # Agregar anotación con información del mes actual
+        fig_mensual.add_annotation(
+            x=mes_actual_row['FECHA _ INGRESO'].iloc[0],
+            y=mes_actual_row['cantidad'].iloc[0],
+            text=f"Mes Actual:<br>Real: {total_mes_actual:,.0f}<br>Proyectado: {proyeccion_mes_actual:,.0f}<br>Días transcurridos: {dias_transcurridos_mes}",
+            showarrow=True,
+            arrowhead=1
+        )
+
         fig_mensual.update_layout(
             title='Ingresos Mensuales y Predicción',
             xaxis_title='Fecha',
             yaxis_title='Cantidad de Expedientes',
-            hovermode='x unified'
+            hovermode='x unified',
+            showlegend=True
         )
+
         st.plotly_chart(fig_mensual, use_container_width=True)
 
-        # Agregar insights sobre las tendencias
-        st.write("""
-        **Insights de las Tendencias:**
-        - **Tendencia Diaria**: Utiliza suavizado LOESS para mostrar patrones a corto plazo
-        - **Tendencia Semanal**: Usa regresión polinomial para capturar ciclos semanales
-        - **Tendencia Mensual**: Emplea Prophet para predicciones más robustas a largo plazo
-        
-        Las áreas sombreadas en el gráfico mensual representan intervalos de confianza del 95%.
+        # Agregar información detallada del mes actual
+        st.info(f"""
+        **Datos del Mes Actual:**
+        - Ingresos hasta hoy: {total_mes_actual:,}
+        - Días transcurridos: {dias_transcurridos_mes}
+        - Días hábiles con ingresos: {dias_habiles_transcurridos}
+        - Promedio diario: {promedio_diario_mes_actual:.1f}
+        - Proyección al cierre: {proyeccion_mes_actual:,.0f}
         """)
 
         # 4. Indicadores Clave y Alertas

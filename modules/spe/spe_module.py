@@ -878,18 +878,18 @@ class SPEModule:
         - **Días Atípicos**: Días con ingresos inusualmente altos
         """)
 
-        # Calcular indicadores
-        tendencia_corto_plazo = (daily_counts['cantidad'].tail(7).mean() / 
-                                daily_counts['cantidad'].tail(14).head(7).mean() - 1) * 100
+        # Calcular indicadores usando ingresos_diarios en lugar de daily_counts
+        tendencia_corto_plazo = (ingresos_diarios['cantidad'].tail(7).mean() / 
+                                ingresos_diarios['cantidad'].tail(14).head(7).mean() - 1) * 100
         
-        volatilidad = daily_counts['cantidad'].std() / daily_counts['cantidad'].mean() * 100
+        volatilidad = ingresos_diarios['cantidad'].std() / ingresos_diarios['cantidad'].mean() * 100
         
         # Calcular percentiles para detección de anomalías
-        p25, p75 = np.percentile(daily_counts['cantidad'], [25, 75])
+        p25, p75 = np.percentile(ingresos_diarios['cantidad'], [25, 75])
         iqr = p75 - p25
         limite_superior = p75 + 1.5 * iqr
         
-        dias_atipicos = daily_counts[daily_counts['cantidad'] > limite_superior]
+        dias_atipicos = ingresos_diarios[ingresos_diarios['cantidad'] > limite_superior]
         
         col1, col2, col3 = st.columns(3)
         

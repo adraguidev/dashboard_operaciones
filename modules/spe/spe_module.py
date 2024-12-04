@@ -77,28 +77,30 @@ class SPEModule:
         """Renderizar pestaña de ranking de expedientes trabajados."""
         st.header("Ranking de Expedientes Trabajados")
 
-        # Mapeo de columnas - Estandarizar a mayúsculas
+        # Mapeo de columnas y fechas relevantes
         COLUMNAS = {
             'EVALUADOR': 'EVALUADOR',
             'EXPEDIENTE': 'EXPEDIENTE',
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
-        # Convertir fecha de trabajo a datetime
+        fecha_actual = datetime.now().date()
+        fecha_ayer = fecha_actual - timedelta(days=1)
+        fecha_inicio = fecha_actual - timedelta(days=15)
+
+        # Convertir fecha de trabajo a datetime y filtrar INMEDIATAMENTE hasta el día anterior
         data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
             data[COLUMNAS['FECHA_TRABAJO']], 
             format='%d/%m/%Y',
             dayfirst=True,
             errors='coerce'
         )
+        
+        # Filtrar datos solo hasta el día anterior desde el inicio
+        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer]
 
         # Excluir evaluadores inactivos
         data = data[~data[COLUMNAS['EVALUADOR']].isin(INACTIVE_EVALUATORS['SPE'])]
-
-        # Obtener fechas relevantes
-        fecha_actual = datetime.now().date()
-        fecha_ayer = fecha_actual - timedelta(days=1)
-        fecha_inicio = fecha_actual - timedelta(days=15)
 
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
@@ -113,49 +115,32 @@ class SPEModule:
         if registros_historicos:
             for registro in registros_historicos:
                 fecha = pd.Timestamp(registro['fecha'])
-                # Solo procesar fechas hasta ayer
-                if fecha.date() <= fecha_ayer:
-                    fechas_guardadas.add(fecha.date())
-                    fecha_str = fecha.strftime('%d/%m')
-                    df_temp = pd.DataFrame(registro['datos'])
-                    if not df_temp.empty:
-                        evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
-                        df_pivot = pd.DataFrame({
-                            'EVALUADOR': df_temp[evaluador_col].tolist(),
-                            fecha_str: df_temp['cantidad'].tolist()
-                        })
-                        if df_historico.empty:
-                            df_historico = df_pivot
-                        else:
-                            df_historico = df_historico.merge(
-                                df_pivot, on='EVALUADOR', how='outer'
-                            )
-
-        # Obtener datos no guardados de Google Sheets
-        fecha_inicio = fecha_actual - timedelta(days=15)
-        datos_sheets = data[
-            (data[COLUMNAS['FECHA_TRABAJO']].dt.date >= fecha_inicio) &
-            (data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer)
-        ]
-
-        # Filtrar datos solo hasta el día anterior
-        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer]
-
-        # Procesar datos no guardados
-        datos_no_guardados = {}
-        for fecha, grupo in datos_sheets.groupby(datos_sheets[COLUMNAS['FECHA_TRABAJO']].dt.date):
-            # Solo procesar fechas hasta ayer que no estén guardadas
-            if fecha <= fecha_ayer and fecha not in fechas_guardadas:
-                ranking_dia = grupo.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
-                datos_no_guardados[fecha] = ranking_dia
-
-        # Agregar datos no guardados al DataFrame histórico
-        for fecha, ranking in datos_no_guardados.items():
-            if fecha <= fecha_ayer:  # Verificación adicional
+                fechas_guardadas.add(fecha.date())
                 fecha_str = fecha.strftime('%d/%m')
+                df_temp = pd.DataFrame(registro['datos'])
+                if not df_temp.empty:
+                    evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
+                    df_pivot = pd.DataFrame({
+                        'EVALUADOR': df_temp[evaluador_col].tolist(),
+                        fecha_str: df_temp['cantidad'].tolist()
+                    })
+                    if df_historico.empty:
+                        df_historico = df_pivot
+                    else:
+                        df_historico = df_historico.merge(
+                            df_pivot, on='EVALUADOR', how='outer'
+                        )
+
+        # Obtener datos no guardados solo del día anterior
+        datos_ayer = None
+        if fecha_ayer not in fechas_guardadas:
+            datos_dia_anterior = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha_ayer]
+            if not datos_dia_anterior.empty:
+                datos_ayer = datos_dia_anterior.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
+                fecha_str = fecha_ayer.strftime('%d/%m')
                 df_pivot = pd.DataFrame({
-                    'EVALUADOR': ranking['EVALUADOR'].tolist(),
-                    fecha_str: ranking['cantidad'].tolist()
+                    'EVALUADOR': datos_ayer['EVALUADOR'].tolist(),
+                    fecha_str: datos_ayer['cantidad'].tolist()
                 })
                 if df_historico.empty:
                     df_historico = df_pivot
@@ -193,9 +178,6 @@ class SPEModule:
         # Contenedor para los botones
         button_container = st.container()
         col1, col2 = button_container.columns(2)
-
-        # Verificar si hay datos del día anterior pendientes de guardar
-        datos_ayer = datos_no_guardados.get(fecha_ayer)
 
         # Botón de guardar (solo para el día anterior)
         with col1:

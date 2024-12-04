@@ -186,52 +186,46 @@ class SPEModule:
 
         # Contenedor para los botones
         button_container = st.container()
-        col1, col2, col3 = button_container.columns([1, 1, 2])
+        col1, col2 = button_container.columns(2)
 
-        # Verificar datos pendientes de guardar
+        # Verificar datos pendientes de guardar (solo hasta el día anterior)
         datos_pendientes = {fecha: datos for fecha, datos in datos_no_guardados.items() 
                           if fecha <= fecha_ayer}
 
-        # Botón de guardar
+        # Botón de guardar (sin verificación de contraseña)
         with col1:
             if datos_pendientes:
                 fechas_str = ", ".join(fecha.strftime('%d/%m/%Y') for fecha in datos_pendientes.keys())
                 if st.button("💾 Guardar producción"):
-                    if self.verify_password_and_confirm(
-                        datos=datos_pendientes,
-                        collection=collection,
-                        ultima_fecha_db=ultima_fecha_db
-                    ):
-                        for fecha, ranking in datos_pendientes.items():
-                            # Si es el último día, eliminar registro existente
-                            if ultima_fecha_db and fecha == ultima_fecha_db.date():
-                                collection.delete_many({
-                                    "modulo": "SPE",
-                                    "fecha": ultima_fecha_db
-                                })
-                            
-                            # Guardar nuevo registro
-                            nuevo_registro = {
-                                "fecha": pd.Timestamp(fecha),
-                                "datos": ranking.to_dict('records'),
-                                "modulo": "SPE"
-                            }
-                            collection.insert_one(nuevo_registro)
+                    for fecha, ranking in datos_pendientes.items():
+                        # Si es el último día, eliminar registro existente
+                        if ultima_fecha_db and fecha == ultima_fecha_db.date():
+                            collection.delete_many({
+                                "modulo": "SPE",
+                                "fecha": ultima_fecha_db
+                            })
                         
-                        st.success(f"✅ Producción guardada exitosamente para las fechas: {fechas_str}")
-                        st.rerun()
+                        # Guardar nuevo registro
+                        nuevo_registro = {
+                            "fecha": pd.Timestamp(fecha),
+                            "datos": ranking.to_dict('records'),
+                            "modulo": "SPE"
+                        }
+                        collection.insert_one(nuevo_registro)
+                    
+                    st.success(f"✅ Producción guardada exitosamente para las fechas: {fechas_str}")
+                    st.rerun()
 
-        # Botón de reset
+        # Botón de resetear última fecha
         with col2:
-            if ultima_fecha_db and ultima_fecha_db.date() == fecha_ayer:
-                if st.button("🔄 Resetear día"):
-                    if self.verify_password_and_confirm(is_reset=True, collection=collection, ultima_fecha_db=ultima_fecha_db):
-                        collection.delete_many({
-                            "modulo": "SPE",
-                            "fecha": ultima_fecha_db
-                        })
-                        st.success("✅ Día anterior eliminado correctamente")
-                        st.rerun()
+            if ultima_fecha_db:
+                if st.button("🔄 Resetear última fecha"):
+                    collection.delete_many({
+                        "modulo": "SPE",
+                        "fecha": ultima_fecha_db
+                    })
+                    st.success("✅ Última fecha eliminada correctamente")
+                    st.rerun()
 
     def _get_last_date_from_db(self, collection):
         """Obtener la última fecha registrada en la base de datos."""
@@ -548,87 +542,3 @@ class SPEModule:
                 
         except Exception as e:
             st.error(f"Error al migrar datos: {str(e)}") 
-
-    def verify_password_and_confirm(self, datos=None, is_reset=False, collection=None, ultima_fecha_db=None):
-        """Verificar contraseña y mostrar confirmación."""
-        if 'password_verified' not in st.session_state:
-            st.session_state.password_verified = False
-
-        # Paso 1: Verificar contraseña
-        if not st.session_state.password_verified:
-            with st.form("password_form"):
-                st.subheader("🔒 Verificación de Administrador")
-                password = st.text_input("Ingrese la contraseña", type="password")
-                submitted = st.form_submit_button("Verificar")
-                
-                if submitted:
-                    if password == st.secrets["passwords"]["admin_password"]:
-                        st.session_state.password_verified = True
-                        st.success("✅ Contraseña correcta")
-                        st.rerun()
-                    else:
-                        st.error("❌ Contraseña incorrecta")
-                return False
-
-        # Paso 2: Mostrar datos a confirmar
-        if st.session_state.password_verified:
-            st.success("✅ Contraseña verificada")
-            st.info("📋 Resumen de cambios a realizar:")
-            
-            can_save = True
-            for fecha, ranking in datos.items():
-                st.markdown(f"### Fecha: {fecha.strftime('%d/%m/%Y')}")
-                
-                datos_existentes = collection.find_one({
-                    "modulo": "SPE",
-                    "fecha": pd.Timestamp(fecha)
-                })
-                
-                if datos_existentes:
-                    df_existente = pd.DataFrame(datos_existentes['datos'])
-                    if fecha != ultima_fecha_db.date():
-                        st.error(f"❌ No se puede modificar la fecha {fecha.strftime('%d/%m/%Y')} porque no es el último día registrado")
-                        can_save = False
-                        continue
-                    
-                    st.warning("⚠️ Ya existen datos para esta fecha")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown("**Datos Actuales:**")
-                        st.dataframe(df_existente.sort_values('cantidad', ascending=False))
-                    with col2:
-                        st.markdown("**Nuevos Datos:**")
-                        st.dataframe(ranking.sort_values('cantidad', ascending=False))
-                    
-                    # Mostrar diferencias
-                    df_merged = df_existente.merge(
-                        ranking, 
-                        on='EVALUADOR', 
-                        suffixes=('_actual', '_nuevo')
-                    )
-                    df_merged['diferencia'] = df_merged['cantidad_nuevo'] - df_merged['cantidad_actual']
-                    
-                    if not df_merged[df_merged['diferencia'] != 0].empty:
-                        st.markdown("**Cambios detectados:**")
-                        st.dataframe(
-                            df_merged[df_merged['diferencia'] != 0][
-                                ['EVALUADOR', 'cantidad_actual', 'cantidad_nuevo', 'diferencia']
-                            ]
-                        )
-                else:
-                    st.success("✅ Nuevos datos a guardar:")
-                    st.dataframe(ranking.sort_values('cantidad', ascending=False))
-
-            # Botones de acción
-            if can_save:
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("✅ Confirmar y Guardar"):
-                        st.session_state.password_verified = False
-                        return True
-                with col2:
-                    if st.button("❌ Cancelar"):
-                        st.session_state.password_verified = False
-                        st.rerun()
-        
-        return False

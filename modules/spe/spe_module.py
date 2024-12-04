@@ -102,8 +102,11 @@ class SPEModule:
         ultima_fecha_db = self._get_last_date_from_db(collection)
         ultima_fecha = ultima_fecha_db.date() if ultima_fecha_db else None
 
-        # Obtener datos históricos de MongoDB
-        registros_historicos = list(collection.find({"modulo": "SPE"}).sort("fecha", -1))
+        # Obtener datos históricos de MongoDB (explícitamente excluyendo el día actual)
+        registros_historicos = list(collection.find({
+            "modulo": "SPE",
+            "fecha": {"$lt": pd.Timestamp(fecha_actual)}  # Excluir explícitamente registros del día actual
+        }).sort("fecha", -1))
         
         # Preparar DataFrame histórico desde MongoDB
         df_historico = pd.DataFrame()
@@ -153,8 +156,15 @@ class SPEModule:
         if not df_historico.empty:
             # Asegurarnos de que no haya datos del día actual
             fecha_actual_str = fecha_actual.strftime('%d/%m')
+            
+            # Excluir explícitamente la columna del día actual si existe
+            columnas_disponibles = df_historico.columns.tolist()
+            if fecha_actual_str in columnas_disponibles:
+                df_historico = df_historico.drop(columns=[fecha_actual_str])
+            
+            # Continuar con el procesamiento normal
             columnas_a_mostrar = ['EVALUADOR'] + [col for col in df_historico.columns 
-                                                if col != 'EVALUADOR' and col != fecha_actual_str]
+                                                if col != 'EVALUADOR']
             
             # Ordenar las columnas de fecha
             columnas_fecha = [col for col in columnas_a_mostrar if col != 'EVALUADOR']
@@ -219,9 +229,14 @@ class SPEModule:
 
     def _get_last_date_from_db(self, collection):
         """Obtener la última fecha registrada en la base de datos."""
-        # Buscar el último registro sin filtro de fecha primero
+        fecha_actual = datetime.now().date()
+        
+        # Buscar el último registro que NO sea del día actual
         ultimo_registro = collection.find_one(
-            {"modulo": "SPE"}, 
+            {
+                "modulo": "SPE",
+                "fecha": {"$lt": pd.Timestamp(fecha_actual)}
+            }, 
             sort=[("fecha", -1)]
         )
         return ultimo_registro['fecha'] if ultimo_registro else None

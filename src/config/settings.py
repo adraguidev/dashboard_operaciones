@@ -43,7 +43,7 @@ MODULES_CONFIG: Dict[str, ModuleConfig] = {
     ),
     'SPE': ModuleConfig(
         name='SPE',
-        icon='📂',
+        icon='💼',
         folder='descargas/SPE',
         inactive_evaluators=[...]
     )

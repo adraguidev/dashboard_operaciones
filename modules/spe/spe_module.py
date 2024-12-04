@@ -57,7 +57,8 @@ class SPEModule:
         tabs = st.tabs([
             "Reporte de Pendientes", 
             "Reporte de Trabajados",
-            "Ranking de Expedientes Trabajados"
+            "Ranking de Expedientes Trabajados",
+            "Análisis Dinámico"  # Nueva pestaña
         ])
         
         with tabs[0]:
@@ -66,6 +67,8 @@ class SPEModule:
             self.render_worked_report(data)
         with tabs[2]:
             self.render_ranking_report(data, collection)
+        with tabs[3]:
+            self.render_dynamic_analysis(data)  # Nuevo método
 
     @staticmethod
     @st.cache_resource
@@ -526,3 +529,145 @@ class SPEModule:
                 
         except Exception as e:
             st.error(f"Error al migrar datos: {str(e)}") 
+
+    def render_dynamic_analysis(self, data):
+        """Renderizar análisis dinámico tipo tabla dinámica."""
+        st.header("Análisis Dinámico")
+
+        # Definir las columnas disponibles para análisis
+        COLUMNAS_DISPONIBLES = {
+            'EVALUADOR': 'EVALUADOR',
+            'EXPEDIENTE': 'EXPEDIENTE',
+            'ETAPA': 'ETAPA_EVALUACIÓN',
+            'ESTADO': 'ESTADO',
+            'FECHA_INGRESO': 'FECHA _ INGRESO',
+            'FECHA_TRABAJO': 'Fecha_Trabajo'
+        }
+
+        # Configuración del análisis
+        st.subheader("Configuración del Análisis")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Selección de filas
+            filas = st.multiselect(
+                "Seleccionar campos para filas:",
+                options=list(COLUMNAS_DISPONIBLES.keys()),
+                default=['EVALUADOR']
+            )
+            
+            # Selección de valor a contar/sumar
+            valor_conteo = st.selectbox(
+                "Seleccionar valor a contar:",
+                options=['EXPEDIENTE'],
+                format_func=lambda x: f"Cantidad de {x}s"
+            )
+
+        with col2:
+            # Selección de columnas
+            columnas = st.multiselect(
+                "Seleccionar campos para columnas:",
+                options=list(COLUMNAS_DISPONIBLES.keys()),
+                default=['ESTADO']
+            )
+            
+            # Selección de función de agregación
+            funcion_agg = st.selectbox(
+                "Función de agregación:",
+                options=['count', 'nunique'],
+                format_func=lambda x: "Contar" if x == 'count' else "Contar únicos"
+            )
+
+        # Filtros adicionales
+        st.subheader("Filtros")
+        
+        filtros_aplicados = {}
+        for campo in COLUMNAS_DISPONIBLES:
+            if campo not in filas + columnas:
+                valores_unicos = data[COLUMNAS_DISPONIBLES[campo]].unique()
+                if len(valores_unicos) > 0:
+                    filtros = st.multiselect(
+                        f"Filtrar por {campo}:",
+                        options=valores_unicos,
+                        default=[]
+                    )
+                    if filtros:
+                        filtros_aplicados[COLUMNAS_DISPONIBLES[campo]] = filtros
+
+        # Aplicar filtros
+        data_filtrada = data.copy()
+        for campo, valores in filtros_aplicados.items():
+            data_filtrada = data_filtrada[data_filtrada[campo].isin(valores)]
+
+        # Crear tabla dinámica
+        if filas and valor_conteo:
+            try:
+                indices = [COLUMNAS_DISPONIBLES[f] for f in filas]
+                cols = [COLUMNAS_DISPONIBLES[c] for c in columnas] if columnas else None
+                
+                pivot_table = pd.pivot_table(
+                    data_filtrada,
+                    index=indices,
+                    columns=cols,
+                    values=COLUMNAS_DISPONIBLES[valor_conteo],
+                    aggfunc=funcion_agg,
+                    margins=True,
+                    margins_name='Total'
+                )
+
+                # Mostrar resultados
+                st.subheader("Resultados")
+                st.dataframe(
+                    pivot_table,
+                    use_container_width=True,
+                    height=400
+                )
+
+                # Opción para descargar
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    pivot_table.to_excel(writer, sheet_name='Análisis_Dinámico')
+                
+                st.download_button(
+                    label="📥 Descargar Análisis",
+                    data=output.getvalue(),
+                    file_name="analisis_dinamico.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+                # Visualización gráfica si es posible
+                if len(pivot_table.index) > 1 and len(pivot_table.columns) > 1:
+                    st.subheader("Visualización")
+                    tipo_grafico = st.selectbox(
+                        "Tipo de gráfico:",
+                        options=['Barras', 'Líneas', 'Calor'],
+                        key="tipo_grafico"
+                    )
+
+                    if tipo_grafico == 'Barras':
+                        fig = px.bar(
+                            pivot_table.reset_index(),
+                            x=pivot_table.index.names[0],
+                            y=pivot_table.columns[0] if len(pivot_table.columns) > 0 else None,
+                            title="Análisis Gráfico",
+                            barmode='group'
+                        )
+                    elif tipo_grafico == 'Líneas':
+                        fig = px.line(
+                            pivot_table.reset_index(),
+                            x=pivot_table.index.names[0],
+                            y=pivot_table.columns[0] if len(pivot_table.columns) > 0 else None,
+                            title="Análisis Gráfico"
+                        )
+                    else:  # Calor
+                        fig = px.imshow(
+                            pivot_table,
+                            title="Mapa de Calor"
+                        )
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Error al generar el análisis: {str(e)}")
+                st.info("Sugerencia: Intente con una combinación diferente de campos")

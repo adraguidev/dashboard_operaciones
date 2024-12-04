@@ -483,7 +483,7 @@ class SPEModule:
         st.dataframe(pendientes_por_evaluador, use_container_width=True)
 
     def _show_pending_chart(self, pendientes):
-        """Mostrar gráfico de pendientes."""
+        """Mostrar gr��fico de pendientes."""
         pendientes_por_evaluador = pendientes.groupby('EVALASIGN').size().reset_index(name='Cantidad')
         
         st.subheader("Distribución de Pendientes por Evaluador")
@@ -843,6 +843,9 @@ class SPEModule:
 
         # 3. Análisis Mensual
         st.write("### Evolución Mensual")
+        
+        # Definir último mes completo
+        ultimo_mes_completo = fecha_actual.replace(day=1) - pd.Timedelta(days=1)
         
         # Preparar datos mensuales incluyendo mes actual
         ingresos_mensuales_completos = data[

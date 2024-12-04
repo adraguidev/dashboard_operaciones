@@ -101,35 +101,41 @@ class SPEModule:
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
 
-        # Obtener datos históricos de MongoDB
-        registros_historicos = list(collection.find({"modulo": "SPE"}).sort("fecha", -1))
+        # Obtener datos históricos de MongoDB (EXPLÍCITAMENTE hasta ayer)
+        registros_historicos = list(collection.find({
+            "modulo": "SPE",
+            "fecha": {"$lt": pd.Timestamp(fecha_actual)}  # Solo registros anteriores a hoy
+        }).sort("fecha", -1))
         
         # Preparar DataFrame histórico desde MongoDB
         df_historico = pd.DataFrame()
         fechas_guardadas = set()
         
+        # Procesar solo registros hasta ayer
         if registros_historicos:
             for registro in registros_historicos:
                 fecha = pd.Timestamp(registro['fecha'])
-                fechas_guardadas.add(fecha.date())
-                fecha_str = fecha.strftime('%d/%m')
-                df_temp = pd.DataFrame(registro['datos'])
-                if not df_temp.empty:
-                    evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
-                    df_pivot = pd.DataFrame({
-                        'EVALUADOR': df_temp[evaluador_col].tolist(),
-                        fecha_str: df_temp['cantidad'].tolist()
-                    })
-                    if df_historico.empty:
-                        df_historico = df_pivot
-                    else:
-                        df_historico = df_historico.merge(
-                            df_pivot, on='EVALUADOR', how='outer'
-                        )
+                if fecha.date() < fecha_actual:  # Verificación adicional
+                    fechas_guardadas.add(fecha.date())
+                    fecha_str = fecha.strftime('%d/%m')
+                    df_temp = pd.DataFrame(registro['datos'])
+                    if not df_temp.empty:
+                        evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
+                        df_pivot = pd.DataFrame({
+                            'EVALUADOR': df_temp[evaluador_col].tolist(),
+                            fecha_str: df_temp['cantidad'].tolist()
+                        })
+                        if df_historico.empty:
+                            df_historico = df_pivot
+                        else:
+                            df_historico = df_historico.merge(
+                                df_pivot, on='EVALUADOR', how='outer'
+                            )
 
-        # Solo procesar datos del día anterior si no están guardados
+        # Procesar datos del día anterior desde Google Sheets
         datos_ayer = None
         if fecha_ayer not in fechas_guardadas:
+            # Filtrar explícitamente solo datos del día anterior
             datos_dia_anterior = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha_ayer]
             if not datos_dia_anterior.empty:
                 datos_ayer = datos_dia_anterior.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
@@ -148,16 +154,28 @@ class SPEModule:
         # Mostrar tabla de ranking
         if not df_historico.empty:
             df_historico = df_historico.fillna(0)
+            
+            # Filtrar explícitamente las columnas para excluir el día actual
             cols_fecha = [col for col in df_historico.columns if col != 'EVALUADOR']
+            fecha_actual_str = fecha_actual.strftime('%d/%m')
+            cols_fecha = [col for col in cols_fecha if col != fecha_actual_str and col != 'Total']
+            
+            # Ordenar columnas
             cols_ordenadas = ['EVALUADOR'] + sorted(
-                [col for col in cols_fecha if col != 'Total'],
+                cols_fecha,
                 key=lambda x: pd.to_datetime(x + f"/{datetime.now().year}", format='%d/%m/%Y'),
                 reverse=False
             ) + ['Total']
             
-            df_historico = df_historico.reindex(columns=cols_ordenadas)
+            # Usar solo las columnas que existen y no son del día actual
+            cols_ordenadas = [col for col in cols_ordenadas if col in df_historico.columns and col != fecha_actual_str]
+            df_historico = df_historico[cols_ordenadas]
+            
+            # Calcular total y ordenar
             df_historico['Total'] = df_historico.iloc[:, 1:-1].sum(axis=1)
             df_historico = df_historico.sort_values('Total', ascending=False)
+            
+            # Mostrar tabla
             st.dataframe(df_historico)
 
         # Mostrar información de última fecha y botones

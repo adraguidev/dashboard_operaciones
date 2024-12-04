@@ -156,18 +156,25 @@ class SPEModule:
             # Filtrar explícitamente las columnas para excluir el día actual
             cols_fecha = [col for col in df_historico.columns if col != 'EVALUADOR']
             fecha_actual_str = fecha_actual.strftime('%d/%m')
-            cols_fecha = [col for col in cols_fecha if col != fecha_actual_str and col != 'Total']
+            cols_fecha = [col for col in cols_fecha if col != fecha_actual_str]
             
+            # Ordenar columnas (sin incluir Total todavía)
             cols_ordenadas = ['EVALUADOR'] + sorted(
                 cols_fecha,
                 key=lambda x: pd.to_datetime(x + f"/{datetime.now().year}", format='%d/%m/%Y'),
                 reverse=False
-            ) + ['Total']
+            )
             
-            # Usar solo las columnas que existen y no son del día actual
+            # Primero seleccionar las columnas existentes
             df_historico = df_historico[cols_ordenadas]
-            df_historico['Total'] = df_historico.iloc[:, 1:-1].sum(axis=1)
+            
+            # Luego calcular y agregar la columna Total
+            df_historico['Total'] = df_historico.iloc[:, 1:].sum(axis=1)
+            
+            # Finalmente ordenar por Total
             df_historico = df_historico.sort_values('Total', ascending=False)
+            
+            # Mostrar tabla
             st.dataframe(df_historico)
 
         # Mostrar información de última fecha y botones

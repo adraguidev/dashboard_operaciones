@@ -86,7 +86,6 @@ class SPEModule:
 
         fecha_actual = datetime.now().date()
         fecha_ayer = fecha_actual - timedelta(days=1)
-        fecha_inicio = fecha_actual - timedelta(days=15)
 
         # Convertir fecha de trabajo a datetime
         data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
@@ -96,8 +95,8 @@ class SPEModule:
             errors='coerce'
         )
 
-        # IMPORTANTE: Filtrar datos del día actual ANTES de cualquier procesamiento
-        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date != fecha_actual]
+        # Ignorar datos del día actual
+        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual]
 
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
@@ -109,29 +108,27 @@ class SPEModule:
         df_historico = pd.DataFrame()
         fechas_guardadas = set()
         
-        # Procesar registros históricos
         if registros_historicos:
             for registro in registros_historicos:
                 fecha = pd.Timestamp(registro['fecha'])
-                # No procesar fechas del día actual
-                if fecha.date() != fecha_actual:
-                    fechas_guardadas.add(fecha.date())
-                    fecha_str = fecha.strftime('%d/%m')
-                    df_temp = pd.DataFrame(registro['datos'])
-                    if not df_temp.empty:
-                        evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
-                        df_pivot = pd.DataFrame({
-                            'EVALUADOR': df_temp[evaluador_col].tolist(),
-                            fecha_str: df_temp['cantidad'].tolist()
-                        })
-                        if df_historico.empty:
-                            df_historico = df_pivot
-                        else:
-                            df_historico = df_historico.merge(
-                                df_pivot, on='EVALUADOR', how='outer'
-                            )
+                fechas_guardadas.add(fecha.date())
+                fecha_str = fecha.strftime('%d/%m')
+                df_temp = pd.DataFrame(registro['datos'])
+                if not df_temp.empty:
+                    evaluador_col = 'EVALUADOR' if 'EVALUADOR' in df_temp.columns else 'evaluador'
+                    df_pivot = pd.DataFrame({
+                        'EVALUADOR': df_temp[evaluador_col].tolist(),
+                        fecha_str: df_temp['cantidad'].tolist()
+                    })
+                    if df_historico.empty:
+                        df_historico = df_pivot
+                    else:
+                        df_historico = df_historico.merge(
+                            df_pivot, on='EVALUADOR', how='outer'
+                        )
 
-        # Agregar solo datos del día anterior si no están guardados
+        # Solo procesar datos del día anterior si no están guardados
+        datos_ayer = None
         if fecha_ayer not in fechas_guardadas:
             datos_dia_anterior = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha_ayer]
             if not datos_dia_anterior.empty:
@@ -150,31 +147,17 @@ class SPEModule:
 
         # Mostrar tabla de ranking
         if not df_historico.empty:
-            # Reemplazar NaN con ceros
             df_historico = df_historico.fillna(0)
-            
-            # Ordenar columnas
             cols_fecha = [col for col in df_historico.columns if col != 'EVALUADOR']
-            
-            # IMPORTANTE: Asegurarse de que no se incluya la fecha actual
-            fecha_actual_str = fecha_actual.strftime('%d/%m')
-            cols_fecha = [col for col in cols_fecha if col != fecha_actual_str]
-            
             cols_ordenadas = ['EVALUADOR'] + sorted(
                 [col for col in cols_fecha if col != 'Total'],
                 key=lambda x: pd.to_datetime(x + f"/{datetime.now().year}", format='%d/%m/%Y'),
                 reverse=False
             ) + ['Total']
             
-            # IMPORTANTE: Solo usar las columnas que queremos mostrar
-            cols_ordenadas = [col for col in cols_ordenadas if col in df_historico.columns]
-            df_historico = df_historico[cols_ordenadas]
-            
-            # Calcular total y ordenar
+            df_historico = df_historico.reindex(columns=cols_ordenadas)
             df_historico['Total'] = df_historico.iloc[:, 1:-1].sum(axis=1)
             df_historico = df_historico.sort_values('Total', ascending=False)
-            
-            # Mostrar tabla
             st.dataframe(df_historico)
 
         # Mostrar información de última fecha y botones

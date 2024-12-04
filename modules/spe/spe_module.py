@@ -188,10 +188,8 @@ class SPEModule:
         button_container = st.container()
         col1, col2, col3 = button_container.columns([1, 1, 2])
 
-        def verify_password_and_confirm(datos=None, is_reset=False):
+        def verify_password_and_confirm(self, datos=None, is_reset=False, collection=None, ultima_fecha_db=None):
             """Verificar contraseña y mostrar confirmación."""
-            password_correct = False
-            
             with st.form("password_form"):
                 st.subheader("🔒 Verificación de Administrador")
                 password = st.text_input("Ingrese la contraseña", type="password")
@@ -199,13 +197,13 @@ class SPEModule:
                 
                 if submitted:
                     if password == st.secrets["passwords"]["admin_password"]:
-                        password_correct = True
                         st.success("✅ Contraseña correcta")
                         
                         if is_reset:
                             # Mostrar datos que se van a eliminar
                             st.warning("⚠️ Se eliminarán los siguientes datos:")
                             st.info(f"Fecha: {ultima_fecha_db.strftime('%d/%m/%Y')}")
+                            
                             # Obtener y mostrar los datos a eliminar
                             datos_a_eliminar = collection.find_one({
                                 "modulo": "SPE",
@@ -217,28 +215,27 @@ class SPEModule:
                                     df_eliminar.sort_values('cantidad', ascending=False),
                                     use_container_width=True
                                 )
-                            st.warning("¿Está seguro que desea eliminar estos datos?")
-                        elif datos:
-                            # Mostrar resumen de datos a guardar
+                            
+                            if st.form_submit_button("🗑️ Confirmar Eliminación"):
+                                return True
+                        else:
+                            # Mostrar datos que se van a guardar
                             st.info("📋 Se guardarán los siguientes datos:")
                             total_registros = 0
                             for fecha, ranking in datos.items():
                                 st.markdown(f"**Fecha: {fecha.strftime('%d/%m/%Y')}**")
-                                total_registros += len(ranking)
                                 st.dataframe(
                                     ranking.sort_values('cantidad', ascending=False),
                                     use_container_width=True
                                 )
+                                total_registros += len(ranking)
                             st.info(f"Total de registros a guardar: {total_registros}")
-                        
-                        # Botón de confirmación
-                        confirm_text = "🗑️ Sí, Eliminar Datos" if is_reset else "✅ Confirmar y Guardar"
-                        if st.form_submit_button(confirm_text):
-                            return True, True
+                            
+                            if st.form_submit_button("✅ Confirmar y Guardar"):
+                                return True
                     else:
                         st.error("❌ Contraseña incorrecta")
-            
-            return password_correct, False
+            return False
 
         # Verificar datos pendientes de guardar
         datos_pendientes = {fecha: datos for fecha, datos in datos_no_guardados.items() 
@@ -248,14 +245,12 @@ class SPEModule:
         with col1:
             if datos_pendientes:
                 fechas_str = ", ".join(fecha.strftime('%d/%m/%Y') for fecha in datos_pendientes.keys())
-                if st.button(" Guardar producción"):
-                    password_correct, confirmed = verify_password_and_confirm(datos_pendientes)
-                    if password_correct and confirmed:
+                if st.button("💾 Guardar producción"):
+                    if self.verify_password_and_confirm(datos=datos_pendientes):
                         for fecha, ranking in datos_pendientes.items():
-                            ranking_data = ranking.rename(columns={COLUMNAS['EVALUADOR']: 'EVALUADOR'})
                             nuevo_registro = {
                                 "fecha": pd.Timestamp(fecha),
-                                "datos": ranking_data.to_dict('records'),
+                                "datos": ranking.to_dict('records'),
                                 "modulo": "SPE"
                             }
                             collection.insert_one(nuevo_registro)
@@ -268,13 +263,12 @@ class SPEModule:
         with col2:
             if ultima_fecha_db and ultima_fecha_db.date() == fecha_ayer:
                 if st.button("🔄 Resetear día"):
-                    password_correct, confirmed = verify_password_and_confirm(is_reset=True)
-                    if password_correct and confirmed:
+                    if self.verify_password_and_confirm(is_reset=True, collection=collection, ultima_fecha_db=ultima_fecha_db):
                         collection.delete_many({
                             "modulo": "SPE",
                             "fecha": ultima_fecha_db
                         })
-                        st.success("Día anterior eliminado. Los datos se actualizarán al recargar.")
+                        st.success("✅ Día anterior eliminado correctamente")
                         st.rerun()
 
     def _get_last_date_from_db(self, collection):

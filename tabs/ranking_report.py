@@ -6,28 +6,45 @@ from io import BytesIO
 from config.settings import MONGODB_CONFIG
 
 def render_ranking_report_tab(data, selected_module, collection):
+    st.write("Iniciando render_ranking_report_tab")
+    st.write(f"Módulo seleccionado: {selected_module}")
+    st.write(f"Tipo de datos recibidos: {type(data)}")
+    
+    if isinstance(data, pd.DataFrame):
+        st.write(f"Columnas disponibles: {data.columns.tolist()}")
+        st.write(f"Muestra de datos:")
+        st.write(data.head())
+
     st.header("Ranking de Expedientes Trabajados")
 
     try:
+        # Agregar verificación inicial de datos
+        if data is None or data.empty:
+            st.warning(f"No hay datos disponibles para el módulo {selected_module}.")
+            return
+
         # Configurar zona horaria de Perú
         peru_tz = pytz.timezone('America/Lima')
         now = datetime.now(peru_tz)
         
         # Obtener fecha de ayer (hora Perú)
         yesterday = pd.Timestamp(now).normalize() - pd.Timedelta(days=1)
-        yesterday = yesterday.tz_localize(None)  # Remover zona horaria para comparaciones
-        
-        # Verificar si hay datos del módulo
-        if data is None:
-            st.warning(f"No se encontraron datos para el módulo {selected_module}.")
-            return
+        yesterday = yesterday.tz_localize(None)
 
-        # Convertir FechaPre a datetime si no lo está ya
-        data['FechaPre'] = pd.to_datetime(data['FechaPre'])
+        # Convertir fechas una sola vez al inicio
+        data['FechaPre'] = pd.to_datetime(data['FechaPre'], errors='coerce')
         data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
 
-        # Filtrar datos de ayer
+        # Agregar log para debugging
+        st.write(f"Total de registros cargados: {len(data)}")
+        st.write(f"Rango de fechas: {data['FECHA DE TRABAJO'].min()} - {data['FECHA DE TRABAJO'].max()}")
+
+        # Filtrar datos de ayer de manera más eficiente
         datos_ayer = data[data['FECHA DE TRABAJO'].dt.normalize() == yesterday]
+        
+        # Verificar si hay datos de ayer
+        if not datos_ayer.empty:
+            st.write(f"Registros encontrados para ayer: {len(datos_ayer)}")
         
         # Obtener última fecha registrada
         ultima_fecha_db = get_last_date_from_db(selected_module, collection)
@@ -108,181 +125,186 @@ def render_ranking_report_tab(data, selected_module, collection):
                 collection.insert_many(nuevos_registros)
 
         # Mostrar registros históricos
-        registros_historicos = list(collection.find({"modulo": selected_module}).sort("fecha", -1))
-        if registros_historicos:
-            df_historico = pd.DataFrame()
-            
-            for registro in registros_historicos:
-                fecha = pd.Timestamp(registro['fecha']).strftime('%d/%m')
-                if pd.Timestamp(registro['fecha']).date() < fecha_actual:
-                    df_temp = pd.DataFrame(registro['datos'])
-                    if not df_temp.empty:
-                        df_pivot = pd.DataFrame({
-                            'EVALASIGN': df_temp['evaluador'].tolist(),
-                            fecha: df_temp['cantidad'].tolist()
-                        })
-                        if df_historico.empty:
-                            df_historico = df_pivot
-                        else:
-                            df_historico = df_historico.merge(
-                                df_pivot, on='EVALASIGN', how='outer'
-                            )
+        registros_historicos = list(collection.find(
+            {"modulo": selected_module},
+            {"fecha": 1, "datos": 1, "_id": 0}
+        ).sort("fecha", -1).limit(15))  # Limitar a últimos 15 días
 
-            if not df_historico.empty:
-                # Reemplazar NaN con ceros y convertir valores a enteros
-                df_historico = df_historico.fillna(0)
-                df_historico.iloc[:, 1:] = df_historico.iloc[:, 1:].astype(int)
+        if not registros_historicos:
+            st.warning("No se encontraron registros históricos.")
+            return
 
-                # Ordenar y agregar día de la semana a las fechas
-                dias_semana = {
-                    0: 'Lun',
-                    1: 'Mar',
-                    2: 'Mie',
-                    3: 'Jue',
-                    4: 'Vie',
-                    5: 'Sab',
-                    6: 'Dom'
-                }
-
-                fecha_cols = [col for col in df_historico.columns if col != 'EVALASIGN']
-                nuevas_cols = []
-                for col in fecha_cols:
-                    if col not in ['Total', 'Promedio']:
-                        fecha = pd.to_datetime(col + f"/{datetime.now().year}", format='%d/%m/%Y')
-                        dia_semana = dias_semana[fecha.weekday()]
-                        nueva_col = f"{dia_semana} {col}"
-                        df_historico = df_historico.rename(columns={col: nueva_col})
-                        nuevas_cols.append(nueva_col)
-                    else:
-                        nuevas_cols.append(col)
-
-                # Ordenar fechas de más antiguo a más reciente
-                df_historico = df_historico.reindex(
-                    columns=['EVALASIGN'] + sorted(
-                        [col for col in nuevas_cols if col not in ['Total', 'Promedio']],
-                        key=lambda x: pd.to_datetime(x.split(' ')[-1] + f"/{datetime.now().year}", format='%d/%m/%Y')
-                    ) + ['Total', 'Promedio']
-                )
-
-                # Calcular el promedio especial
-                def calcular_promedio_especial(row):
-                    fechas_columnas = [col for col in row.index if col != 'EVALASIGN' and col not in ['Total', 'Promedio']]
-                    dias_trabajo = []
-                    
-                    for fecha_col in fechas_columnas:
-                        # Extraer solo la parte de la fecha (dd/mm) del nombre de la columna
-                        fecha_str = fecha_col.split(' ')[-1]  # Obtener "dd/mm" de "Día dd/mm"
-                        fecha_completa = pd.to_datetime(fecha_str + f"/{datetime.now().year}", format='%d/%m/%Y')
-                        dia_semana = fecha_completa.weekday()  # 0 = Lunes, 6 = Domingo
-                        cantidad = row[fecha_col]
-                        
-                        if cantidad > 0:
-                            dias_trabajo.append((fecha_str, dia_semana, cantidad))
-                    
-                    # Contar días laborables (L-V) con trabajo
-                    dias_laborables = sum(1 for _, dia, _ in dias_trabajo if dia < 5)
-                    
-                    # Sumar todas las cantidades
-                    total_trabajo = sum(cantidad for _, _, cantidad in dias_trabajo)
-                    
-                    # Si no hay días laborables pero hay trabajo en fin de semana,
-                    # consideramos que es trabajo recuperado
-                    if dias_laborables == 0 and dias_trabajo:
-                        return total_trabajo / 5
-                    
-                    # Si hay días laborables, dividimos entre 5 (semana completa)
-                    if dias_laborables > 0:
-                        return total_trabajo / 5
-                    
-                    return 0
-
-                # Aplicar el cálculo del promedio a cada fila
-                df_historico['Promedio'] = df_historico.apply(calcular_promedio_especial, axis=1)
-
-                # Agregar columna 'Total' y ordenar
-                df_historico['Total'] = df_historico.iloc[:, 1:-1].sum(axis=1)  # Excluir 'Promedio' del total
-                df_historico = df_historico.sort_values(by='Total', ascending=False)
-
-                # Restablecer el índice, comenzando desde 1
-                df_historico.reset_index(drop=True, inplace=True)
-                df_historico.index += 1
-
-                # Convertir todas las columnas numéricas a enteros antes de mostrar
-                columnas_numericas = [col for col in df_historico.columns if col not in ['EVALASIGN', 'Promedio']]
-                for col in columnas_numericas:
-                    df_historico[col] = df_historico[col].astype(int)
-
-                # Mostrar tabla con formato especial para el promedio
-                st.subheader(f"Ranking de Expedientes Trabajados - {selected_module} (Últimos 15 días hasta ayer)")
-                st.table(
-                    df_historico.style.format({
-                        'Promedio': "{:.1f}"  # Solo formato especial para el promedio
-                    })
-                )
-
-                # Botón para descargar ranking como Excel
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_historico.to_excel(writer, index=False, sheet_name='Ranking_Historico')
-                output.seek(0)
-                
-                st.download_button(
-                    label="Descargar Ranking Histórico",
-                    data=output,
-                    file_name=f"Ranking_Historico_{selected_module}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
-                # Nueva sección para inconsistencias de fechas
-                st.subheader("Inconsistencias en Fechas de Trabajo")
-                
-                # Filtrar datos de los últimos 30 días
-                fecha_30_dias = pd.Timestamp.now() - pd.Timedelta(days=30)
-                datos_recientes = data[data['FechaPre'] >= fecha_30_dias].copy(deep=True)
-                
-                # Convertir fechas si no lo están
-                datos_recientes.loc[:, 'FECHA DE TRABAJO'] = pd.to_datetime(datos_recientes['FECHA DE TRABAJO'], errors='coerce')
-                datos_recientes.loc[:, 'FechaPre'] = pd.to_datetime(datos_recientes['FechaPre'], errors='coerce')
-                
-                # Filtrar primero los registros que tienen ambas fechas (no nulos)
-                datos_validos = datos_recientes.dropna(subset=['FECHA DE TRABAJO', 'FechaPre'])
-                
-                # Calcular la diferencia en días entre las fechas
-                datos_validos['DiferenciaDias'] = abs((datos_validos['FECHA DE TRABAJO'] - datos_validos['FechaPre']).dt.days)
-                
-                # Encontrar inconsistencias (diferencia mayor a 2 días)
-                mask = datos_validos['DiferenciaDias'] > 2
-                columnas = ['NumeroTramite', 'EVALASIGN', 'FECHA DE TRABAJO', 'FechaPre', 'DiferenciaDias', 'ESTADO', 'DESCRIPCION']
-                inconsistencias = datos_validos.loc[mask, columnas].copy()
-                
-                if not inconsistencias.empty:
-                    # Mostrar el dataframe
-                    inconsistencias = prepare_inconsistencias_dataframe(inconsistencias)
-                    st.dataframe(inconsistencias, use_container_width=True, height=400)
-                    
-                    # Botón para descargar inconsistencias
-                    output_inconsistencias = BytesIO()
-                    with pd.ExcelWriter(output_inconsistencias, engine='openpyxl') as writer:
-                        inconsistencias.to_excel(writer, index=False, sheet_name='Inconsistencias_Fechas')
-                    output_inconsistencias.seek(0)
-                    
-                    st.download_button(
-                        label="Descargar Reporte de Inconsistencias",
-                        data=output_inconsistencias,
-                        file_name=f"Inconsistencias_Fechas_{selected_module}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                    
-                    # Mostrar resumen
-                    st.warning(f"Se encontraron {len(inconsistencias)} expedientes con diferencia mayor a 2 días entre fechas en los últimos 30 días.")
+        # Crear DataFrame histórico de manera más eficiente
+        df_historico = pd.DataFrame()
+        for registro in registros_historicos:
+            fecha = pd.Timestamp(registro['fecha']).strftime('%d/%m')
+            df_temp = pd.DataFrame(registro['datos'])
+            if not df_temp.empty:
+                df_temp = df_temp.pivot(
+                    columns='evaluador',
+                    values='cantidad'
+                ).reset_index(drop=True)
+                df_temp.columns.name = None
+                df_temp = df_temp.add_prefix(f"{fecha}_")
+                if df_historico.empty:
+                    df_historico = df_temp
                 else:
-                    st.success("No se encontraron inconsistencias significativas en las fechas de los últimos 30 días.")
+                    df_historico = pd.concat([df_historico, df_temp], axis=1)
 
-        else:
-            st.warning(f"No hay datos históricos para el módulo {selected_module}.")
+        # Reemplazar NaN con ceros y convertir valores a enteros
+        df_historico = df_historico.fillna(0)
+        df_historico.iloc[:, 1:] = df_historico.iloc[:, 1:].astype(int)
+
+        # Ordenar y agregar día de la semana a las fechas
+        dias_semana = {
+            0: 'Lun',
+            1: 'Mar',
+            2: 'Mie',
+            3: 'Jue',
+            4: 'Vie',
+            5: 'Sab',
+            6: 'Dom'
+        }
+
+        fecha_cols = [col for col in df_historico.columns if col != 'EVALASIGN']
+        nuevas_cols = []
+        for col in fecha_cols:
+            if col not in ['Total', 'Promedio']:
+                fecha = pd.to_datetime(col + f"/{datetime.now().year}", format='%d/%m/%Y')
+                dia_semana = dias_semana[fecha.weekday()]
+                nueva_col = f"{dia_semana} {col}"
+                df_historico = df_historico.rename(columns={col: nueva_col})
+                nuevas_cols.append(nueva_col)
+            else:
+                nuevas_cols.append(col)
+
+        # Ordenar fechas de más antiguo a más reciente
+        df_historico = df_historico.reindex(
+            columns=['EVALASIGN'] + sorted(
+                [col for col in nuevas_cols if col not in ['Total', 'Promedio']],
+                key=lambda x: pd.to_datetime(x.split(' ')[-1] + f"/{datetime.now().year}", format='%d/%m/%Y')
+            ) + ['Total', 'Promedio']
+        )
+
+        # Calcular el promedio especial
+        def calcular_promedio_especial(row):
+            fechas_columnas = [col for col in row.index if col != 'EVALASIGN' and col not in ['Total', 'Promedio']]
+            dias_trabajo = []
             
+            for fecha_col in fechas_columnas:
+                # Extraer solo la parte de la fecha (dd/mm) del nombre de la columna
+                fecha_str = fecha_col.split(' ')[-1]  # Obtener "dd/mm" de "Día dd/mm"
+                fecha_completa = pd.to_datetime(fecha_str + f"/{datetime.now().year}", format='%d/%m/%Y')
+                dia_semana = fecha_completa.weekday()  # 0 = Lunes, 6 = Domingo
+                cantidad = row[fecha_col]
+                
+                if cantidad > 0:
+                    dias_trabajo.append((fecha_str, dia_semana, cantidad))
+            
+            # Contar días laborables (L-V) con trabajo
+            dias_laborables = sum(1 for _, dia, _ in dias_trabajo if dia < 5)
+            
+            # Sumar todas las cantidades
+            total_trabajo = sum(cantidad for _, _, cantidad in dias_trabajo)
+            
+            # Si no hay días laborables pero hay trabajo en fin de semana,
+            # consideramos que es trabajo recuperado
+            if dias_laborables == 0 and dias_trabajo:
+                return total_trabajo / 5
+            
+            # Si hay días laborables, dividimos entre 5 (semana completa)
+            if dias_laborables > 0:
+                return total_trabajo / 5
+            
+            return 0
+
+        # Aplicar el cálculo del promedio a cada fila
+        df_historico['Promedio'] = df_historico.apply(calcular_promedio_especial, axis=1)
+
+        # Agregar columna 'Total' y ordenar
+        df_historico['Total'] = df_historico.iloc[:, 1:-1].sum(axis=1)  # Excluir 'Promedio' del total
+        df_historico = df_historico.sort_values(by='Total', ascending=False)
+
+        # Restablecer el índice, comenzando desde 1
+        df_historico.reset_index(drop=True, inplace=True)
+        df_historico.index += 1
+
+        # Convertir todas las columnas numéricas a enteros antes de mostrar
+        columnas_numericas = [col for col in df_historico.columns if col not in ['EVALASIGN', 'Promedio']]
+        for col in columnas_numericas:
+            df_historico[col] = df_historico[col].astype(int)
+
+        # Mostrar tabla con formato especial para el promedio
+        st.subheader(f"Ranking de Expedientes Trabajados - {selected_module} (Últimos 15 días hasta ayer)")
+        st.table(
+            df_historico.style.format({
+                'Promedio': "{:.1f}"  # Solo formato especial para el promedio
+            })
+        )
+
+        # Botón para descargar ranking como Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_historico.to_excel(writer, index=False, sheet_name='Ranking_Historico')
+        output.seek(0)
+        
+        st.download_button(
+            label="Descargar Ranking Histórico",
+            data=output,
+            file_name=f"Ranking_Historico_{selected_module}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # Nueva sección para inconsistencias de fechas
+        st.subheader("Inconsistencias en Fechas de Trabajo")
+        
+        # Filtrar datos de los últimos 30 días
+        fecha_30_dias = pd.Timestamp.now() - pd.Timedelta(days=30)
+        datos_recientes = data[data['FechaPre'] >= fecha_30_dias].copy(deep=True)
+        
+        # Convertir fechas si no lo están
+        datos_recientes.loc[:, 'FECHA DE TRABAJO'] = pd.to_datetime(datos_recientes['FECHA DE TRABAJO'], errors='coerce')
+        datos_recientes.loc[:, 'FechaPre'] = pd.to_datetime(datos_recientes['FechaPre'], errors='coerce')
+        
+        # Filtrar primero los registros que tienen ambas fechas (no nulos)
+        datos_validos = datos_recientes.dropna(subset=['FECHA DE TRABAJO', 'FechaPre'])
+        
+        # Calcular la diferencia en días entre las fechas
+        datos_validos['DiferenciaDias'] = abs((datos_validos['FECHA DE TRABAJO'] - datos_validos['FechaPre']).dt.days)
+        
+        # Encontrar inconsistencias (diferencia mayor a 2 días)
+        mask = datos_validos['DiferenciaDias'] > 2
+        columnas = ['NumeroTramite', 'EVALASIGN', 'FECHA DE TRABAJO', 'FechaPre', 'DiferenciaDias', 'ESTADO', 'DESCRIPCION']
+        inconsistencias = datos_validos.loc[mask, columnas].copy()
+        
+        if not inconsistencias.empty:
+            # Mostrar el dataframe
+            inconsistencias = prepare_inconsistencias_dataframe(inconsistencias)
+            st.dataframe(inconsistencias, use_container_width=True, height=400)
+            
+            # Botón para descargar inconsistencias
+            output_inconsistencias = BytesIO()
+            with pd.ExcelWriter(output_inconsistencias, engine='openpyxl') as writer:
+                inconsistencias.to_excel(writer, index=False, sheet_name='Inconsistencias_Fechas')
+            output_inconsistencias.seek(0)
+            
+            st.download_button(
+                label="Descargar Reporte de Inconsistencias",
+                data=output_inconsistencias,
+                file_name=f"Inconsistencias_Fechas_{selected_module}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+            # Mostrar resumen
+            st.warning(f"Se encontraron {len(inconsistencias)} expedientes con diferencia mayor a 2 días entre fechas en los últimos 30 días.")
+        else:
+            st.success("No se encontraron inconsistencias significativas en las fechas de los últimos 30 días.")
+
     except Exception as e:
         st.error(f"Error al procesar los datos: {str(e)}")
+        # Agregar más detalles del error para debugging
+        import traceback
+        st.code(traceback.format_exc())
 
 def get_last_date_from_db(module, collection):
     """Obtener la última fecha registrada para el módulo."""

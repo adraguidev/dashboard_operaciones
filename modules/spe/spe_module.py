@@ -695,11 +695,14 @@ class SPEModule:
         
         # Obtener fecha actual y fecha hace 30 días
         fecha_actual = pd.Timestamp.now()
+        mes_actual = fecha_actual.month
         fecha_30_dias = fecha_actual - pd.Timedelta(days=30)
         
         # Preparar datos históricos de 2024
         df_historico = data.copy()
-        df_historico['Mes'] = df_historico['FECHA _ INGRESO'].dt.strftime('%B')  # Nombre del mes
+        # Usar número de mes para ordenamiento correcto
+        df_historico['Mes_num'] = df_historico['FECHA _ INGRESO'].dt.month
+        df_historico['Mes'] = df_historico['FECHA _ INGRESO'].dt.strftime('%B')
         df_historico['Semana'] = df_historico['FECHA _ INGRESO'].dt.isocalendar().week
         
         # Análisis de últimos 30 días
@@ -720,7 +723,11 @@ class SPEModule:
         
         # Análisis por mes (2024)
         st.subheader("Tendencia Mensual 2024")
-        ingresos_mensuales = df_historico.groupby('Mes').size().reset_index(name='Cantidad')
+        ingresos_mensuales = df_historico.groupby(['Mes_num', 'Mes']).agg({
+            'EXPEDIENTE': 'count'
+        }).reset_index()
+        ingresos_mensuales.columns = ['Mes_num', 'Mes', 'Cantidad']
+        ingresos_mensuales = ingresos_mensuales.sort_values('Mes_num')  # Ordenar por número de mes
         
         fig_mensual = px.bar(
             ingresos_mensuales,
@@ -748,57 +755,67 @@ class SPEModule:
         # Análisis de tendencia
         st.subheader("Análisis de Tendencia")
         
-        # Calcular métricas
-        promedio_diario = ingresos_diarios['Cantidad'].mean()
-        promedio_semanal = ingresos_semanales['Cantidad'].mean()
-        tendencia_semanal = ingresos_semanales['Cantidad'].pct_change().mean() * 100
+        # Calcular métricas del mes actual
+        datos_mes_actual = df_historico[df_historico['Mes_num'] == mes_actual]
+        dias_mes_actual = datos_mes_actual['FECHA _ INGRESO'].dt.day.nunique()
+        total_mes_actual = len(datos_mes_actual)
+        promedio_diario_mes_actual = total_mes_actual / dias_mes_actual if dias_mes_actual > 0 else 0
+        
+        # Calcular promedio diario de los últimos 30 días
+        promedio_diario_30dias = len(datos_recientes) / min(30, datos_recientes['FECHA _ INGRESO'].dt.day.nunique())
         
         # Métricas clave
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric(
-                "Promedio Diario",
-                f"{promedio_diario:.1f}",
-                f"{ingresos_diarios['Cantidad'].std():.1f} σ"
+                "Promedio Diario (Mes Actual)",
+                f"{promedio_diario_mes_actual:.1f}",
+                f"{datos_mes_actual.groupby(datos_mes_actual['FECHA _ INGRESO'].dt.date).size().std():.1f} σ"
             )
         with col2:
             st.metric(
-                "Promedio Semanal",
-                f"{promedio_semanal:.1f}",
-                f"{ingresos_semanales['Cantidad'].std():.1f} σ"
+                "Promedio Diario (30 días)",
+                f"{promedio_diario_30dias:.1f}",
+                f"{ingresos_diarios['Cantidad'].std():.1f} σ"
             )
         with col3:
+            promedio_mensual = ingresos_mensuales['Cantidad'].mean()
             st.metric(
                 "Total Mes Actual",
-                f"{ingresos_diarios['Cantidad'].sum():,.0f}",
-                f"vs {ingresos_mensuales['Cantidad'].mean():.0f} promedio mensual"
+                f"{total_mes_actual:,.0f}",
+                f"{((total_mes_actual/promedio_mensual - 1) * 100):.1f}% vs promedio"
             )
         
         # Análisis y conclusiones
         st.subheader("Análisis y Predicciones")
         
-        # Calcular tendencias recientes
-        tendencia_ultimos_dias = ingresos_diarios['Cantidad'].pct_change().mean() * 100
+        # Calcular tendencias considerando solo días hábiles
+        dias_habiles_mes = datos_mes_actual['FECHA _ INGRESO'].dt.dayofweek < 5  # Lunes a Viernes
+        promedio_dias_habiles = datos_mes_actual[dias_habiles_mes].groupby(
+            datos_mes_actual[dias_habiles_mes]['FECHA _ INGRESO'].dt.date
+        ).size().mean()
         
-        # Generar conclusiones basadas en datos de 2024
+        # Generar conclusiones
         conclusiones = []
         
-        # Tendencia diaria
-        if tendencia_ultimos_dias > 0:
-            conclusiones.append("📈 La tendencia de los últimos días muestra un incremento en los ingresos.")
+        # Tendencia mensual
+        tendencia_mensual = ingresos_mensuales['Cantidad'].pct_change().iloc[-1] * 100
+        if tendencia_mensual > 0:
+            conclusiones.append(f"📈 El mes actual muestra un incremento del {tendencia_mensual:.1f}% respecto al mes anterior.")
         else:
-            conclusiones.append("📉 La tendencia de los últimos días muestra una disminución en los ingresos.")
+            conclusiones.append(f"📉 El mes actual muestra una disminución del {-tendencia_mensual:.1f}% respecto al mes anterior.")
         
         # Comparación con promedio
-        ultimo_valor = ingresos_diarios['Cantidad'].iloc[-1]
-        if ultimo_valor > promedio_diario:
-            conclusiones.append(f"📊 El último día registrado ({ultimo_valor:.0f}) está por encima del promedio diario ({promedio_diario:.0f}).")
+        if promedio_diario_mes_actual > promedio_diario_30dias:
+            conclusiones.append(f"📊 El promedio diario del mes actual ({promedio_diario_mes_actual:.1f}) está por encima del promedio de los últimos 30 días ({promedio_diario_30dias:.1f}).")
         else:
-            conclusiones.append(f"📊 El último día registrado ({ultimo_valor:.0f}) está por debajo del promedio diario ({promedio_diario:.0f}).")
+            conclusiones.append(f"📊 El promedio diario del mes actual ({promedio_diario_mes_actual:.1f}) está por debajo del promedio de los últimos 30 días ({promedio_diario_30dias:.1f}).")
         
-        # Predicción simple para próxima semana
-        prediccion_siguiente_semana = promedio_diario * 5  # Días laborables
-        conclusiones.append(f"🔮 Para la próxima semana, se proyectan aproximadamente {prediccion_siguiente_semana:.0f} ingresos.")
+        # Predicción para el resto del mes
+        dias_habiles_restantes = 20 - dias_mes_actual  # Asumiendo 20 días hábiles por mes
+        if dias_habiles_restantes > 0:
+            prediccion_mes = total_mes_actual + (dias_habiles_restantes * promedio_dias_habiles)
+            conclusiones.append(f"🔮 Proyección para fin de mes: {prediccion_mes:.0f} expedientes.")
         
         # Mostrar conclusiones
         for conclusion in conclusiones:
@@ -806,13 +823,13 @@ class SPEModule:
         
         # Recomendaciones basadas en tendencia actual
         st.subheader("Recomendaciones")
-        if tendencia_ultimos_dias > 0:
+        if promedio_diario_mes_actual > promedio_diario_30dias:
             st.write("📋 Dado el incremento en ingresos, se recomienda:")
-            st.write("- Optimizar la distribución de expedientes")
-            st.write("- Monitorear la carga de trabajo diaria")
-            st.write("- Priorizar según fecha de ingreso")
+            st.write("- Optimizar la distribución diaria de expedientes")
+            st.write("- Monitorear la carga de trabajo por evaluador")
+            st.write("- Priorizar expedientes según antigüedad")
         else:
             st.write("📋 Dado el descenso en ingresos, se recomienda:")
-            st.write("- Enfocarse en reducir expedientes pendientes")
-            st.write("- Analizar la distribución actual de trabajo")
-            st.write("- Prepararse para posibles incrementos futuros")
+            st.write("- Aprovechar para reducir expedientes pendientes")
+            st.write("- Revisar la distribución actual de trabajo")
+            st.write("- Preparar estrategias para futuros incrementos")

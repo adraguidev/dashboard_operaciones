@@ -95,6 +95,9 @@ class SPEModule:
             errors='coerce'
         )
 
+        # IMPORTANTE: Filtrar los datos del día actual del Google Sheets desde el inicio
+        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual]
+
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
         ultima_fecha = ultima_fecha_db.date() if ultima_fecha_db else None

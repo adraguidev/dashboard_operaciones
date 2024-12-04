@@ -584,6 +584,12 @@ class SPEModule:
         """Renderizar análisis dinámico tipo tabla dinámica."""
         st.header("Análisis Dinámico")
 
+        # Agregar botón de reset al inicio
+        col1, col2 = st.columns([1, 5])
+        with col1:
+            if st.button("🔄 Resetear Filtros"):
+                st.rerun()  # Esto recargará la página con los datos originales
+
         # Definir las columnas disponibles para análisis
         COLUMNAS_DISPONIBLES = {
             'EVALUADOR': 'EVALUADOR',
@@ -664,7 +670,7 @@ class SPEModule:
 
         # Mostrar grid interactivo
         st.subheader("Filtrado y Análisis Avanzado")
-        grid_response = AgGrid(
+        AgGrid(
             data,
             grid_options,
             enable_enterprise_modules=True,
@@ -675,109 +681,3 @@ class SPEModule:
             height=500,
             allow_unsafe_jscode=True
         )
-
-        # Obtener datos filtrados
-        data_filtrada = pd.DataFrame(grid_response['data'])
-        
-        if not data_filtrada.empty:
-            st.subheader("Resumen de Datos Filtrados")
-            
-            # Mostrar conteos básicos
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Expedientes", len(data_filtrada))
-            with col2:
-                st.metric("Expedientes Únicos", data_filtrada['EXPEDIENTE'].nunique())
-            with col3:
-                st.metric("Evaluadores", data_filtrada['EVALUADOR'].nunique())
-
-            # Opción para agrupar datos
-            st.subheader("Análisis Agrupado")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                agrupar_por = st.multiselect(
-                    "Agrupar por:",
-                    options=[k for k in COLUMNAS_DISPONIBLES.keys() if k != 'EXPEDIENTE'],
-                    default=['EVALUADOR']
-                )
-            
-            with col2:
-                metrica = st.selectbox(
-                    "Métrica:",
-                    options=['Cantidad de Expedientes', 'Expedientes Únicos'],
-                    index=0
-                )
-
-            if agrupar_por:
-                # Crear tabla pivote según selección
-                indices = [COLUMNAS_DISPONIBLES[col] for col in agrupar_por]
-                
-                if metrica == 'Cantidad de Expedientes':
-                    pivot = pd.pivot_table(
-                        data_filtrada,
-                        index=indices,
-                        values='EXPEDIENTE',
-                        aggfunc='count',
-                        margins=True,
-                        margins_name='Total'
-                    )
-                else:
-                    pivot = pd.pivot_table(
-                        data_filtrada,
-                        index=indices,
-                        values='EXPEDIENTE',
-                        aggfunc='nunique',
-                        margins=True,
-                        margins_name='Total'
-                    )
-
-                st.dataframe(pivot, use_container_width=True)
-
-                # Opción para descargar
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    pivot.to_excel(writer, sheet_name='Análisis_Agrupado')
-                    data_filtrada.to_excel(writer, sheet_name='Datos_Filtrados', index=False)
-                
-                st.download_button(
-                    label="📥 Descargar Análisis",
-                    data=output.getvalue(),
-                    file_name="analisis_dinamico.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
-                # Visualización
-                if len(pivot) > 1:
-                    st.subheader("Visualización")
-                    tipo_grafico = st.selectbox(
-                        "Tipo de gráfico:",
-                        options=['Barras', 'Líneas', 'Torta', 'Calor'],
-                        key="tipo_grafico"
-                    )
-
-                    pivot_plot = pivot.iloc[:-1]  # Excluir la fila de Total
-                    if tipo_grafico == 'Barras':
-                        fig = px.bar(
-                            pivot_plot,
-                            title="Análisis Gráfico"
-                        )
-                    elif tipo_grafico == 'Líneas':
-                        fig = px.line(
-                            pivot_plot,
-                            title="Análisis Gráfico"
-                        )
-                    elif tipo_grafico == 'Torta':
-                        fig = px.pie(
-                            pivot_plot,
-                            values=pivot_plot.columns[0],
-                            names=pivot_plot.index,
-                            title="Análisis Gráfico"
-                        )
-                    else:  # Calor
-                        fig = px.imshow(
-                            pivot_plot,
-                            title="Mapa de Calor"
-                        )
-
-                    st.plotly_chart(fig, use_container_width=True)

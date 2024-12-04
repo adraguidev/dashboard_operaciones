@@ -770,17 +770,24 @@ class SPEModule:
         model_semanal = make_pipeline(PolynomialFeatures(3), Ridge(alpha=0.1))
         model_semanal.fit(X_semanal, ingresos_semanales['cantidad'])
         
-        # Generar predicciones semanales
-        X_pred_semanal = np.linspace(X_semanal.min(), X_semanal.max() + 14, 100).reshape(-1, 1)
-        y_pred_semanal = model_semanal.predict(X_pred_semanal)
+        # Generar predicciones semanales - CORREGIDO
+        # Calcular fechas futuras basadas en la última fecha real
+        ultima_fecha_real = ingresos_semanales['FECHA _ INGRESO'].max()
+        dias_prediccion = 60  # Predecir 2 meses aproximadamente
         fechas_pred_semanal = pd.date_range(
-            ingresos_semanales['FECHA _ INGRESO'].min(),
-            periods=100,
+            start=ingresos_semanales['FECHA _ INGRESO'].min(),
+            end=ultima_fecha_real + pd.Timedelta(days=dias_prediccion),
             freq='D'
         )
+        
+        # Preparar datos para predicción
+        X_pred_semanal = (fechas_pred_semanal - ingresos_semanales['FECHA _ INGRESO'].min()).days.values.reshape(-1, 1)
+        y_pred_semanal = model_semanal.predict(X_pred_semanal)
 
         # Gráfico semanal
         fig_semanal = go.Figure()
+        
+        # Datos reales
         fig_semanal.add_trace(go.Scatter(
             x=ingresos_semanales['FECHA _ INGRESO'],
             y=ingresos_semanales['cantidad'],
@@ -789,6 +796,8 @@ class SPEModule:
             line=dict(color='blue', width=1),
             marker=dict(size=8)
         ))
+        
+        # Línea de tendencia y predicción
         fig_semanal.add_trace(go.Scatter(
             x=fechas_pred_semanal,
             y=y_pred_semanal,
@@ -796,12 +805,24 @@ class SPEModule:
             name='Tendencia y Predicción',
             line=dict(color='red', dash='dash', width=2)
         ))
+        
         fig_semanal.update_layout(
             title='Ingresos Semanales y Tendencia',
             xaxis_title='Fecha',
             yaxis_title='Cantidad de Expedientes',
-            hovermode='x unified'
+            hovermode='x unified',
+            showlegend=True
         )
+        
+        # Agregar anotación para indicar inicio de predicción
+        fig_semanal.add_vline(
+            x=ultima_fecha_real,
+            line_dash="dot",
+            line_color="gray",
+            annotation_text="Inicio Predicción",
+            annotation_position="top right"
+        )
+        
         st.plotly_chart(fig_semanal, use_container_width=True)
 
         # 3. Análisis Mensual

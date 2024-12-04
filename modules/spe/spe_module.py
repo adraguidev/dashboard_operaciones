@@ -154,6 +154,27 @@ class SPEModule:
                         df_pivot, on='EVALUADOR', how='outer'
                     )
 
+        # Mostrar tabla de ranking
+        if not df_historico.empty:
+            # Reemplazar NaN con ceros
+            df_historico = df_historico.fillna(0)
+            
+            # Ordenar columnas (del más antiguo al más reciente)
+            cols_fecha = [col for col in df_historico.columns if col != 'EVALUADOR']
+            cols_ordenadas = ['EVALUADOR'] + sorted(
+                [col for col in cols_fecha if col != 'Total'],
+                key=lambda x: pd.to_datetime(x + f"/{datetime.now().year}", format='%d/%m/%Y'),
+                reverse=False
+            ) + ['Total']
+            df_historico = df_historico.reindex(columns=cols_ordenadas)
+            
+            # Calcular total y ordenar
+            df_historico['Total'] = df_historico.iloc[:, 1:-1].sum(axis=1)
+            df_historico = df_historico.sort_values('Total', ascending=False)
+            
+            # Mostrar tabla
+            st.dataframe(df_historico)
+
         # Mostrar información de última fecha y botones
         if ultima_fecha_db:
             if ultima_fecha_db.date() > fecha_ayer:

@@ -22,25 +22,9 @@ def render_ranking_report_tab(data, selected_module, collection):
             st.warning(f"No se encontraron datos para el módulo {selected_module}.")
             return
 
-        # Convertir FechaPre a datetime con manejo de errores
-        def convert_dates(date_str):
-            try:
-                # Primero intentamos con el formato estándar
-                return pd.to_datetime(date_str, format='%d/%m/%Y', errors='coerce')
-            except:
-                try:
-                    # Si falla, intentamos limpiar la cadena y convertir
-                    cleaned_date = date_str.split('_')[0] if '_' in date_str else date_str
-                    return pd.to_datetime(cleaned_date, format='%d/%m/%Y', errors='coerce')
-                except:
-                    return pd.NaT
-
-        # Convertir las fechas con el nuevo método
-        data['FechaPre'] = data['FechaPre'].apply(convert_dates)
-        data['FECHA DE TRABAJO'] = data['FECHA DE TRABAJO'].apply(convert_dates)
-
-        # Eliminar filas con fechas inválidas
-        data = data.dropna(subset=['FECHA DE TRABAJO', 'FechaPre'])
+        # Convertir FechaPre a datetime si no lo está ya
+        data['FechaPre'] = pd.to_datetime(data['FechaPre'])
+        data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
 
         # Filtrar datos de ayer
         datos_ayer = data[data['FECHA DE TRABAJO'].dt.normalize() == yesterday]

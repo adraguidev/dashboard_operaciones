@@ -83,16 +83,17 @@ class SPEModule:
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
-        fecha_actual = datetime.now().date()
+        # Usar timezone de Peru para las fechas
+        fecha_actual = pd.Timestamp.now(tz='America/Lima').date()
         fecha_ayer = fecha_actual - timedelta(days=1)
 
-        # Convertir fecha de trabajo a datetime
+        # Convertir fecha de trabajo a datetime considerando timezone
         data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
             data[COLUMNAS['FECHA_TRABAJO']], 
             format='%d/%m/%Y',
             dayfirst=True,
             errors='coerce'
-        )
+        ).dt.tz_localize('America/Lima')
 
         # Filtrar datos del día actual
         data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual]
@@ -101,8 +102,11 @@ class SPEModule:
         ultima_fecha_db = self._get_last_date_from_db(collection)
         ultima_fecha = ultima_fecha_db.date() if ultima_fecha_db else None
 
-        # Obtener datos históricos de MongoDB
-        registros_historicos = list(collection.find({"modulo": "SPE"}).sort("fecha", -1))
+        # Obtener datos históricos de MongoDB considerando timezone
+        registros_historicos = list(collection.find({
+            "modulo": "SPE",
+            "fecha": {"$lt": pd.Timestamp(fecha_actual, tz='America/Lima')}
+        }).sort("fecha", -1))
         
         # Preparar DataFrame histórico
         df_historico = pd.DataFrame()

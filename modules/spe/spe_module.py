@@ -538,78 +538,89 @@ class SPEModule:
 
     def verify_password_and_confirm(self, datos=None, is_reset=False, collection=None, ultima_fecha_db=None):
         """Verificar contraseña y mostrar confirmación."""
-        # Primero verificar la contraseña
-        with st.form("password_form"):
-            st.subheader("🔒 Verificación de Administrador")
-            password = st.text_input("Ingrese la contraseña", type="password")
-            verify_submitted = st.form_submit_button("Verificar")
-            
-            if verify_submitted and password == st.secrets["passwords"]["admin_password"]:
-                st.success("✅ Contraseña correcta")
+        # Inicializar estado de sesión si no existe
+        if 'password_verified' not in st.session_state:
+            st.session_state.password_verified = False
+
+        # Paso 1: Verificar contraseña
+        if not st.session_state.password_verified:
+            with st.form("password_form"):
+                st.subheader("🔒 Verificación de Administrador")
+                password = st.text_input("Ingrese la contraseña", type="password")
+                verify_submitted = st.form_submit_button("Verificar")
                 
-                if is_reset:
-                    if ultima_fecha_db and ultima_fecha_db.date() == (datetime.now().date() - timedelta(days=1)):
-                        st.warning("⚠️ Se eliminarán los siguientes datos:")
-                        st.info(f"Fecha: {ultima_fecha_db.strftime('%d/%m/%Y')}")
-                        
-                        datos_a_eliminar = collection.find_one({
-                            "modulo": "SPE",
-                            "fecha": ultima_fecha_db
-                        })
-                        if datos_a_eliminar:
-                            df_eliminar = pd.DataFrame(datos_a_eliminar['datos'])
-                            st.dataframe(
-                                df_eliminar.sort_values('cantidad', ascending=False),
-                                use_container_width=True
-                            )
-                        
-                        confirm_delete = st.form_submit_button("🗑️ Confirmar Eliminación")
-                        if confirm_delete:
-                            return True
+                if verify_submitted:
+                    if password == st.secrets["passwords"]["admin_password"]:
+                        st.session_state.password_verified = True
+                        st.rerun()
                     else:
-                        st.error("❌ Solo se puede resetear el último día registrado")
-                else:
-                    # Verificar datos existentes y mostrar comparación
-                    st.info("📋 Resumen de datos:")
-                    can_save = False
-                    total_registros = 0
+                        st.error("❌ Contraseña incorrecta")
+            return False
+
+        # Paso 2: Mostrar confirmación y datos
+        with st.form("confirm_form"):
+            st.success("✅ Contraseña verificada")
+            
+            if is_reset:
+                if ultima_fecha_db and ultima_fecha_db.date() == (datetime.now().date() - timedelta(days=1)):
+                    st.warning("⚠️ Se eliminarán los siguientes datos:")
+                    st.info(f"Fecha: {ultima_fecha_db.strftime('%d/%m/%Y')}")
                     
-                    for fecha, ranking in datos.items():
-                        st.markdown(f"**Fecha: {fecha.strftime('%d/%m/%Y')}**")
-                        
-                        datos_existentes = collection.find_one({
-                            "modulo": "SPE",
-                            "fecha": pd.Timestamp(fecha)
-                        })
-                        
-                        if datos_existentes:
-                            df_existente = pd.DataFrame(datos_existentes['datos'])
-                            
-                            if fecha == ultima_fecha_db.date():
-                                st.warning("⚠️ Ya existen datos para esta fecha")
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.markdown("**Datos Existentes:**")
-                                    st.dataframe(df_existente.sort_values('cantidad', ascending=False))
-                                with col2:
-                                    st.markdown("**Nuevos Datos:**")
-                                    st.dataframe(ranking.sort_values('cantidad', ascending=False))
-                                can_save = True
-                                total_registros += len(ranking)
-                            else:
-                                st.error(f"❌ Ya existen datos para {fecha.strftime('%d/%m/%Y')} y no se pueden sobreescribir")
-                        else:
-                            st.success("✅ Nuevos datos a guardar:")
-                            st.dataframe(ranking.sort_values('cantidad', ascending=False))
+                    datos_a_eliminar = collection.find_one({
+                        "modulo": "SPE",
+                        "fecha": ultima_fecha_db
+                    })
+                    if datos_a_eliminar:
+                        df_eliminar = pd.DataFrame(datos_a_eliminar['datos'])
+                        st.dataframe(df_eliminar.sort_values('cantidad', ascending=False))
+                    
+                    if st.form_submit_button("🗑️ Confirmar Eliminación"):
+                        st.session_state.password_verified = False
+                        return True
+                else:
+                    st.error("❌ Solo se puede resetear el último día registrado")
+            else:
+                st.info("📋 Resumen de datos:")
+                can_save = False
+                total_registros = 0
+                
+                for fecha, ranking in datos.items():
+                    st.markdown(f"**Fecha: {fecha.strftime('%d/%m/%Y')}**")
+                    
+                    datos_existentes = collection.find_one({
+                        "modulo": "SPE",
+                        "fecha": pd.Timestamp(fecha)
+                    })
+                    
+                    if datos_existentes:
+                        df_existente = pd.DataFrame(datos_existentes['datos'])
+                        if fecha == ultima_fecha_db.date():
+                            st.warning("⚠️ Ya existen datos para esta fecha")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown("**Datos Existentes:**")
+                                st.dataframe(df_existente.sort_values('cantidad', ascending=False))
+                            with col2:
+                                st.markdown("**Nuevos Datos:**")
+                                st.dataframe(ranking.sort_values('cantidad', ascending=False))
                             can_save = True
                             total_registros += len(ranking)
-                    
-                    if total_registros > 0 and can_save:
-                        st.info(f"Total de registros a guardar/actualizar: {total_registros}")
-                        confirm_save = st.form_submit_button("✅ Confirmar y Guardar")
-                        if confirm_save:
-                            return True
-            elif verify_submitted:
-                st.error("❌ Contraseña incorrecta")
+                        else:
+                            st.error(f"❌ Ya existen datos para {fecha.strftime('%d/%m/%Y')} y no se pueden sobreescribir")
+                    else:
+                        st.success("✅ Nuevos datos a guardar:")
+                        st.dataframe(ranking.sort_values('cantidad', ascending=False))
+                        can_save = True
+                        total_registros += len(ranking)
+                
+                if total_registros > 0 and can_save:
+                    st.info(f"Total de registros a guardar/actualizar: {total_registros}")
+                    if st.form_submit_button("✅ Confirmar y Guardar"):
+                        st.session_state.password_verified = False
+                        return True
+
+            if st.form_submit_button("❌ Cancelar"):
+                st.session_state.password_verified = False
+                st.rerun()
                 
         return False

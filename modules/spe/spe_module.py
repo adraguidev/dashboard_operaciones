@@ -137,10 +137,13 @@ class SPEModule:
             (data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer)
         ]
 
+        # Filtrar datos solo hasta el día anterior
+        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer]
+
         # Procesar datos no guardados
         datos_no_guardados = {}
         for fecha, grupo in datos_sheets.groupby(datos_sheets[COLUMNAS['FECHA_TRABAJO']].dt.date):
-            if fecha not in fechas_guardadas:
+            if fecha <= fecha_ayer and fecha not in fechas_guardadas:
                 ranking_dia = grupo.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
                 datos_no_guardados[fecha] = ranking_dia
 
@@ -167,7 +170,7 @@ class SPEModule:
             cols_ordenadas = ['EVALUADOR'] + sorted(
                 [col for col in cols_fecha if col != 'Total'],
                 key=lambda x: pd.to_datetime(x + f"/{datetime.now().year}", format='%d/%m/%Y'),
-                reverse=False  # Ordenar del más antiguo al más reciente
+                reverse=False
             ) + ['Total']
             df_historico = df_historico.reindex(columns=cols_ordenadas)
             
@@ -188,33 +191,30 @@ class SPEModule:
         button_container = st.container()
         col1, col2 = button_container.columns(2)
 
-        # Verificar datos pendientes de guardar (solo hasta el día anterior)
-        datos_pendientes = {fecha: datos for fecha, datos in datos_no_guardados.items() 
-                          if fecha <= fecha_ayer}
+        # Verificar si hay datos del día anterior pendientes de guardar
+        datos_ayer = datos_no_guardados.get(fecha_ayer)
 
-        # Botón de guardar (sin ningún tipo de verificación)
+        # Botón de guardar (solo para el día anterior)
         with col1:
-            if datos_pendientes:
-                fechas_str = ", ".join(fecha.strftime('%d/%m/%Y') for fecha in datos_pendientes.keys())
+            if datos_ayer is not None:
                 if st.button("💾 Guardar producción", key="guardar_produccion"):
                     try:
-                        for fecha, ranking in datos_pendientes.items():
-                            # Si es el último día, eliminar registro existente
-                            if ultima_fecha_db and fecha == ultima_fecha_db.date():
-                                collection.delete_many({
-                                    "modulo": "SPE",
-                                    "fecha": ultima_fecha_db
-                                })
-                            
-                            # Guardar nuevo registro
-                            nuevo_registro = {
-                                "fecha": pd.Timestamp(fecha),
-                                "datos": ranking.to_dict('records'),
-                                "modulo": "SPE"
-                            }
-                            collection.insert_one(nuevo_registro)
+                        # Si existe registro del día anterior, eliminarlo
+                        if ultima_fecha_db and ultima_fecha_db.date() == fecha_ayer:
+                            collection.delete_many({
+                                "modulo": "SPE",
+                                "fecha": ultima_fecha_db
+                            })
                         
-                        st.success(f"✅ Producción guardada exitosamente para las fechas: {fechas_str}")
+                        # Guardar nuevo registro
+                        nuevo_registro = {
+                            "fecha": pd.Timestamp(fecha_ayer),
+                            "datos": datos_ayer.to_dict('records'),
+                            "modulo": "SPE"
+                        }
+                        collection.insert_one(nuevo_registro)
+                        
+                        st.success(f"✅ Producción guardada exitosamente para la fecha: {fecha_ayer.strftime('%d/%m/%Y')}")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al guardar los datos: {str(e)}")

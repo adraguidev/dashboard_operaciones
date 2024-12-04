@@ -584,11 +584,8 @@ class SPEModule:
         """Renderizar análisis dinámico tipo tabla dinámica."""
         st.header("Análisis Dinámico")
 
-        # Agregar botón de reset al inicio
-        col1, col2 = st.columns([1, 5])
-        with col1:
-            if st.button("🔄 Resetear Filtros"):
-                st.rerun()  # Esto recargará la página con los datos originales
+        # Eliminar columnas que empiezan con "Column"
+        data = data[[col for col in data.columns if not col.startswith('Column')]]
 
         # Definir las columnas disponibles para análisis
         COLUMNAS_DISPONIBLES = {

@@ -806,21 +806,37 @@ class SPEModule:
             line=dict(color='red', dash='dash', width=2)
         ))
         
+        # Agregar línea vertical usando shape en lugar de add_vline
         fig_semanal.update_layout(
             title='Ingresos Semanales y Tendencia',
             xaxis_title='Fecha',
             yaxis_title='Cantidad de Expedientes',
             hovermode='x unified',
-            showlegend=True
-        )
-        
-        # Agregar anotación para indicar inicio de predicción
-        fig_semanal.add_vline(
-            x=ultima_fecha_real,
-            line_dash="dot",
-            line_color="gray",
-            annotation_text="Inicio Predicción",
-            annotation_position="top right"
+            showlegend=True,
+            shapes=[
+                dict(
+                    type='line',
+                    x0=ultima_fecha_real,
+                    x1=ultima_fecha_real,
+                    y0=0,
+                    y1=1,
+                    yref='paper',
+                    line=dict(
+                        color='gray',
+                        dash='dot'
+                    )
+                )
+            ],
+            annotations=[
+                dict(
+                    x=ultima_fecha_real,
+                    y=1,
+                    yref='paper',
+                    showarrow=False,
+                    text='Inicio Predicción',
+                    textangle=-90
+                )
+            ]
         )
         
         st.plotly_chart(fig_semanal, use_container_width=True)

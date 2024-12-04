@@ -188,6 +188,18 @@ class SPEModule:
         button_container = st.container()
         col1, col2, col3 = button_container.columns([1, 1, 2])
 
+        def verify_password():
+            """Verificar contraseña de administrador."""
+            with st.popup("Verificación de Administrador"):
+                password = st.text_input("Contraseña", type="password")
+                if st.button("Verificar"):
+                    if password == st.secrets["admin_password"]:
+                        return True
+                    else:
+                        st.error("Contraseña incorrecta")
+                        return False
+            return False
+
         # Verificar datos pendientes de guardar
         datos_pendientes = {fecha: datos for fecha, datos in datos_no_guardados.items() 
                           if fecha <= fecha_ayer}
@@ -197,17 +209,17 @@ class SPEModule:
             if datos_pendientes:
                 fechas_str = ", ".join(fecha.strftime('%d/%m/%Y') for fecha in datos_pendientes.keys())
                 if st.button(" Guardar producción"):
-                    for fecha, ranking in datos_pendientes.items():
-                        # Asegurarnos que los datos se guarden con el nombre de columna en mayúsculas
-                        ranking_data = ranking.rename(columns={COLUMNAS['EVALUADOR']: 'EVALUADOR'})
-                        nuevo_registro = {
-                            "fecha": pd.Timestamp(fecha),
-                            "datos": ranking_data.to_dict('records'),
-                            "modulo": "SPE"
-                        }
-                        collection.insert_one(nuevo_registro)
-                    st.success(f"Producción guardada exitosamente para las fechas: {fechas_str}")
-                    st.rerun()
+                    if verify_password():
+                        for fecha, ranking in datos_pendientes.items():
+                            ranking_data = ranking.rename(columns={COLUMNAS['EVALUADOR']: 'EVALUADOR'})
+                            nuevo_registro = {
+                                "fecha": pd.Timestamp(fecha),
+                                "datos": ranking_data.to_dict('records'),
+                                "modulo": "SPE"
+                            }
+                            collection.insert_one(nuevo_registro)
+                        st.success(f"Producción guardada exitosamente para las fechas: {fechas_str}")
+                        st.rerun()
             elif ultima_fecha_db and ultima_fecha_db.date() == fecha_ayer:
                 st.info("La producción de ayer ya está guardada")
 
@@ -215,12 +227,13 @@ class SPEModule:
         with col2:
             if ultima_fecha_db and ultima_fecha_db.date() == fecha_ayer:
                 if st.button("🔄 Resetear día"):
-                    collection.delete_many({
-                        "modulo": "SPE",
-                        "fecha": ultima_fecha_db
-                    })
-                    st.success("Día anterior eliminado. Los datos se actualizarán al recargar.")
-                    st.rerun()
+                    if verify_password():
+                        collection.delete_many({
+                            "modulo": "SPE",
+                            "fecha": ultima_fecha_db
+                        })
+                        st.success("Día anterior eliminado. Los datos se actualizarán al recargar.")
+                        st.rerun()
 
     def _get_last_date_from_db(self, collection):
         """Obtener la última fecha registrada en la base de datos."""

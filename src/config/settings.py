@@ -76,4 +76,7 @@ GOOGLE_SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets.readonly'
 ]
 
+# Agregar al archivo de configuración
+ADMIN_PASSWORD = "Ka260314!"  # Idealmente esto debería estar en st.secrets
+
 # Otras configuraciones... 

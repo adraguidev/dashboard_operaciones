@@ -44,36 +44,39 @@ class DataLoader:
             
             for col in date_columns:
                 if col in data.columns:
-                    # Primero intentar convertir desde el formato guardado
                     try:
-                        # Convertir a datetime sin timezone
-                        data[col] = pd.to_datetime(data[col], errors='coerce')
-                        if data[col].dt.tz is not None:
-                            data[col] = data[col].dt.tz_localize(None)
+                        # Primero intentar con formato específico dd/mm/yyyy
+                        data[col] = pd.to_datetime(
+                            data[col], 
+                            format='%d/%m/%Y',
+                            errors='coerce'
+                        )
                     except:
-                        pass
+                        try:
+                            # Si falla, intentar con dayfirst=True para formatos variados
+                            data[col] = pd.to_datetime(
+                                data[col], 
+                                dayfirst=True,
+                                errors='coerce'
+                            )
+                        except:
+                            pass
 
-                    # Si hay valores nulos, intentar diferentes formatos
+                    # Si hay valores nulos, intentar otros formatos comunes
                     if data[col].isna().any():
-                        # Intentar formatos comunes
-                        formats = ['%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y']
-                        for fmt in formats:
-                            try:
-                                mask = data[col].isna()
-                                temp_dates = pd.to_datetime(
-                                    data.loc[mask, col], 
-                                    format=fmt, 
-                                    errors='coerce'
-                                )
-                                # Asegurar que no tiene timezone
-                                if temp_dates.dt.tz is not None:
-                                    temp_dates = temp_dates.dt.tz_localize(None)
-                                data.loc[mask, col] = temp_dates
-                            except:
-                                continue
+                        mask = data[col].isna()
+                        try:
+                            # Intentar formato yyyy-mm-dd
+                            temp_dates = pd.to_datetime(
+                                data.loc[mask, col],
+                                format='%Y-%m-%d',
+                                errors='coerce'
+                            )
+                            data.loc[mask, col] = temp_dates
+                        except:
+                            pass
 
-                # Asegurar que todas las fechas son timezone-naive
-                if col in data.columns and not data[col].empty:
+                    # Asegurar que no tiene timezone
                     if data[col].dtype == 'datetime64[ns]' and data[col].dt.tz is not None:
                         data[col] = data[col].dt.tz_localize(None)
 

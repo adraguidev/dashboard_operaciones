@@ -1,43 +1,16 @@
-# Básicos
-streamlit
-pandas
-numpy<2.0.0
-
-# Visualización
-plotly
-openpyxl
-
-# Base de datos
-pymongo
-
-# Google APIs
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
-gspread
-google-api-python-client
-
-# Procesamiento de datos
-xlsxwriter
-streamlit-aggrid
-
-# Utilidades
-python-dateutil
-tqdm
-
-prophet
-scikit-learn
-
-# Para análisis predictivo
-prophet==1.1.4
-statsmodels==0.14.0
-scikit-learn>=1.0.2
-
-pytz
-
+streamlit==1.31.0
+pandas==2.2.0
+numpy==1.26.3
 pymongo==4.6.1
 python-dotenv==1.0.0
 google-auth==2.27.0
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.1.1
 google-api-python-client==2.115.0
+gspread==5.12.4
+openpyxl==3.1.2
+plotly==5.18.0
+streamlit-aggrid==0.3.4
+xlsxwriter==3.1.9
+python-dateutil==2.8.2
+pytz==2024.1

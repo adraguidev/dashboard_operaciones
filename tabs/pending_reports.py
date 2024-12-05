@@ -181,11 +181,15 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
                     return 'Activos'
             except Exception as e:
                 print(f"Error en get_status: {str(e)}, valor: {row['EVALASIGN']}")
-                return 'No Asignado'  # valor por defecto en caso de error
+                return 'No Asignado'
 
         summary_data['Estado'] = summary_data.apply(get_status, axis=1)
         
         try:
+            # Asegurar que Anio sea un valor válido
+            summary_data['Anio'] = summary_data['Anio'].fillna(0).astype(int).astype(str)
+            
+            # Crear tabla pivote
             summary_table = pd.pivot_table(
                 summary_data,
                 values='NumeroTramite',
@@ -195,18 +199,26 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
                 fill_value=0
             )
             
-            # Asegurar que todas las columnas sean strings válidos
-            summary_table.columns = [str(col) for col in summary_table.columns]
+            # Ordenar las columnas cronológicamente
+            summary_table = summary_table.reindex(sorted(summary_table.columns), axis=1)
             
+            # Agregar columna de total
             summary_table['TOTAL'] = summary_table.sum(axis=1)
+            
+            # Convertir todos los valores a enteros
             summary_table = summary_table.astype(int)
-
+            
+            # Ordenar el índice para mantener un orden consistente
+            desired_order = ['Activos', 'Inactivos', 'No Asignado', 'Suspendida', 'Vulnerabilidad']
+            summary_table = summary_table.reindex(desired_order)
+            
+            # Mostrar la tabla
             st.dataframe(
                 summary_table,
                 use_container_width=True,
                 column_config={
-                    col: st.column_config.NumberColumn(
-                        str(col),  # Asegurar que la clave sea string
+                    str(col): st.column_config.NumberColumn(
+                        str(col),
                         format="%d",
                         width="small"
                     ) for col in summary_table.columns
@@ -216,6 +228,10 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
         except Exception as e:
             st.error(f"Error al generar la tabla resumen: {str(e)}")
             print(f"Error detallado en tabla resumen: {str(e)}")
+            # Mostrar información de debugging
+            print("Columnas disponibles:", summary_data.columns.tolist())
+            print("Tipos de datos:", summary_data.dtypes)
+            print("Valores únicos en Anio:", summary_data['Anio'].unique())
 
     except Exception as e:
         st.error(f"Error al procesar los datos: {str(e)}")

@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from io import BytesIO
+import numpy as np
 
 def render_closing_analysis_tab(data: pd.DataFrame):
     try:
@@ -21,7 +22,7 @@ def render_closing_analysis_tab(data: pd.DataFrame):
 
         # 1. Panel de Control de Cierres
         st.subheader("📊 Panel de Control de Cierres")
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
             total_cerrados = len(data[data['FechaPre'].notna()])
@@ -32,19 +33,26 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             )
         
         with col2:
-            tiempo_promedio = (data['FechaPre'] - data['FechaExpendiente']).dt.days.mean()
+            # Calcular tiempos de cierre más representativos
+            tiempos_cierre = (data['FechaPre'] - data['FechaExpendiente']).dt.days
+            
+            # Eliminar outliers usando el método IQR
+            Q1 = tiempos_cierre.quantile(0.25)
+            Q3 = tiempos_cierre.quantile(0.75)
+            IQR = Q3 - Q1
+            tiempos_filtrados = tiempos_cierre[
+                (tiempos_cierre >= Q1 - 1.5 * IQR) & 
+                (tiempos_cierre <= Q3 + 1.5 * IQR)
+            ]
+            
+            tiempo_promedio = tiempos_filtrados.median()  # Usar mediana en lugar de media
+            percentil_80 = tiempos_filtrados.quantile(0.8)
+            
             st.metric(
-                "Tiempo Promedio de Cierre",
+                "Tiempo Típico de Cierre",
                 f"{tiempo_promedio:.1f} días",
-                help="Promedio de días entre ingreso y cierre"
-            )
-        
-        with col3:
-            cierres_hoy = len(data[data['FechaPre'].dt.date == pd.Timestamp.now().date()])
-            st.metric(
-                "Cierres del Día",
-                f"{cierres_hoy:,d}",
-                help="Expedientes cerrados en el día actual"
+                f"80% se cierra en {percentil_80:.1f} días o menos",
+                help="Tiempo típico de cierre (excluyendo casos extremos)"
             )
 
         # 2. Selección del rango de fechas
@@ -155,44 +163,58 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             .reset_index(drop=True)
         )
 
-        # Distribución de tiempos de cierre
-        st.subheader(f"Distribución de Tiempos de Cierre ({selected_range})")
+        # Nueva sección de distribución de tiempos
+        st.subheader(f"📊 Distribución de Tiempos de Cierre ({selected_range})")
         
-        # Definir categorías de tiempo
-        bins = [1, 3, 6, 9, 12, 15, 18, 21, 24, 28, float('inf')]
+        # Calcular rangos más representativos
+        tiempos_cierre_periodo = (cierre_data_range['FechaPre'] - cierre_data_range['FechaExpendiente']).dt.days
+        
+        # Definir rangos dinámicos basados en percentiles
+        percentiles = [0, 25, 50, 75, 90, 95, 100]
+        rangos = np.percentile(tiempos_cierre_periodo, percentiles)
+        
+        # Crear etiquetas personalizadas
         labels = [
-            "1-3 días", "4-6 días", "7-9 días", "10-12 días",
-            "13-15 días", "16-18 días", "19-21 días", "22-24 días",
-            "25-28 días", "28+ días"
+            f"Muy rápido (0-{rangos[1]:.0f} días)",
+            f"Rápido ({rangos[1]:.0f}-{rangos[2]:.0f} días)",
+            f"Normal ({rangos[2]:.0f}-{rangos[3]:.0f} días)",
+            f"Demorado ({rangos[3]:.0f}-{rangos[4]:.0f} días)",
+            f"Muy demorado ({rangos[4]:.0f}-{rangos[5]:.0f} días)",
+            f"Casos especiales (>{rangos[5]:.0f} días)"
         ]
         
-        # Categorizar los tiempos de cierre
+        # Categorizar los tiempos
+        bins = [float('-inf')] + list(rangos)[1:] + [float('inf')]
         cierre_data_range['CategoríaTiempo'] = pd.cut(
-            cierre_data_range['TiempoCierre'],
+            tiempos_cierre_periodo,
             bins=bins,
             labels=labels,
             include_lowest=True
         )
 
-        # Calcular distribución de tiempos
-        distribucion_tiempos = cierre_data_range['CategoríaTiempo'].value_counts(normalize=True).sort_index() * 100
+        # Calcular distribución
+        distribucion_tiempos = cierre_data_range['CategoríaTiempo'].value_counts(normalize=True) * 100
 
-        # Crear gráfico de distribución de tiempos
+        # Crear gráfico de distribución
         fig_tiempos = px.bar(
             distribucion_tiempos,
-            x=distribucion_tiempos.index,
-            y=distribucion_tiempos.values,
             title=f"Distribución de Tiempos de Cierre ({selected_range})",
-            labels={'x': "Tiempo de Cierre", 'y': "Porcentaje de Expedientes"},
-            text_auto=True
+            labels={'index': "Categoría", 'value': "Porcentaje de Expedientes"},
+            text=distribucion_tiempos.round(1).astype(str) + '%',
+            color_discrete_sequence=['#2ecc71', '#3498db', '#f1c40f', '#e67e22', '#e74c3c', '#95a5a6']
         )
-        st.plotly_chart(fig_tiempos)
+        
+        fig_tiempos.update_traces(textposition='outside')
+        st.plotly_chart(fig_tiempos, use_container_width=True)
 
-        st.write("""
-        **Interpretación del Indicador:**
-        - El gráfico muestra la distribución porcentual de los expedientes según el tiempo transcurrido entre su ingreso y cierre.
-        - Un mayor porcentaje en las categorías de menor tiempo indica mejor eficiencia en el proceso.
-        - Los tiempos se miden en días hábiles desde la fecha de ingreso hasta la fecha de cierre.
+        st.info("""
+        📌 **Interpretación de las Categorías:**
+        - **Muy rápido**: El 25% más rápido de los cierres
+        - **Rápido**: Entre el percentil 25 y la mediana
+        - **Normal**: Entre la mediana y el percentil 75
+        - **Demorado**: Entre el percentil 75 y 90
+        - **Muy demorado**: Entre el percentil 90 y 95
+        - **Casos especiales**: El 5% más demorado (pueden requerir atención especial)
         """)
 
         # Nueva sección: Top 25 expedientes más demorados

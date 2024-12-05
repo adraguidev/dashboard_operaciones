@@ -15,65 +15,61 @@ def render_evaluator_report_tab(data: pd.DataFrame):
         data['EVALASIGN'] = data['EVALASIGN'].fillna('')
         evaluators = sorted(data[data['EVALASIGN'] != '']['EVALASIGN'].unique())
 
-        # Panel de Filtros
-        st.sidebar.subheader("🎯 Filtros de Análisis")
-        
-        # Selección de evaluador con búsqueda
-        selected_evaluator = st.sidebar.selectbox(
+        # Selección de evaluador
+        selected_evaluator = st.selectbox(
             "Seleccionar Evaluador",
             options=evaluators,
             help="Busca y selecciona un evaluador específico"
         )
 
-        # Filtros de tiempo
-        st.sidebar.markdown("### 📅 Filtros Temporales")
+        # Filtros en columnas
+        col1, col2, col3 = st.columns(3)
         
-        # Selector de años múltiple
-        available_years = sorted(data['Anio'].unique(), reverse=True)
-        selected_years = st.sidebar.multiselect(
-            "Seleccionar Año(s)",
-            options=available_years,
-            default=[max(available_years)],
-            help="Selecciona uno o varios años"
-        )
-
-        # Selector de meses si hay años seleccionados
-        if selected_years:
-            month_names = {
-                1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
-                5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
-                9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
-            }
-            
-            available_months = sorted(data[data['Anio'].isin(selected_years)]['Mes'].unique())
-            month_options = [month_names[m] for m in available_months]
-            selected_month_names = st.sidebar.multiselect(
-                "Seleccionar Mes(es)",
-                options=month_options,
-                help="Selecciona uno o varios meses"
+        with col1:
+            # Selector de años
+            available_years = sorted(data['Anio'].unique(), reverse=True)
+            selected_years = st.multiselect(
+                "Seleccionar Año(s)",
+                options=available_years,
+                default=[max(available_years)],
+                help="Selecciona uno o varios años"
             )
+
+        with col2:
+            # Filtro por estado de evaluación
+            estado_eval_options = ["Todos", "Pendientes", "Evaluados"]
+            estado_eval = st.radio(
+                "Estado de Evaluación",
+                options=estado_eval_options,
+                horizontal=True
+            )
+
+        with col3:
+            # Filtro por estado del expediente
+            estados_unicos = sorted(data['ESTADO'].dropna().unique())
+            selected_estados = st.multiselect(
+                "Estado del Expediente",
+                options=estados_unicos,
+                help="Filtra por estados específicos"
+            )
+
+        # Filtros adicionales expandibles
+        with st.expander("📌 Filtros Adicionales"):
+            col1, col2 = st.columns(2)
             
-            month_mapping = {v: k for k, v in month_names.items()}
-            selected_months = [month_mapping[m] for m in selected_month_names]
-
-        # Filtros adicionales
-        st.sidebar.markdown("### 🔍 Filtros Adicionales")
-        
-        # Filtro por estado
-        estados_unicos = sorted(data['ESTADO'].dropna().unique())
-        selected_estados = st.sidebar.multiselect(
-            "Estados",
-            options=estados_unicos,
-            help="Filtra por estados específicos"
-        )
-
-        # Filtro por última etapa en lugar de tipo de expediente
-        etapas_unicas = sorted(data['UltimaEtapa'].dropna().unique())
-        selected_etapas = st.sidebar.multiselect(
-            "Última Etapa",
-            options=etapas_unicas,
-            help="Filtra por última etapa del expediente"
-        )
+            with col1:
+                # Filtro por última etapa
+                etapas = sorted(data['UltimaEtapa'].dropna().unique())
+                selected_etapas = st.multiselect(
+                    "Última Etapa",
+                    options=etapas,
+                    help="Filtra por última etapa del expediente"
+                )
+            
+            with col2:
+                # Rango de fechas
+                fecha_inicio = st.date_input("Fecha Desde", value=None)
+                fecha_fin = st.date_input("Fecha Hasta", value=None)
 
         # Aplicar filtros
         filtered_data = data[data['EVALASIGN'] == selected_evaluator]
@@ -81,126 +77,76 @@ def render_evaluator_report_tab(data: pd.DataFrame):
         if selected_years:
             filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
         
-        if selected_months:
-            filtered_data = filtered_data[filtered_data['Mes'].isin(selected_months)]
+        if estado_eval == "Pendientes":
+            filtered_data = filtered_data[filtered_data['Evaluado'] == 'NO']
+        elif estado_eval == "Evaluados":
+            filtered_data = filtered_data[filtered_data['Evaluado'] == 'SI']
             
         if selected_estados:
             filtered_data = filtered_data[filtered_data['ESTADO'].isin(selected_estados)]
             
-        if selected_etapas:  # Cambiado de tipos a etapas
+        if selected_etapas:
             filtered_data = filtered_data[filtered_data['UltimaEtapa'].isin(selected_etapas)]
-
-        # Mostrar resumen estadístico
-        st.subheader("📊 Resumen Estadístico")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            total_asignados = len(filtered_data)
-            pendientes = len(filtered_data[filtered_data['Evaluado'] == 'NO'])
-            st.metric(
-                "Total Expedientes",
-                f"{total_asignados:,d}",
-                f"{pendientes:,d} pendientes",
-                help="Total de expedientes asignados y pendientes"
-            )
             
-        with col2:
-            if not filtered_data.empty:
-                tiempo_promedio = (filtered_data['FechaPre'] - filtered_data['FechaExpendiente']).dt.days.median()
-                st.metric(
-                    "Tiempo Promedio",
-                    f"{tiempo_promedio:.1f} días",
-                    help="Tiempo promedio de procesamiento"
-                )
-            
-        with col3:
-            productividad = len(filtered_data[filtered_data['Evaluado'] == 'SI']) / total_asignados * 100 if total_asignados > 0 else 0
-            st.metric(
-                "Productividad",
-                f"{productividad:.1f}%",
-                help="Porcentaje de expedientes evaluados"
-            )
+        if fecha_inicio:
+            filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date >= fecha_inicio]
+        if fecha_fin:
+            filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date <= fecha_fin]
 
-        # Análisis de tendencias
-        st.subheader("📈 Análisis de Tendencias")
-        
-        # Gráfico de expedientes por mes
-        monthly_data = filtered_data.groupby(['Anio', 'Mes']).size().reset_index(name='Cantidad')
-        monthly_data['Fecha'] = pd.to_datetime(monthly_data[['Anio', 'Mes']].assign(Day=1))
-        
-        fig = px.line(
-            monthly_data,
-            x='Fecha',
-            y='Cantidad',
-            title='Tendencia de Expedientes Asignados',
-            labels={'Cantidad': 'Expedientes', 'Fecha': 'Período'},
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Distribución por estado
+        # Mostrar resumen
         if not filtered_data.empty:
-            st.subheader("🔄 Distribución por Estado")
-            estado_dist = filtered_data['ESTADO'].value_counts()
-            fig_pie = px.pie(
-                values=estado_dist.values,
-                names=estado_dist.index,
-                title='Distribución por Estado'
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
+            st.markdown("### 📊 Resumen")
+            total = len(filtered_data)
+            pendientes = len(filtered_data[filtered_data['Evaluado'] == 'NO'])
+            evaluados = total - pendientes
+            
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Expedientes", f"{total:,d}")
+            col2.metric("Pendientes", f"{pendientes:,d}")
+            col3.metric("Evaluados", f"{evaluados:,d}")
 
-        # Tabla detallada de expedientes
-        st.subheader("📋 Detalle de Expedientes")
+        # Mostrar datos filtrados
+        st.markdown("### 📋 Detalle de Expedientes")
         
-        # Preparar datos para la tabla
-        display_columns = [
-            'NumeroTramite', 'ESTADO', 'FechaExpendiente', 
-            'FechaPre', 'Evaluado', 'UltimaEtapa'  # Cambiado TipoTramite por UltimaEtapa
-        ]
-        
-        # Verificar qué columnas están disponibles
-        available_columns = [col for col in display_columns if col in filtered_data.columns]
-        display_data = filtered_data[available_columns].copy()
-        
-        # Formatear fechas
-        if 'FechaExpendiente' in display_data.columns:
+        if not filtered_data.empty:
+            # Preparar datos para mostrar
+            display_data = filtered_data[[
+                'NumeroTramite', 'ESTADO', 'UltimaEtapa', 
+                'FechaExpendiente', 'FechaPre', 'Evaluado'
+            ]].copy()
+            
+            # Formatear fechas
             display_data['FechaExpendiente'] = display_data['FechaExpendiente'].dt.strftime('%d/%m/%Y')
-        if 'FechaPre' in display_data.columns:
             display_data['FechaPre'] = display_data['FechaPre'].dt.strftime('%d/%m/%Y')
-        
-        # Configuración de columnas dinámica
-        column_config = {
-            'NumeroTramite': 'Expediente',
-            'ESTADO': 'Estado',
-            'FechaExpendiente': 'Fecha Ingreso',
-            'FechaPre': 'Fecha Pre',
-            'Evaluado': 'Evaluado',
-            'UltimaEtapa': 'Última Etapa'
-        }
-        
-        # Filtrar solo las configuraciones de columnas disponibles
-        column_config = {k: v for k, v in column_config.items() if k in display_data.columns}
-        
-        # Mostrar tabla con formato mejorado
-        st.dataframe(
-            display_data,
-            use_container_width=True,
-            column_config=column_config
-        )
+            
+            # Mostrar tabla
+            st.dataframe(
+                display_data,
+                use_container_width=True,
+                column_config={
+                    'NumeroTramite': 'Expediente',
+                    'ESTADO': 'Estado',
+                    'UltimaEtapa': 'Última Etapa',
+                    'FechaExpendiente': 'Fecha Ingreso',
+                    'FechaPre': 'Fecha Pre',
+                    'Evaluado': 'Estado Evaluación'
+                }
+            )
 
-        # Opción de descarga
-        if not display_data.empty:
+            # Botón de descarga
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 display_data.to_excel(writer, index=False, sheet_name='Reporte')
             output.seek(0)
             
             st.download_button(
-                label="📥 Descargar Reporte Detallado",
+                label="📥 Descargar Reporte",
                 data=output,
                 file_name=f"reporte_{selected_evaluator.replace(' ', '_')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+        else:
+            st.info("No se encontraron expedientes con los filtros seleccionados")
 
     except Exception as e:
         st.error(f"Error al procesar el reporte: {str(e)}")

@@ -680,402 +680,46 @@ class SPEModule:
         )
 
     def render_predictive_analysis(self, data):
-        """Renderizar análisis predictivo de ingresos usando ML y análisis estadístico avanzado."""
-        st.header("Análisis Predictivo de Ingresos 2024")
+        """Análisis predictivo simplificado usando regresión lineal"""
+        st.header("Predicción de Ingresos")
         
-        st.write("""
-        Este análisis muestra los patrones de ingreso de expedientes y realiza predicciones basadas en datos históricos del 2024.
-        Los insights generados ayudarán en la planificación y distribución de recursos.
-        """)
-
-        # Preparación inicial de datos
-        data['FECHA _ INGRESO'] = pd.to_datetime(data['FECHA _ INGRESO'], format='%d/%m/%Y', errors='coerce')
-        data = data.dropna(subset=['FECHA _ INGRESO'])
-        data = data[data['FECHA _ INGRESO'].dt.year == 2024]
-
-        # Evolución Temporal de Ingresos
-        st.subheader("Evolución Temporal de Ingresos")
-
-        # 1. Análisis Diario (últimos 30 días)
-        st.write("### Evolución Diaria (Últimos 30 días)")
+        # Preparar datos históricos
+        ingresos_diarios = data.groupby('FECHA _ INGRESO').size().reset_index(name='cantidad')
+        ingresos_diarios['FECHA _ INGRESO'] = pd.to_datetime(ingresos_diarios['FECHA _ INGRESO'])
         
-        # Preparar datos diarios - excluir el día actual
-        fecha_actual = pd.Timestamp.now()
-        fecha_30_dias = fecha_actual - pd.Timedelta(days=30)
-        datos_diarios = data[
-            (data['FECHA _ INGRESO'] >= fecha_30_dias) & 
-            (data['FECHA _ INGRESO'].dt.date < fecha_actual.date())
-        ]
-        ingresos_diarios = datos_diarios.groupby('FECHA _ INGRESO').size().reset_index(name='cantidad')
+        # Crear modelo de regresión lineal
+        X = np.arange(len(ingresos_diarios)).reshape(-1, 1)
+        y = ingresos_diarios['cantidad'].values
+        model = LinearRegression()
+        model.fit(X, y)
         
-        # Aplicar modelo LOESS para suavizado de tendencia diaria
-        x_diario = (ingresos_diarios['FECHA _ INGRESO'] - ingresos_diarios['FECHA _ INGRESO'].min()).dt.days
-        tendencia_diaria = lowess(
-            ingresos_diarios['cantidad'],
-            x_diario,
-            frac=0.3,
-            it=3,
-            return_sorted=False
-        )
-        
-        # Gráfico diario
-        fig_diario = go.Figure()
-        fig_diario.add_trace(go.Scatter(
-            x=ingresos_diarios['FECHA _ INGRESO'],
-            y=ingresos_diarios['cantidad'],
-            mode='markers+lines',
-            name='Ingresos Diarios',
-            line=dict(color='blue', width=1),
-            marker=dict(size=6)
-        ))
-        fig_diario.add_trace(go.Scatter(
-            x=ingresos_diarios['FECHA _ INGRESO'],
-            y=tendencia_diaria,
-            mode='lines',
-            name='Tendencia (LOESS)',
-            line=dict(color='red', dash='dash', width=2)
-        ))
-        fig_diario.update_layout(
-            title='Ingresos Diarios y Tendencia',
-            xaxis_title='Fecha',
-            yaxis_title='Cantidad de Expedientes',
-            hovermode='x unified'
-        )
-        st.plotly_chart(fig_diario, use_container_width=True)
-
-        # 2. Análisis Semanal
-        st.write("### Evolución Semanal")
-        
-        # Preparar datos semanales - excluir la semana en curso
-        ultima_semana_completa = fecha_actual - pd.Timedelta(days=fecha_actual.weekday() + 1)
-        ingresos_semanales = data[
-            data['FECHA _ INGRESO'].dt.date <= ultima_semana_completa.date()
-        ].groupby(pd.Grouper(key='FECHA _ INGRESO', freq='W')).size().reset_index(name='cantidad')
-        
-        st.info("Nota: El análisis semanal excluye la semana en curso para evitar distorsiones en las tendencias.")
-
-        # Aplicar modelo de regresión polinomial para tendencia semanal
-        X_semanal = (ingresos_semanales['FECHA _ INGRESO'] - ingresos_semanales['FECHA _ INGRESO'].min()).dt.days.values.reshape(-1, 1)
-        model_semanal = make_pipeline(PolynomialFeatures(3), Ridge(alpha=0.1))
-        model_semanal.fit(X_semanal, ingresos_semanales['cantidad'])
-        
-        # Generar predicciones semanales - CORREGIDO
-        # Calcular fechas futuras basadas en la última fecha real
-        ultima_fecha_real = ingresos_semanales['FECHA _ INGRESO'].max()
-        dias_prediccion = 60  # Predecir 2 meses aproximadamente
-        fechas_pred_semanal = pd.date_range(
-            start=ingresos_semanales['FECHA _ INGRESO'].min(),
-            end=ultima_fecha_real + pd.Timedelta(days=dias_prediccion),
+        # Predicción para próximos 30 días
+        future_dates = pd.date_range(
+            start=ingresos_diarios['FECHA _ INGRESO'].max(),
+            periods=31,
             freq='D'
         )
+        X_future = np.arange(len(ingresos_diarios) + 30).reshape(-1, 1)
+        predictions = model.predict(X_future)
         
-        # Preparar datos para predicción
-        X_pred_semanal = (fechas_pred_semanal - ingresos_semanales['FECHA _ INGRESO'].min()).days.values.reshape(-1, 1)
-        y_pred_semanal = model_semanal.predict(X_pred_semanal)
-
-        # Gráfico semanal
-        fig_semanal = go.Figure()
+        # Visualización
+        fig = go.Figure()
         
-        # Datos reales
-        fig_semanal.add_trace(go.Scatter(
-            x=ingresos_semanales['FECHA _ INGRESO'],
-            y=ingresos_semanales['cantidad'],
-            mode='markers+lines',
-            name='Ingresos Semanales',
-            line=dict(color='blue', width=1),
-            marker=dict(size=8)
-        ))
-        
-        # Línea de tendencia y predicción
-        fig_semanal.add_trace(go.Scatter(
-            x=fechas_pred_semanal,
-            y=y_pred_semanal,
+        # Datos históricos
+        fig.add_trace(go.Scatter(
+            x=ingresos_diarios['FECHA _ INGRESO'],
+            y=ingresos_diarios['cantidad'],
             mode='lines',
-            name='Tendencia y Predicción',
-            line=dict(color='red', dash='dash', width=2)
+            name='Datos Históricos'
         ))
         
-        # Agregar línea vertical usando shape en lugar de add_vline
-        fig_semanal.update_layout(
-            title='Ingresos Semanales y Tendencia',
-            xaxis_title='Fecha',
-            yaxis_title='Cantidad de Expedientes',
-            hovermode='x unified',
-            showlegend=True,
-            shapes=[
-                dict(
-                    type='line',
-                    x0=ultima_fecha_real,
-                    x1=ultima_fecha_real,
-                    y0=0,
-                    y1=1,
-                    yref='paper',
-                    line=dict(
-                        color='gray',
-                        dash='dot'
-                    )
-                )
-            ],
-            annotations=[
-                dict(
-                    x=ultima_fecha_real,
-                    y=1,
-                    yref='paper',
-                    showarrow=False,
-                    text='Inicio Predicción',
-                    textangle=-90
-                )
-            ]
-        )
-        
-        st.plotly_chart(fig_semanal, use_container_width=True)
-
-        # 3. Análisis Mensual
-        st.write("### Evolución Mensual")
-        
-        # Definir último mes completo
-        ultimo_mes_completo = fecha_actual.replace(day=1) - pd.Timedelta(days=1)
-        
-        # Preparar datos mensuales incluyendo mes actual
-        ingresos_mensuales_completos = data[
-            data['FECHA _ INGRESO'].dt.date <= ultimo_mes_completo.date()
-        ].groupby(pd.Grouper(key='FECHA _ INGRESO', freq='M')).size().reset_index(name='cantidad')
-        
-        # Calcular datos del mes actual
-        mes_actual_data = data[data['FECHA _ INGRESO'].dt.month == fecha_actual.month]
-        dias_transcurridos_mes = fecha_actual.day
-        dias_habiles_transcurridos = len(mes_actual_data['FECHA _ INGRESO'].dt.date.unique())
-        total_mes_actual = len(mes_actual_data)
-        
-        # Proyección del mes actual basada en días transcurridos
-        promedio_diario_mes_actual = total_mes_actual / dias_habiles_transcurridos if dias_habiles_transcurridos > 0 else 0
-        dias_habiles_mes = 20  # Aproximación de días hábiles en un mes
-        proyeccion_mes_actual = promedio_diario_mes_actual * dias_habiles_mes
-
-        # Agregar mes actual con proyección
-        mes_actual_row = pd.DataFrame({
-            'FECHA _ INGRESO': [pd.Timestamp(fecha_actual.year, fecha_actual.month, 1)],
-            'cantidad': [proyeccion_mes_actual],
-            'cantidad_actual': [total_mes_actual],
-            'dias_transcurridos': [dias_transcurridos_mes],
-            'proyeccion': [True]
-        })
-        
-        # Combinar datos históricos con proyección
-        ingresos_mensuales = pd.concat([
-            ingresos_mensuales_completos,
-            mes_actual_row
-        ]).reset_index(drop=True)
-
-        # Modificar el modelo Prophet considerando datos parciales
-        df_prophet = pd.DataFrame({
-            'ds': ingresos_mensuales['FECHA _ INGRESO'],
-            'y': ingresos_mensuales['cantidad'],
-            'floor': 0  # Asegurar predicciones no negativas
-        })
-        
-        # Ajustar el modelo con más peso en datos recientes
-        model_mensual = Prophet(
-            changepoint_prior_scale=0.5,
-            yearly_seasonality=False,
-            weekly_seasonality=False,
-            daily_seasonality=False,
-            growth='linear'
-        )
-        model_mensual.fit(df_prophet)
-        
-        # Generar predicciones mensuales
-        future_dates = model_mensual.make_future_dataframe(periods=2, freq='M')
-        forecast = model_mensual.predict(future_dates)
-
-        # Gráfico mensual mejorado
-        fig_mensual = go.Figure()
-
-        # Datos históricos completos
-        fig_mensual.add_trace(go.Scatter(
-            x=ingresos_mensuales_completos['FECHA _ INGRESO'],
-            y=ingresos_mensuales_completos['cantidad'],
-            mode='markers+lines',
-            name='Ingresos Mensuales Históricos',
-            line=dict(color='blue', width=2),
-            marker=dict(size=10)
-        ))
-
-        # Mes actual (datos parciales)
-        fig_mensual.add_trace(go.Scatter(
-            x=[mes_actual_row['FECHA _ INGRESO'].iloc[0]],
-            y=[mes_actual_row['cantidad_actual'].iloc[0]],
-            mode='markers',
-            name='Mes Actual (Parcial)',
-            marker=dict(
-                color='yellow',
-                size=12,
-                symbol='diamond'
-            )
-        ))
-
-        # Proyección mes actual
-        fig_mensual.add_trace(go.Scatter(
-            x=[mes_actual_row['FECHA _ INGRESO'].iloc[0]],
-            y=[mes_actual_row['cantidad'].iloc[0]],
-            mode='markers',
-            name='Proyección Mes Actual',
-            marker=dict(
-                color='orange',
-                size=12,
-                symbol='star'
-            )
-        ))
-
-        # Tendencia y predicción
-        fig_mensual.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat'],
+        # Predicciones
+        fig.add_trace(go.Scatter(
+            x=future_dates,
+            y=predictions[-30:],
             mode='lines',
-            name='Tendencia y Predicción',
-            line=dict(color='red', dash='dash', width=2)
+            name='Predicción',
+            line=dict(dash='dash')
         ))
-
-        # Intervalos de confianza
-        fig_mensual.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat_upper'],
-            mode='lines',
-            name='Intervalo Superior',
-            line=dict(color='rgba(255,0,0,0.2)', width=0)
-        ))
-        fig_mensual.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat_lower'],
-            mode='lines',
-            name='Intervalo Inferior',
-            fill='tonexty',
-            line=dict(color='rgba(255,0,0,0.2)', width=0)
-        ))
-
-        # Agregar anotación con información del mes actual
-        fig_mensual.add_annotation(
-            x=mes_actual_row['FECHA _ INGRESO'].iloc[0],
-            y=mes_actual_row['cantidad'].iloc[0],
-            text=f"Mes Actual:<br>Real: {total_mes_actual:,.0f}<br>Proyectado: {proyeccion_mes_actual:,.0f}<br>Días transcurridos: {dias_transcurridos_mes}",
-            showarrow=True,
-            arrowhead=1
-        )
-
-        fig_mensual.update_layout(
-            title='Ingresos Mensuales y Predicción',
-            xaxis_title='Fecha',
-            yaxis_title='Cantidad de Expedientes',
-            hovermode='x unified',
-            showlegend=True
-        )
-
-        st.plotly_chart(fig_mensual, use_container_width=True)
-
-        # Agregar información detallada del mes actual
-        st.info(f"""
-        **Datos del Mes Actual:**
-        - Ingresos hasta hoy: {total_mes_actual:,}
-        - Días transcurridos: {dias_transcurridos_mes}
-        - Días hábiles con ingresos: {dias_habiles_transcurridos}
-        - Promedio diario: {promedio_diario_mes_actual:.1f}
-        - Proyección al cierre: {proyeccion_mes_actual:,.0f}
-        """)
-
-        # 4. Indicadores Clave y Alertas
-        st.subheader("4. Indicadores Clave y Alertas")
-        st.write("""
-        Métricas importantes para monitorear el comportamiento de los ingresos:
-        - **Tendencia Últimos 7 días**: Compara el promedio de la última semana con la semana anterior
-        - **Volatilidad**: Indica qué tan variables son los ingresos (mayor % = más variable)
-        - **Días Atípicos**: Días con ingresos inusualmente altos
-        """)
-
-        # Calcular indicadores usando ingresos_diarios en lugar de daily_counts
-        tendencia_corto_plazo = (ingresos_diarios['cantidad'].tail(7).mean() / 
-                                ingresos_diarios['cantidad'].tail(14).head(7).mean() - 1) * 100
         
-        volatilidad = ingresos_diarios['cantidad'].std() / ingresos_diarios['cantidad'].mean() * 100
-        
-        # Calcular percentiles para detección de anomalías
-        p25, p75 = np.percentile(ingresos_diarios['cantidad'], [25, 75])
-        iqr = p75 - p25
-        limite_superior = p75 + 1.5 * iqr
-        
-        dias_atipicos = ingresos_diarios[ingresos_diarios['cantidad'] > limite_superior]
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric(
-                "Tendencia Últimos 7 días",
-                f"{tendencia_corto_plazo:.1f}%",
-                delta=tendencia_corto_plazo,
-                delta_color="normal"
-            )
-        
-        with col2:
-            st.metric(
-                "Volatilidad",
-                f"{volatilidad:.1f}%",
-                help="Coeficiente de variación de los ingresos"
-            )
-        
-        with col3:
-            st.metric(
-                "Días Atípicos",
-                len(dias_atipicos),
-                help="Días con ingresos inusualmente altos"
-            )
-
-        # 5. Conclusiones
-        st.subheader("5. Conclusiones")
-        st.write("""
-        Basado en el análisis de los datos, se presentan las siguientes conclusiones
-        sobre la tendencia de ingresos:
-        """)
-
-        conclusiones = []
-        
-        # Análisis de tendencia
-        if tendencia_corto_plazo > 5:
-            conclusiones.append("📈 Tendencia al alza significativa en los últimos 7 días.")
-        elif tendencia_corto_plazo < -5:
-            conclusiones.append("📉 Tendencia a la baja significativa en los últimos 7 días.")
-        
-        # Análisis de volatilidad
-        if volatilidad > 50:
-            conclusiones.append("⚠️ Alta volatilidad en los ingresos.")
-        
-        # Predicción próxima semana usando el modelo Prophet
-        proxima_semana_forecast = forecast['yhat'].iloc[-1]
-        conclusiones.append(f"🔮 Predicción para próximo mes: {proxima_semana_forecast:.0f} ingresos en promedio.")
-        
-        # Análisis de patrones semanales
-        promedio_por_dia = data.groupby(data['FECHA _ INGRESO'].dt.dayofweek).size()
-        dia_mas_ingresos = promedio_por_dia.idxmax()
-        dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-        conclusiones.append(f"📊 {dias[dia_mas_ingresos]} es el día con mayor volumen de ingresos histórico.")
-
-        # Ajustar cálculos de tendencias para usar solo períodos completos
-        tendencia_corto_plazo = (
-            ingresos_diarios[ingresos_diarios['FECHA _ INGRESO'].dt.date < (fecha_actual - pd.Timedelta(days=fecha_actual.weekday())).date()]
-            ['cantidad'].tail(5).mean() / 
-            ingresos_diarios[ingresos_diarios['FECHA _ INGRESO'].dt.date < (fecha_actual - pd.Timedelta(days=fecha_actual.weekday())).date()]
-            ['cantidad'].tail(10).head(5).mean() - 1
-        ) * 100
-
-        # Ajustar tendencia mensual para usar solo meses completos
-        if len(ingresos_mensuales) >= 2:
-            tendencia_mensual = (
-                ingresos_mensuales['cantidad'].iloc[-1] / 
-                ingresos_mensuales['cantidad'].iloc[-2] - 1
-            ) * 100
-            if tendencia_mensual > 0:
-                conclusiones.append(f"📈 El último mes completo muestra un incremento del {tendencia_mensual:.1f}% respecto al mes anterior.")
-            else:
-                conclusiones.append(f"📉 El último mes completo muestra una disminución del {-tendencia_mensual:.1f}% respecto al mes anterior.")
-
-        # Mostrar conclusiones
-        for conclusion in conclusiones:
-            st.write(conclusion)
+        st.plotly_chart(fig)

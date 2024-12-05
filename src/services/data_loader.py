@@ -35,10 +35,46 @@ class DataLoader:
             if data.empty:
                 return None
 
-            # Convertir columnas de fecha
-            for col in DATE_COLUMNS:
+            # Convertir columnas de fecha - Modificado para manejar múltiples formatos
+            date_columns = [
+                'FechaExpendiente', 'FechaEtapaAprobacionMasivaFin', 
+                'FechaPre', 'FechaTramite', 'FechaAsignacion',
+                'FECHA DE TRABAJO'
+            ]
+            
+            for col in date_columns:
                 if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], errors='coerce')
+                    # Primero intentar convertir desde el formato guardado
+                    try:
+                        data[col] = pd.to_datetime(data[col], errors='coerce')
+                    except:
+                        pass
+
+                    # Si hay valores nulos, intentar diferentes formatos
+                    if data[col].isna().any():
+                        # Intentar formatos comunes
+                        formats = ['%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y']
+                        for fmt in formats:
+                            try:
+                                mask = data[col].isna()
+                                data.loc[mask, col] = pd.to_datetime(
+                                    data.loc[mask, col], 
+                                    format=fmt, 
+                                    errors='coerce'
+                                )
+                            except:
+                                continue
+
+            # Asegurar que las fechas estén en el timezone correcto
+            for col in date_columns:
+                if col in data.columns and not data[col].empty:
+                    # Convertir a datetime si es string
+                    if data[col].dtype == 'object':
+                        data[col] = pd.to_datetime(data[col], errors='coerce')
+                    
+                    # Asegurar que las fechas tienen timezone
+                    if data[col].dt.tz is None:
+                        data[col] = data[col].dt.tz_localize('America/Lima')
 
             # Procesar datos específicos del módulo
             if module_name == 'CCM-LEY':

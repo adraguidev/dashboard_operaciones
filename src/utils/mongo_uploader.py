@@ -62,7 +62,7 @@ class MongoUploader:
             '%Y-%m-%d %H:%M:%S'
         ]
         
-        # Convertir todas las columnas de fecha a formato dd/mm/yyyy o None
+        # Convertir todas las columnas de fecha
         for column in df.columns:
             if pd.api.types.is_datetime64_any_dtype(df[column]):
                 # Para columnas ya en formato datetime
@@ -71,7 +71,7 @@ class MongoUploader:
                 )
             elif isinstance(df[column].dtype, pd.StringDtype) or df[column].dtype == object:
                 # Para columnas que podrían contener fechas como strings
-                if df[column].notna().any():  # Solo procesar si hay valores no nulos
+                if df[column].notna().any():
                     # Intentar cada formato conocido
                     for date_format in date_formats:
                         try:
@@ -85,10 +85,10 @@ class MongoUploader:
                                 df[column] = temp_dates.apply(
                                     lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else None
                                 )
-                                break  # Si encontramos un formato que funciona, salir del loop
+                                break
                         except:
                             continue
-        
+
         # Convertir NaN/NaT a None (null en MongoDB)
         df = df.replace({np.nan: None, pd.NaT: None})
         

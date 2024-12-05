@@ -137,15 +137,23 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
             excel_buffer = download_table_as_excel(excel_data, f"Pendientes_{selected_module}")
             
             # Crear nombre de archivo seguro
-            years_str = ""
-            if len(selected_years) == 1:
-                years_str = str(selected_years[0])
-            else:
-                # Filtrar cualquier valor None y convertir a string
-                valid_years = [str(year) for year in selected_years if year is not None]
-                years_str = "_".join(valid_years) if valid_years else "sin_año"
-            
-            file_name = f"Pendientes_{selected_module}_{years_str}.xlsx"
+            try:
+                # Asegurar que todos los años son válidos y convertirlos a string
+                valid_years = []
+                for year in selected_years:
+                    if year is not None and str(year).strip():
+                        valid_years.append(str(year))
+                
+                if not valid_years:
+                    file_name = f"Pendientes_{selected_module}_sin_año.xlsx"
+                elif len(valid_years) == 1:
+                    file_name = f"Pendientes_{selected_module}_{valid_years[0]}.xlsx"
+                else:
+                    years_str = "_".join(sorted(valid_years))
+                    file_name = f"Pendientes_{selected_module}_{years_str}.xlsx"
+            except:
+                # Si hay algún error en el procesamiento de años, usar nombre genérico
+                file_name = f"Pendientes_{selected_module}.xlsx"
             
             st.download_button(
                 label=" Descargar Reporte",
@@ -160,6 +168,8 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
             
         except Exception as e:
             st.error(f"Error al preparar la descarga: {str(e)}")
+            # Imprimir error detallado para debugging
+            print(f"Error detallado en la descarga: {str(e)}")
 
     except Exception as e:
         st.error(f"Error al procesar los datos: {str(e)}")

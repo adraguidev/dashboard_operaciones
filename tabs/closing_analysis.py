@@ -34,7 +34,15 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         
         with col2:
             # Calcular tiempos de cierre más representativos
-            tiempos_cierre = (data['FechaPre'] - data['FechaExpendiente']).dt.days
+            # Filtrar solo expedientes del último año y creados en el mismo año
+            ultimo_anio = pd.Timestamp.now() - pd.DateOffset(years=1)
+            expedientes_recientes = data[
+                (data['FechaExpendiente'] >= ultimo_anio) & 
+                (data['FechaPre'] >= ultimo_anio) &
+                (data['FechaExpendiente'].dt.year == data['FechaPre'].dt.year)
+            ]
+            
+            tiempos_cierre = (expedientes_recientes['FechaPre'] - expedientes_recientes['FechaExpendiente']).dt.days
             
             # Eliminar outliers usando el método IQR
             Q1 = tiempos_cierre.quantile(0.25)
@@ -47,13 +55,23 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             
             tiempo_promedio = tiempos_filtrados.median()  # Usar mediana en lugar de media
             percentil_80 = tiempos_filtrados.quantile(0.8)
+            percentil_90 = tiempos_filtrados.quantile(0.9)
             
             st.metric(
                 "Tiempo Típico de Cierre",
                 f"{tiempo_promedio:.1f} días",
-                f"80% se cierra en {percentil_80:.1f} días o menos",
-                help="Tiempo típico de cierre (excluyendo casos extremos)"
+                f"90% se cierra en {percentil_90:.1f} días o menos",
+                help="Tiempo típico de cierre del último año (excluyendo casos extremos)"
             )
+            
+            # Mostrar distribución detallada
+            st.caption(f"""
+            📊 Distribución de tiempos:
+            - 25% se cierra en {Q1:.1f} días o menos
+            - 50% se cierra en {tiempo_promedio:.1f} días o menos
+            - 75% se cierra en {Q3:.1f} días o menos
+            - 90% se cierra en {percentil_90:.1f} días o menos
+            """)
 
         # 2. Selección del rango de fechas
         st.markdown("---")

@@ -5,15 +5,29 @@ from sklearn.linear_model import LinearRegression
 import numpy as np
 import plotly.graph_objects as go
 
-def render_entry_analysis_tab(data):
-    st.header("Ingreso de Expedientes")
-    st.info("Gráficos de tendencias y predicciones sobre ingresos de expedientes.")
+def render_entry_analysis_tab(data: pd.DataFrame):
+    try:
+        st.header("Ingreso de Expedientes")
+        st.info("Gráficos de tendencias y predicciones sobre ingresos de expedientes.")
 
-    # Gráfico principal de ingresos diarios
-    render_daily_entries_chart(data)
-    
-    # Tabla de ingresos diarios
-    render_daily_entries_table(data)
+        # Validar datos
+        if data is None or data.empty:
+            st.error("No hay datos disponibles para mostrar")
+            return
+
+        # Asegurar que las fechas son válidas
+        data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], errors='coerce')
+        
+        # Filtrar datos nulos
+        data = data.dropna(subset=['FechaExpendiente'])
+
+        # Gráfico principal de ingresos diarios
+        render_daily_entries_chart(data)
+        
+        # Tabla de ingresos diarios
+        render_daily_entries_table(data)
+    except Exception as e:
+        st.error(f"Error al procesar los datos: {e}")
 
 def render_daily_entries_chart(data):
     st.subheader("Evolución de Ingresos Diarios (Últimos 45 días)")

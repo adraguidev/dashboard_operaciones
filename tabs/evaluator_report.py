@@ -2,39 +2,47 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
-def render_evaluator_report_tab(data):
-    st.header("Reporte por Evaluador")
-    st.info("Genera un reporte personalizado de expedientes pendientes por evaluador, año y mes.")
+def render_evaluator_report_tab(data: pd.DataFrame):
+    try:
+        st.header("Reporte por Evaluador")
+        
+        # Validar datos
+        if data is None or data.empty:
+            st.error("No hay datos disponibles para mostrar")
+            return
 
-    # Obtener evaluadores con pendientes
-    evaluators_with_pendings = get_evaluators_with_pendings(data)
-    
-    # Selección de evaluador
-    selected_evaluator = st.selectbox(
-        "Selecciona un Evaluador", 
-        options=evaluators_with_pendings
-    )
+        # Asegurar que EVALASIGN no tiene valores None
+        data['EVALASIGN'] = data['EVALASIGN'].fillna('')
+        evaluators = sorted(data[data['EVALASIGN'] != '']['EVALASIGN'].unique())
 
-    # Selección de años
-    available_years = sorted(data['Anio'].unique())
-    selected_years = st.multiselect(
-        "Selecciona el Año o Años", 
-        options=available_years
-    )
+        # Selección de evaluador
+        selected_evaluator = st.selectbox(
+            "Selecciona un Evaluador", 
+            options=evaluators
+        )
 
-    # Selección de meses si hay años seleccionados
-    selected_months = get_selected_months(data, selected_years) if selected_years else None
+        # Selección de años
+        available_years = sorted(data['Anio'].unique())
+        selected_years = st.multiselect(
+            "Selecciona el Año o Años", 
+            options=available_years
+        )
 
-    # Filtrar y mostrar datos
-    filtered_data = filter_evaluator_data(
-        data, 
-        selected_evaluator, 
-        selected_years, 
-        selected_months
-    )
+        # Selección de meses si hay años seleccionados
+        selected_months = get_selected_months(data, selected_years) if selected_years else None
 
-    # Mostrar resultados
-    display_filtered_results(filtered_data)
+        # Filtrar y mostrar datos
+        filtered_data = filter_evaluator_data(
+            data, 
+            selected_evaluator, 
+            selected_years, 
+            selected_months
+        )
+
+        # Mostrar resultados
+        display_filtered_results(filtered_data)
+    except Exception as e:
+        st.error(f"Error al renderizar el reporte por evaluador: {e}")
 
 def get_evaluators_with_pendings(data):
     """Obtener lista ordenada de evaluadores con expedientes pendientes."""

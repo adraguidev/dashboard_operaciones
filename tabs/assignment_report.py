@@ -2,18 +2,31 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-def render_assignment_report_tab(data):
-    st.header("Porcentaje de Expedientes Asignados y Sin Asignar")
-    
-    # Información de asignaciones de los últimos 15 días
-    st.subheader("Porcentaje de Expedientes Asignados y Sin Asignar por Día (Últimos 15 Días)")
-    
-    # Procesar y mostrar datos de asignación
-    assignment_data = process_assignment_data(data)
-    display_assignment_data(assignment_data)
-    
-    # Mostrar gráfico de barras apiladas
-    display_stacked_bar_chart(assignment_data)
+def render_assignment_report_tab(data: pd.DataFrame):
+    try:
+        st.header("Reporte de Asignaciones")
+        
+        # Validar datos
+        if data is None or data.empty:
+            st.error("No hay datos disponibles para mostrar")
+            return
+
+        # Asegurar que no hay valores None en las columnas críticas
+        data['EVALASIGN'] = data['EVALASIGN'].fillna('')
+        data['FechaAsignacion'] = pd.to_datetime(data['FechaAsignacion'], errors='coerce')
+        
+        # Filtrar datos nulos
+        data = data.dropna(subset=['FechaAsignacion'])
+
+        # Información de asignaciones de los últimos 15 días
+        st.subheader("Porcentaje de Expedientes Asignados y Sin Asignar por Día (Últimos 15 Días)")
+        
+        # Procesar y mostrar datos de asignación
+        assignment_data = process_assignment_data(data)
+        display_assignment_data(assignment_data)
+        
+        # Mostrar gráfico de barras apiladas
+        display_stacked_bar_chart(assignment_data)
 
 def process_assignment_data(data):
     """Procesar datos de asignación de los últimos 15 días."""

@@ -15,10 +15,8 @@ import numpy as np
 import plotly.graph_objects as go
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
-from statsmodels.nonparametric.smoothers_lowess import lowess
 from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import Ridge
-from prophet import Prophet
 
 class SPEModule:
     SCOPES = [

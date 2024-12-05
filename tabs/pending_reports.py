@@ -168,42 +168,54 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
         summary_data = data[data['Evaluado'] == 'NO'].copy()
         
         def get_status(row):
-            if pd.isna(row['EVALASIGN']) or row['EVALASIGN'] == '':
-                return 'No Asignado'
-            elif row['EVALASIGN'] == 'VULNERABILIDAD':
-                return 'Vulnerabilidad'
-            elif row['EVALASIGN'] == 'SUSPENDIDA':
-                return 'Suspendida'
-            elif row['EVALASIGN'] in INACTIVE_EVALUATORS.get(selected_module, []):
-                return 'Inactivos'
-            else:
-                return 'Activos'
+            try:
+                if pd.isna(row['EVALASIGN']) or str(row['EVALASIGN']).strip() == '':
+                    return 'No Asignado'
+                elif row['EVALASIGN'] in VULNERABILIDAD_EVALUATORS.get(selected_module, []):
+                    return 'Vulnerabilidad'
+                elif str(row['EVALASIGN']) == 'SUSPENDIDA':
+                    return 'Suspendida'
+                elif row['EVALASIGN'] in INACTIVE_EVALUATORS.get(selected_module, []):
+                    return 'Inactivos'
+                else:
+                    return 'Activos'
+            except Exception as e:
+                print(f"Error en get_status: {str(e)}, valor: {row['EVALASIGN']}")
+                return 'No Asignado'  # valor por defecto en caso de error
 
         summary_data['Estado'] = summary_data.apply(get_status, axis=1)
         
-        summary_table = pd.pivot_table(
-            summary_data,
-            values='NumeroTramite',
-            index='Estado',
-            columns='Anio',
-            aggfunc='count',
-            fill_value=0
-        )
-        
-        summary_table['TOTAL'] = summary_table.sum(axis=1)
-        summary_table = summary_table.astype(int)
+        try:
+            summary_table = pd.pivot_table(
+                summary_data,
+                values='NumeroTramite',
+                index='Estado',
+                columns='Anio',
+                aggfunc='count',
+                fill_value=0
+            )
+            
+            # Asegurar que todas las columnas sean strings válidos
+            summary_table.columns = [str(col) for col in summary_table.columns]
+            
+            summary_table['TOTAL'] = summary_table.sum(axis=1)
+            summary_table = summary_table.astype(int)
 
-        st.dataframe(
-            summary_table,
-            use_container_width=True,
-            column_config={
-                col: st.column_config.NumberColumn(
-                    col,
-                    format="%d",
-                    width="small"
-                ) for col in summary_table.columns
-            }
-        )
+            st.dataframe(
+                summary_table,
+                use_container_width=True,
+                column_config={
+                    col: st.column_config.NumberColumn(
+                        str(col),  # Asegurar que la clave sea string
+                        format="%d",
+                        width="small"
+                    ) for col in summary_table.columns
+                }
+            )
+
+        except Exception as e:
+            st.error(f"Error al generar la tabla resumen: {str(e)}")
+            print(f"Error detallado en tabla resumen: {str(e)}")
 
     except Exception as e:
         st.error(f"Error al procesar los datos: {str(e)}")

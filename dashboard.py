@@ -12,10 +12,14 @@ from src.utils.database import get_google_credentials
 
 st.set_page_config(layout="wide")
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def get_data_loader():
     """Inicializa y retorna una instancia cacheada del DataLoader."""
-    return DataLoader()
+    try:
+        return DataLoader()
+    except Exception as e:
+        st.error(f"Error al inicializar DataLoader: {str(e)}")
+        return None
 
 def main():
     # Inicializar servicios

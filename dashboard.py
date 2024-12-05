@@ -47,22 +47,7 @@ def main():
 
         st.title("Gestión de Expedientes")
 
-        # Mostrar última actualización de datos
-        st.sidebar.markdown("### 🔄 Última Actualización")
-        for module in MODULES:
-            try:
-                last_update = data_loader.get_latest_update(module)
-                module_name = MODULES[module]
-                if last_update:
-                    update_time = last_update.strftime('%d/%m/%Y %H:%M')
-                    st.sidebar.markdown(f"{module_name}: {update_time}")
-                else:
-                    st.sidebar.markdown(f"{module_name}: ❌ Sin datos")
-            except Exception as e:
-                st.sidebar.markdown(f"{MODULES[module]}: ⚠️ Error al cargar")
-                print(f"Error al cargar actualización de {module}: {str(e)}")
-
-        # Selección de módulo
+        # Selección de módulo (directamente, sin mostrar últimas actualizaciones)
         selected_module = st.sidebar.radio(
             "Selecciona un módulo",
             options=list(MODULES.keys()),

@@ -170,20 +170,19 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         tiempos_cierre_periodo = (cierre_data_range['FechaPre'] - cierre_data_range['FechaExpendiente']).dt.days
         
         # Definir rangos dinámicos basados en percentiles
-        percentiles = [0, 25, 50, 75, 90, 95, 100]
+        percentiles = [0, 25, 50, 75, 90, 95]  # Quitamos el 100 para que coincida con las etiquetas
         rangos = np.percentile(tiempos_cierre_periodo, percentiles)
         
-        # Crear etiquetas personalizadas
+        # Crear etiquetas personalizadas (una menos que los bins)
         labels = [
             f"Muy rápido (0-{rangos[1]:.0f} días)",
             f"Rápido ({rangos[1]:.0f}-{rangos[2]:.0f} días)",
             f"Normal ({rangos[2]:.0f}-{rangos[3]:.0f} días)",
             f"Demorado ({rangos[3]:.0f}-{rangos[4]:.0f} días)",
-            f"Muy demorado ({rangos[4]:.0f}-{rangos[5]:.0f} días)",
-            f"Casos especiales (>{rangos[5]:.0f} días)"
+            f"Casos especiales (>{rangos[4]:.0f} días)"
         ]
         
-        # Categorizar los tiempos
+        # Categorizar los tiempos (bins debe tener un elemento más que labels)
         bins = [float('-inf')] + list(rangos)[1:] + [float('inf')]
         cierre_data_range['CategoríaTiempo'] = pd.cut(
             tiempos_cierre_periodo,
@@ -201,7 +200,7 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             title=f"Distribución de Tiempos de Cierre ({selected_range})",
             labels={'index': "Categoría", 'value': "Porcentaje de Expedientes"},
             text=distribucion_tiempos.round(1).astype(str) + '%',
-            color_discrete_sequence=['#2ecc71', '#3498db', '#f1c40f', '#e67e22', '#e74c3c', '#95a5a6']
+            color_discrete_sequence=['#2ecc71', '#3498db', '#f1c40f', '#e67e22', '#e74c3c']
         )
         
         fig_tiempos.update_traces(textposition='outside')
@@ -213,8 +212,7 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         - **Rápido**: Entre el percentil 25 y la mediana
         - **Normal**: Entre la mediana y el percentil 75
         - **Demorado**: Entre el percentil 75 y 90
-        - **Muy demorado**: Entre el percentil 90 y 95
-        - **Casos especiales**: El 5% más demorado (pueden requerir atención especial)
+        - **Casos especiales**: Más del percentil 90 (pueden requerir atención especial)
         """)
 
         # Nueva sección: Top 25 expedientes más demorados

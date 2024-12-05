@@ -46,7 +46,10 @@ class DataLoader:
                 if col in data.columns:
                     # Primero intentar convertir desde el formato guardado
                     try:
+                        # Convertir a datetime sin timezone
                         data[col] = pd.to_datetime(data[col], errors='coerce')
+                        if data[col].dt.tz is not None:
+                            data[col] = data[col].dt.tz_localize(None)
                     except:
                         pass
 
@@ -57,24 +60,22 @@ class DataLoader:
                         for fmt in formats:
                             try:
                                 mask = data[col].isna()
-                                data.loc[mask, col] = pd.to_datetime(
+                                temp_dates = pd.to_datetime(
                                     data.loc[mask, col], 
                                     format=fmt, 
                                     errors='coerce'
                                 )
+                                # Asegurar que no tiene timezone
+                                if temp_dates.dt.tz is not None:
+                                    temp_dates = temp_dates.dt.tz_localize(None)
+                                data.loc[mask, col] = temp_dates
                             except:
                                 continue
 
-            # Asegurar que las fechas estén en el timezone correcto
-            for col in date_columns:
+                # Asegurar que todas las fechas son timezone-naive
                 if col in data.columns and not data[col].empty:
-                    # Convertir a datetime si es string
-                    if data[col].dtype == 'object':
-                        data[col] = pd.to_datetime(data[col], errors='coerce')
-                    
-                    # Asegurar que las fechas tienen timezone
-                    if data[col].dt.tz is None:
-                        data[col] = data[col].dt.tz_localize('America/Lima')
+                    if data[col].dtype == 'datetime64[ns]' and data[col].dt.tz is not None:
+                        data[col] = data[col].dt.tz_localize(None)
 
             # Procesar datos específicos del módulo
             if module_name == 'CCM-LEY':

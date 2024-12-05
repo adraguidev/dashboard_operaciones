@@ -112,7 +112,47 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             }
         )
 
-        # Resto del código para guardar/resetear datos...
+        # Opciones para guardar/resetear datos
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if ultima_fecha_registrada:
+                if st.button("🔄 Resetear último día", 
+                           help="Elimina los registros del último día para poder grabarlos nuevamente"):
+                    reset_last_day(selected_module, rankings_collection, ultima_fecha_registrada)
+                    st.success("✅ Último día reseteado correctamente")
+                    st.rerun()
+
+        with col2:
+            if not datos_nuevos.empty:
+                # Preparar datos nuevos para guardar
+                fechas_disponibles = sorted(
+                    datos_nuevos['FECHA DE TRABAJO'].dt.date.unique()
+                )
+                fechas_disponibles = [f for f in fechas_disponibles if f > (ultima_fecha_registrada or datetime.min.date())]
+                
+                if fechas_disponibles:
+                    selected_dates = st.multiselect(
+                        "Seleccionar fechas para guardar",
+                        options=fechas_disponibles,
+                        default=fechas_disponibles,
+                        format_func=lambda x: x.strftime('%d/%m/%Y')
+                    )
+                    
+                    if selected_dates and st.button("💾 Guardar datos seleccionados"):
+                        datos_a_guardar = datos_nuevos[
+                            datos_nuevos['FECHA DE TRABAJO'].dt.date.isin(selected_dates)
+                        ].copy()
+                        
+                        # Agrupar por fecha y evaluador
+                        datos_agrupados = datos_a_guardar.groupby(
+                            ['FECHA DE TRABAJO', 'EVALASIGN']
+                        ).size().reset_index(name='cantidad')
+                        
+                        save_rankings_to_db(selected_module, rankings_collection, datos_agrupados)
+                        st.success("✅ Datos guardados correctamente")
+                        st.rerun()
 
     except Exception as e:
         st.error(f"Error al procesar el ranking: {str(e)}")
@@ -130,16 +170,27 @@ def get_last_date_from_db(module, collection):
         print(f"Error al obtener última fecha: {str(e)}")
         return None
 
-def get_rankings_from_db(module, collection, last_date):
+def get_rankings_from_db(module, collection, start_date):
     """Obtener los rankings desde MongoDB."""
     try:
-        registros = collection.find(
-            {
-                "modulo": module,
-                "fecha": {"$gte": last_date - timedelta(days=7)}
-            }
-        )
-        return pd.DataFrame(list(registros))
+        # Obtener registros desde la fecha de inicio
+        registros = collection.find({
+            "modulo": module,
+            "fecha": {"$gte": start_date}
+        }).sort("fecha", 1)
+        
+        # Convertir a DataFrame con el formato necesario
+        data_list = []
+        for registro in registros:
+            fecha = registro['fecha'].date()
+            for evaluador_data in registro['datos']:
+                data_list.append({
+                    'fecha': fecha,
+                    'evaluador': evaluador_data['evaluador'],
+                    'cantidad': evaluador_data['cantidad']
+                })
+        
+        return pd.DataFrame(data_list)
     except Exception as e:
         print(f"Error al obtener rankings: {str(e)}")
         return pd.DataFrame()
@@ -147,14 +198,22 @@ def get_rankings_from_db(module, collection, last_date):
 def save_rankings_to_db(module, collection, data):
     """Guardar nuevos rankings en MongoDB."""
     try:
-        records = data.to_dict('records')
-        for record in records:
+        # Agrupar datos por fecha
+        for fecha, grupo in data.groupby('FECHA DE TRABAJO'):
+            # Preparar datos en el formato correcto
+            datos_evaluadores = [
+                {
+                    "evaluador": row['EVALASIGN'],
+                    "cantidad": int(row['cantidad'])
+                }
+                for _, row in grupo.iterrows()
+            ]
+            
+            # Insertar documento
             collection.insert_one({
                 "modulo": module,
-                "fecha": record['FECHA DE TRABAJO'],
-                "evaluador": record['EVALASIGN'],
-                "cantidad": record['cantidad'],
-                "fecha_registro": datetime.now()
+                "fecha": fecha,
+                "datos": datos_evaluadores
             })
     except Exception as e:
         raise Exception(f"Error al guardar rankings: {str(e)}")
@@ -162,7 +221,7 @@ def save_rankings_to_db(module, collection, data):
 def reset_last_day(module, collection, last_date):
     """Eliminar registros del último día."""
     try:
-        collection.delete_many({
+        collection.delete_one({
             "modulo": module,
             "fecha": last_date
         })

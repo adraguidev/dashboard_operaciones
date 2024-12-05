@@ -2,12 +2,12 @@ import os
 
 # Configuración de módulos
 MODULES = {
-    'CCM': 'Calidad Migratoria',
-    'PRR': 'Prórroga de Residencia',
-    'CCM-ESP': 'Calidad Migratoria Especial',
-    'CCM-LEY': 'Calidad Migratoria Ley',
-    'SOL': 'Solicitudes',
-    'SPE': 'Sistema de Permisos Especiales'
+    'CCM': '📋 CCM',           # Calidad Migratoria
+    'PRR': '🔄 PRR',           # Prórroga de Residencia
+    'CCM-ESP': '⭐ CCM-ESP',    # Calidad Migratoria Especial
+    'CCM-LEY': '⚖️ CCM-LEY',   # Calidad Migratoria Ley
+    'SOL': '📝 SOL',           # Solicitudes
+    'SPE': '🌟 SPE'            # Sistema de Permisos Especiales
 }
 
 # Configuración de Google Sheets
@@ -99,12 +99,12 @@ MONGODB_CONFIG = {
 
 # Módulos disponibles en la aplicación
 MODULES = {
-    'CCM': 'Calidad Migratoria',
-    'PRR': 'Prórroga de Residencia',
-    'CCM-ESP': 'Calidad Migratoria Especial',
-    'CCM-LEY': 'Calidad Migratoria Ley',
-    'SOL': 'Solicitudes',
-    'SPE': 'Sistema de Permisos Especiales'
+    'CCM': '📋 CCM',           # Calidad Migratoria
+    'PRR': '🔄 PRR',           # Prórroga de Residencia
+    'CCM-ESP': '⭐ CCM-ESP',    # Calidad Migratoria Especial
+    'CCM-LEY': '⚖️ CCM-LEY',   # Calidad Migratoria Ley
+    'SOL': '📝 SOL',           # Solicitudes
+    'SPE': '🌟 SPE'            # Sistema de Permisos Especiales
 }
 
 # Scopes para Google API

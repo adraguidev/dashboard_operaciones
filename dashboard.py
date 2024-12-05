@@ -35,11 +35,16 @@ def main():
     st.title("Gestión de Expedientes")
 
     # Mostrar última actualización de datos
-    st.sidebar.markdown("### Última actualización")
+    st.sidebar.markdown("### 🔄 Última Actualización")
     for module in MODULES:
         last_update = data_loader.get_latest_update(module)
         if last_update:
-            st.sidebar.text(f"{MODULES[module]}: {last_update.strftime('%d/%m/%Y %H:%M')}")
+            # Usar el emoji del módulo si existe
+            module_name = MODULES[module]
+            update_time = last_update.strftime('%d/%m/%Y %H:%M')
+            st.sidebar.markdown(f"{module_name}: {update_time}")
+        else:
+            st.sidebar.markdown(f"{MODULES[module]}: ❌ Sin datos")
 
     # Selección de módulo
     selected_module = st.sidebar.radio(

@@ -110,9 +110,9 @@ class MongoUploader:
                 total_records = len(df)
                 print(f"Registros totales a procesar: {total_records}")
 
-                # Reducir el tamaño del lote para archivos grandes
-                batch_size = min(2000, max(100, total_records // 100))
-                print(f"Tamaño de lote ajustado: {batch_size}")
+                # Verificar que el DataFrame no esté vacío
+                if df.empty:
+                    raise ValueError(f"El archivo {file_path} está vacío")
 
                 # Limpiar y preparar datos para MongoDB
                 df = self.clean_data_for_mongo(df)
@@ -128,70 +128,76 @@ class MongoUploader:
                 collection = self.db[collection_name]
                 historical_collection = self.db[f"{collection_name}_historical"]
                 
-                # 2. Procesar en lotes para optimizar memoria
-                bulk_ops_main = []
-                historical_records = []
-                
+                # Verificar si hay datos existentes antes de borrar
+                existing_count = collection.count_documents({})
+                if existing_count > 0:
+                    print(f"Encontrados {existing_count} registros existentes")
+                    
+                    # Hacer backup antes de borrar
+                    backup_collection = self.db[f"{collection_name}_backup"]
+                    backup_collection.drop()  # Limpiar backup anterior
+                    existing_data = list(collection.find({}))
+                    if existing_data:
+                        backup_collection.insert_many(existing_data)
+                    print(f"Backup creado con {len(existing_data)} registros")
+
+                # 2. Procesar en lotes más pequeños para mejor control
+                batch_size = min(1000, max(100, total_records // 20))  # Ajustar tamaño de lote
+                print(f"Tamaño de lote ajustado: {batch_size}")
+
+                # Limpiar colección principal
+                print("\nLimpiando colección principal...")
+                collection.delete_many({})
+
+                # 3. Insertar datos en lotes
                 for i in range(0, total_records, batch_size):
+                    end_idx = min(i + batch_size, total_records)
+                    batch_df = df.iloc[i:end_idx]
+                    batch_records = batch_df.to_dict('records')
+                    
                     try:
-                        # Obtener slice del DataFrame
-                        batch_df = df.iloc[i:i + batch_size]
-                        batch_records = batch_df.to_dict('records')
-                        
-                        # Preparar operaciones en bulk
-                        bulk_ops_main.extend([
-                            InsertOne(record) for record in batch_records
-                        ])
+                        # Insertar en colección principal
+                        collection.insert_many(batch_records, ordered=False)
                         
                         # Preparar registro histórico
                         historical_batch = {
                             'metadata': {
                                 **metadata,
                                 'batch_number': (i // batch_size) + 1,
+                                'total_batches': (total_records + batch_size - 1) // batch_size,
                                 'registros_en_lote': len(batch_records),
-                                'rango_registros': f"{i + 1}-{min(i + batch_size, total_records)}"
+                                'rango_registros': f"{i + 1}-{end_idx}"
                             },
                             'data': batch_records
                         }
-                        historical_records.append(historical_batch)
+                        historical_collection.insert_one(historical_batch)
                         
-                        # Mostrar progreso
-                        print(f"Procesados: {min(i + batch_size, total_records)}/{total_records} registros")
-                        
-                        # Subir lotes intermedios si son muchos registros
-                        if len(bulk_ops_main) >= 10000:
-                            print("Subiendo lote intermedio...")
-                            collection.bulk_write(bulk_ops_main, ordered=False)
-                            bulk_ops_main = []
-                    
-                    except Exception as batch_error:
-                        print(f"Error en lote {i//batch_size + 1}: {str(batch_error)}")
-                        continue
+                        print(f"Progreso: {end_idx}/{total_records} registros procesados")
+                    except Exception as e:
+                        print(f"Error en lote {i//batch_size + 1}: {str(e)}")
+                        # Restaurar desde backup si hay error
+                        if existing_data:
+                            collection.delete_many({})
+                            collection.insert_many(existing_data)
+                            raise Exception(f"Error al procesar lote. Datos restaurados desde backup: {str(e)}")
 
-                # 3. Ejecutar operaciones finales en bulk
-                print("\nActualizando colección principal...")
-                collection.delete_many({})  # Limpiar colección actual
-                if bulk_ops_main:
-                    collection.bulk_write(bulk_ops_main, ordered=False)
-                
-                print("\nGuardando histórico...")
-                if historical_records:
-                    # Subir histórico en lotes más pequeños
-                    for i in range(0, len(historical_records), 10):
-                        historical_batch = historical_records[i:i + 10]
-                        historical_collection.insert_many(historical_batch, ordered=False)
-                        print(f"Histórico: {min(i + 10, len(historical_records))}/{len(historical_records)} lotes")
+                # 4. Verificar integridad
+                final_count = collection.count_documents({})
+                if final_count != total_records:
+                    raise ValueError(
+                        f"Error de integridad: {final_count} registros en DB vs {total_records} en Excel"
+                    )
 
-                print(f"✅ Datos actualizados en {collection_name}")
-                print(f"✅ Histórico guardado en {collection_name}_historical")
-                return  # Éxito, salir del bucle de reintentos
-                
+                print(f"\n✅ Datos actualizados en {collection_name}")
+                print(f"✅ Total registros: {final_count}")
+                return  # Éxito
+
             except Exception as e:
                 print(f"❌ Intento {attempt + 1}/{max_retries} falló: {str(e)}")
                 if attempt < max_retries - 1:
                     print(f"Reintentando en {retry_delay} segundos...")
                     time.sleep(retry_delay)
-                    retry_delay *= 2  # Incrementar el tiempo de espera exponencialmente
+                    retry_delay *= 2
                 else:
                     print(f"❌ Error al subir {file_path} después de {max_retries} intentos")
                     raise
@@ -208,20 +214,17 @@ class MongoUploader:
             'consolidado_sol': f"{carpeta_descargas}/SOL/Consolidado_SOL_CRUZADO.xlsx"
         }
         
-        # Procesar archivos en paralelo
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {
-                executor.submit(self.upload_file, file_path, collection_name): collection_name
-                for collection_name, file_path in archivos_a_subir.items()
-                if os.path.exists(file_path)
-            }
-            
-            for future in as_completed(futures):
-                collection_name = futures[future]
+        # Procesar archivos secuencialmente para mejor control
+        for collection_name, file_path in archivos_a_subir.items():
+            if os.path.exists(file_path):
                 try:
-                    future.result()
+                    print(f"\nProcesando {collection_name}...")
+                    self.upload_file(file_path, collection_name)
                 except Exception as e:
                     print(f"❌ Error procesando {collection_name}: {str(e)}")
+                    continue
+            else:
+                print(f"❌ Archivo no encontrado: {file_path}")
 
     def get_latest_update(self, collection_name):
         """

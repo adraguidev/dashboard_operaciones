@@ -4,7 +4,7 @@ import plotly.express as px
 
 def render_assignment_report_tab(data: pd.DataFrame):
     try:
-        st.header("Reporte de Asignaciones")
+        st.header("📋 Reporte de Asignaciones")
         
         # Validar datos
         if data is None or data.empty:
@@ -13,14 +13,10 @@ def render_assignment_report_tab(data: pd.DataFrame):
 
         # Asegurar que no hay valores None en las columnas críticas
         data['EVALASIGN'] = data['EVALASIGN'].fillna('')
-        data['FechaAsignacion'] = pd.to_datetime(data['FechaAsignacion'], errors='coerce')
         data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], errors='coerce')
         
-        # Filtrar datos nulos
-        data = data.dropna(subset=['FechaExpendiente'])
-
         # Información de asignaciones de los últimos 15 días
-        st.subheader("Porcentaje de Expedientes Asignados y Sin Asignar por Día (Últimos 15 Días)")
+        st.subheader("📊 Porcentaje de Expedientes Asignados y Sin Asignar por Día")
         
         # Procesar y mostrar datos de asignación
         assignment_data = process_assignment_data(data)
@@ -36,24 +32,20 @@ def render_assignment_report_tab(data: pd.DataFrame):
 def process_assignment_data(data):
     """Procesar datos de asignación de los últimos 15 días."""
     try:
-        # Filtrar datos recientes y excluir toma de imágenes
+        # Filtrar datos recientes
         last_15_days = pd.Timestamp.now() - pd.DateOffset(days=15)
-        recent_data = data[
-            (data['FechaExpendiente'] >= last_15_days) & 
-            (data['UltimaEtapa'] != 'TOMA DE IMAGENES - I') & 
-            (data['UltimaEtapa'] != 'TOMA DE IMAGENES - F')
-        ]
+        recent_data = data[data['FechaExpendiente'] >= last_15_days]
 
         # Agrupar y calcular métricas
         assignment_data = recent_data.groupby('FechaExpendiente').apply(
             lambda x: pd.Series({
                 'TotalExpedientes': len(x),
-                'CantidadAsignados': len(x[x['EVALASIGN'].notna()]),
-                'CantidadSinAsignar': len(x[x['EVALASIGN'].isna()])
+                'CantidadAsignados': len(x[x['EVALASIGN'] != '']),
+                'CantidadSinAsignar': len(x[x['EVALASIGN'] == ''])
             })
         ).reset_index()
 
-        # Calcular porcentajes y asegurar que no hay divisiones por cero
+        # Calcular porcentajes
         assignment_data['% Sin Asignar'] = assignment_data.apply(
             lambda row: f"{(row['CantidadSinAsignar'] / row['TotalExpedientes'] * 100):.2f}%" 
             if row['TotalExpedientes'] > 0 else "0.00%",
@@ -68,7 +60,7 @@ def process_assignment_data(data):
     except Exception as e:
         st.error(f"Error al procesar datos de asignación: {str(e)}")
         print(f"Error detallado en process_assignment_data: {str(e)}")
-        return pd.DataFrame()  # Retornar DataFrame vacío en caso de error
+        return pd.DataFrame()
 
 def display_assignment_data(assignment_data):
     """Mostrar tabla de datos de asignación."""
@@ -79,7 +71,15 @@ def display_assignment_data(assignment_data):
                     'FechaExpendiente', 'TotalExpedientes', 
                     'CantidadAsignados', 'CantidadSinAsignar', 
                     '% Sin Asignar'
-                ]]
+                ]],
+                use_container_width=True,
+                column_config={
+                    'FechaExpendiente': 'Fecha',
+                    'TotalExpedientes': 'Total',
+                    'CantidadAsignados': 'Asignados',
+                    'CantidadSinAsignar': 'Sin Asignar',
+                    '% Sin Asignar': 'Porcentaje Sin Asignar'
+                }
             )
         else:
             st.warning("No hay datos de asignación para mostrar")
@@ -91,31 +91,53 @@ def display_stacked_bar_chart(assignment_data):
     """Mostrar gráfico de barras apiladas de asignaciones."""
     try:
         if not assignment_data.empty:
-            fig_stacked_bar = px.bar(
+            fig = px.bar(
                 assignment_data,
                 x='FechaExpendiente',
                 y=['CantidadAsignados', 'CantidadSinAsignar'],
                 title="Distribución de Expedientes Asignados y Sin Asignar (Últimos 15 Días)",
                 labels={
                     'value': 'Cantidad de Expedientes',
-                    'FechaExpendiente': 'Fecha Expediente',
+                    'FechaExpendiente': 'Fecha',
                     'variable': 'Estado'
                 },
                 text_auto=True,
                 color_discrete_map={
-                    'CantidadAsignados': 'green',
-                    'CantidadSinAsignar': 'red'
+                    'CantidadAsignados': '#2ecc71',  # Verde
+                    'CantidadSinAsignar': '#e74c3c'  # Rojo
                 }
             )
 
-            fig_stacked_bar.update_layout(
+            fig.update_layout(
                 barmode='stack',
-                xaxis_title='Fecha Expediente',
+                xaxis_title='Fecha',
                 yaxis_title='Cantidad de Expedientes',
-                legend_title='Estado'
+                legend_title='Estado',
+                showlegend=True,
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
             )
 
-            st.plotly_chart(fig_stacked_bar)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Mostrar métricas resumen
+            total_asignados = assignment_data['CantidadAsignados'].sum()
+            total_sin_asignar = assignment_data['CantidadSinAsignar'].sum()
+            total_expedientes = total_asignados + total_sin_asignar
+            
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Expedientes", f"{total_expedientes:,d}")
+            col2.metric("Total Asignados", f"{total_asignados:,d}")
+            col3.metric(
+                "Sin Asignar", 
+                f"{total_sin_asignar:,d}",
+                f"{(total_sin_asignar/total_expedientes*100):.1f}%"
+            )
         else:
             st.warning("No hay datos suficientes para mostrar el gráfico")
 

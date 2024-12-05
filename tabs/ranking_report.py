@@ -39,10 +39,12 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 columns='fecha',
                 fill_value=0
             )
+            # Renombrar el índice para que coincida con los nuevos datos
+            matriz_historica.index.name = 'EVALASIGN'
         else:
             matriz_historica = pd.DataFrame()
 
-        # Preparar datos nuevos (solo los que no están en históricos)
+        # Preparar datos nuevos
         if ultima_fecha_registrada:
             datos_nuevos = data[
                 (data['FECHA DE TRABAJO'].dt.date > ultima_fecha_registrada) &
@@ -64,53 +66,60 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         else:
             matriz_nueva = pd.DataFrame()
 
-        # Combinar matrices histórica y nueva
+        # Combinar matrices
         if not matriz_historica.empty and not matriz_nueva.empty:
             matriz_ranking = pd.concat([matriz_historica, matriz_nueva], axis=1)
-            # Eliminar duplicados de columnas si existen
             matriz_ranking = matriz_ranking.loc[:, ~matriz_ranking.columns.duplicated()]
         elif not matriz_historica.empty:
             matriz_ranking = matriz_historica
         else:
             matriz_ranking = matriz_nueva
 
-        # Ordenar columnas por fecha
-        matriz_ranking = matriz_ranking.reindex(sorted(matriz_ranking.columns), axis=1)
-        
-        # Mantener solo los últimos 15 días
-        ultimas_columnas = sorted(matriz_ranking.columns)[-15:]
-        matriz_ranking = matriz_ranking[ultimas_columnas]
+        if not matriz_ranking.empty:
+            # Ordenar columnas por fecha
+            matriz_ranking = matriz_ranking.reindex(sorted(matriz_ranking.columns), axis=1)
+            
+            # Mantener solo los últimos 15 días
+            ultimas_columnas = sorted(matriz_ranking.columns)[-15:]
+            matriz_ranking = matriz_ranking[ultimas_columnas]
 
-        # Agregar columna de total
-        matriz_ranking['Total'] = matriz_ranking.sum(axis=1)
-        
-        # Ordenar por total descendente
-        matriz_ranking = matriz_ranking.sort_values('Total', ascending=False)
-        
-        # Convertir todos los valores a enteros
-        matriz_ranking = matriz_ranking.astype(int)
+            # Agregar columna de total
+            matriz_ranking['Total'] = matriz_ranking.sum(axis=1)
+            
+            # Ordenar por total descendente
+            matriz_ranking = matriz_ranking.sort_values('Total', ascending=False)
+            
+            # Convertir todos los valores a enteros
+            matriz_ranking = matriz_ranking.astype(int)
 
-        # Formatear nombres de columnas (fechas) a dd/mm
-        columnas_formateadas = {
-            col: col.strftime('%d/%m') if isinstance(col, (datetime, pd.Timestamp)) else col 
-            for col in matriz_ranking.columns
-        }
-        matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
-
-        # Mostrar matriz
-        st.subheader("📊 Matriz de Expedientes Trabajados por Evaluador")
-        st.dataframe(
-            matriz_ranking,
-            use_container_width=True,
-            column_config={
-                "_index": st.column_config.TextColumn("👨‍💼 Evaluador"),
-                "Total": st.column_config.NumberColumn(
-                    "📊 Total",
-                    help="Total de expedientes trabajados",
-                    format="%d"
-                )
+            # Formatear nombres de columnas (fechas) a dd/mm
+            columnas_formateadas = {
+                col: col.strftime('%d/%m') if isinstance(col, (datetime, pd.Timestamp)) else col 
+                for col in matriz_ranking.columns if col != 'Total'
             }
-        )
+            matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
+
+            # Resetear el índice para mostrar el nombre del evaluador como columna
+            matriz_ranking = matriz_ranking.reset_index()
+
+            # Mostrar matriz
+            st.subheader("📊 Matriz de Expedientes Trabajados por Evaluador")
+            st.dataframe(
+                matriz_ranking,
+                use_container_width=True,
+                column_config={
+                    "EVALASIGN": st.column_config.TextColumn(
+                        "👨‍💼 Evaluador",
+                        width="large"
+                    ),
+                    "Total": st.column_config.NumberColumn(
+                        "📊 Total",
+                        help="Total de expedientes trabajados",
+                        format="%d"
+                    )
+                },
+                hide_index=True
+            )
 
         # Opciones para guardar/resetear datos
         st.markdown("---")

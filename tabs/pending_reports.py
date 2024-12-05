@@ -34,7 +34,7 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
     # Filtrar datos por años seleccionados y pendientes
     filtered_data = data[
         (data['Anio'].isin(selected_years)) &
-        (data['EVALUADO'] == 'NO')
+        (data['Evaluado'] == 'NO')
     ].copy()
 
     # Aplicar filtros según la vista seleccionada
@@ -75,6 +75,14 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
         
         # Ordenar por total descendente
         pending_table = pending_table.sort_values('TOTAL', ascending=False)
+        
+        # Renombrar columnas de meses
+        month_names = {
+            1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
+            5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
+            9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+        }
+        pending_table = pending_table.rename(columns=month_names)
         
     else:
         # Vista por años cuando hay múltiples años seleccionados

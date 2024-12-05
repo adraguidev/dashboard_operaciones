@@ -2,14 +2,11 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
-import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 
 def render_entry_analysis_tab(data: pd.DataFrame):
     try:
-        st.header("📊 Análisis y Predicción de Ingresos")
+        st.header("📊 Análisis de Ingreso de Expedientes")
         
         # Validar datos
         if data is None or data.empty:
@@ -20,199 +17,111 @@ def render_entry_analysis_tab(data: pd.DataFrame):
         data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], errors='coerce')
         data = data.dropna(subset=['FechaExpendiente'])
 
-        # Layout principal con dos columnas
-        col1, col2 = st.columns([2, 1])
+        # Tabla de ingresos diarios
+        st.subheader("Detalle de Ingresos Diarios (Últimos 30 días)")
+        
+        # Preparar datos
+        last_30_days = data[data['FechaExpendiente'] >= (pd.Timestamp.now() - pd.DateOffset(days=30))]
+        daily_counts = last_30_days.groupby(last_30_days['FechaExpendiente'].dt.date).agg({
+            'NumeroTramite': 'count',
+            'ESTADO': lambda x: ', '.join(x.unique())
+        }).reset_index()
+        
+        daily_counts.columns = ['Fecha', 'Total Ingresos', 'Estados']
+        daily_counts['Fecha'] = daily_counts['Fecha'].dt.strftime('%d/%m/%Y')
+        
+        # Ordenar por fecha descendente
+        daily_counts = daily_counts.sort_values('Fecha', ascending=False)
+        
+        # Agregar columna de promedio móvil de 7 días
+        daily_counts['Promedio 7 días'] = daily_counts['Total Ingresos'].rolling(7, min_periods=1).mean().round(1)
+        
+        # Mostrar tabla con formato mejorado
+        st.dataframe(
+            daily_counts,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                'Fecha': st.column_config.TextColumn('Fecha', width='small'),
+                'Total Ingresos': st.column_config.NumberColumn('Total Ingresos', format='%d'),
+                'Promedio 7 días': st.column_config.NumberColumn('Promedio 7 días', format='%.1f'),
+                'Estados': st.column_config.TextColumn('Estados', width='medium')
+            }
+        )
 
+        # Mostrar estadísticas resumen
+        col1, col2, col3 = st.columns(3)
         with col1:
-            render_prediction_chart(data)
+            st.metric("Promedio diario", f"{daily_counts['Total Ingresos'].mean():.1f}")
+        with col2:
+            st.metric("Total del período", f"{daily_counts['Total Ingresos'].sum():,.0f}")
+        with col3:
+            st.metric("Días con registros", f"{len(daily_counts):,d}")
+
+        # Gráfico de tendencia
+        st.subheader("Tendencia de Ingresos")
+        fig = go.Figure()
+        
+        # Línea de ingresos diarios
+        fig.add_trace(go.Scatter(
+            x=daily_counts['Fecha'],
+            y=daily_counts['Total Ingresos'],
+            name='Ingresos Diarios',
+            mode='lines+markers'
+        ))
+        
+        # Línea de promedio móvil
+        fig.add_trace(go.Scatter(
+            x=daily_counts['Fecha'],
+            y=daily_counts['Promedio 7 días'],
+            name='Promedio Móvil (7 días)',
+            line=dict(dash='dash')
+        ))
+        
+        fig.update_layout(
+            title="Tendencia de Ingresos Diarios y Promedio Móvil",
+            xaxis_title="Fecha",
+            yaxis_title="Cantidad de Expedientes",
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Análisis mensual y anual
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Análisis mensual del año actual
+            st.subheader(f"Ingresos Mensuales {datetime.now().year}")
+            monthly_data = data[data['FechaExpendiente'].dt.year == datetime.now().year].groupby(
+                data['FechaExpendiente'].dt.month
+            ).size()
+            
+            month_names = {
+                1:'Enero', 2:'Febrero', 3:'Marzo', 4:'Abril', 
+                5:'Mayo', 6:'Junio', 7:'Julio', 8:'Agosto',
+                9:'Septiembre', 10:'Octubre', 11:'Noviembre', 12:'Diciembre'
+            }
+            monthly_data.index = monthly_data.index.map(month_names)
+            
+            fig_monthly = px.bar(
+                monthly_data,
+                labels={'value': 'Cantidad de Expedientes', 'index': 'Mes'},
+                title=f"Ingresos por Mes {datetime.now().year}"
+            )
+            st.plotly_chart(fig_monthly, use_container_width=True)
         
         with col2:
-            render_key_metrics(data)
-
-        # Análisis temporal debajo
-        st.markdown("---")
-        render_temporal_insights(data)
-        
-        # Patrones y anomalías
-        st.markdown("---")
-        render_patterns_analysis(data)
+            # Análisis anual
+            st.subheader("Ingresos Anuales")
+            yearly_data = data.groupby(data['FechaExpendiente'].dt.year).size()
+            fig_yearly = px.bar(
+                yearly_data,
+                labels={'value': 'Cantidad de Expedientes', 'index': 'Año'},
+                title="Ingresos por Año"
+            )
+            st.plotly_chart(fig_yearly, use_container_width=True)
 
     except Exception as e:
         st.error(f"Error al procesar los datos: {str(e)}")
-        print(f"Error detallado: {str(e)}")
-
-def render_prediction_chart(data):
-    """Renderiza gráfico principal de predicción"""
-    daily_counts = data.groupby(data['FechaExpendiente'].dt.date).size().reset_index(name='Ingresos')
-    daily_counts['FechaExpendiente'] = pd.to_datetime(daily_counts['FechaExpendiente'])
-    
-    # Modelo de predicción polinomial
-    X = np.arange(len(daily_counts)).reshape(-1, 1)
-    poly = PolynomialFeatures(degree=2)
-    X_poly = poly.fit_transform(X)
-    
-    model = LinearRegression()
-    model.fit(X_poly, daily_counts['Ingresos'])
-    
-    # Predicción 30 días
-    future_dates = pd.date_range(
-        start=daily_counts['FechaExpendiente'].max(), 
-        periods=31, 
-        freq='D'
-    )[1:]
-    
-    X_future = np.arange(len(daily_counts), len(daily_counts) + 30).reshape(-1, 1)
-    X_future_poly = poly.transform(X_future)
-    predictions = model.predict(X_future_poly)
-    
-    fig = go.Figure()
-    
-    # Datos históricos (últimos 90 días)
-    recent_data = daily_counts.tail(90)
-    fig.add_trace(go.Scatter(
-        x=recent_data['FechaExpendiente'],
-        y=recent_data['Ingresos'],
-        mode='lines+markers',
-        name='Datos Históricos',
-        line=dict(color='#2ecc71')
-    ))
-    
-    # Predicciones
-    fig.add_trace(go.Scatter(
-        x=future_dates,
-        y=predictions,
-        mode='lines+markers',
-        name='Predicción',
-        line=dict(color='#e74c3c', dash='dash')
-    ))
-    
-    fig.update_layout(
-        title="Tendencia y Predicción de Ingresos (90 días históricos + 30 días futuros)",
-        xaxis_title="Fecha",
-        yaxis_title="Expedientes",
-        hovermode='x unified'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def render_key_metrics(data):
-    """Muestra métricas clave y predicciones"""
-    daily_counts = data.groupby(data['FechaExpendiente'].dt.date).size()
-    
-    # Métricas clave
-    st.subheader("📈 Métricas Clave")
-    
-    # Promedio histórico
-    promedio = daily_counts.mean()
-    st.metric(
-        "Promedio Diario",
-        f"{promedio:.0f}",
-        help="Promedio histórico de ingresos por día"
-    )
-    
-    # Máximo histórico
-    maximo = daily_counts.max()
-    fecha_max = daily_counts.idxmax()
-    st.metric(
-        "Máximo Histórico",
-        f"{maximo:.0f}",
-        f"({fecha_max.strftime('%d/%m/%Y')})",
-        help="Mayor número de ingresos en un día"
-    )
-    
-    # Carga actual vs promedio
-    ultimo_dia = daily_counts.index.max()
-    carga_actual = daily_counts.get(ultimo_dia, 0)
-    variacion = ((carga_actual - promedio) / promedio) * 100
-    st.metric(
-        "Carga Actual",
-        f"{carga_actual:.0f}",
-        f"{variacion:+.1f}% vs promedio",
-        help="Ingresos del último día vs promedio histórico"
-    )
-
-def render_temporal_insights(data):
-    """Análisis temporal detallado"""
-    st.subheader("📅 Análisis Temporal")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Análisis por día de la semana
-        data['DiaSemana'] = data['FechaExpendiente'].dt.day_name()
-        dias_orden = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        dias_esp = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-        dia_mapping = dict(zip(dias_orden, dias_esp))
-        
-        ingresos_por_dia = data.groupby(data['DiaSemana']).size()
-        ingresos_por_dia.index = ingresos_por_dia.index.map(dia_mapping)
-        
-        fig_dias = px.bar(
-            ingresos_por_dia,
-            title="Distribución de Ingresos por Día",
-            labels={'value': 'Cantidad', 'index': 'Día'},
-            color_discrete_sequence=['#3498db']
-        )
-        st.plotly_chart(fig_dias, use_container_width=True)
-    
-    with col2:
-        # Análisis por hora del día
-        data['Hora'] = data['FechaExpendiente'].dt.hour
-        ingresos_por_hora = data.groupby('Hora').size()
-        
-        fig_horas = px.line(
-            ingresos_por_hora,
-            title="Patrón de Ingresos por Hora",
-            labels={'value': 'Cantidad', 'index': 'Hora'},
-            line_shape='spline'
-        )
-        st.plotly_chart(fig_horas, use_container_width=True)
-
-def render_patterns_analysis(data):
-    """Análisis de patrones y anomalías"""
-    st.subheader("🔍 Patrones y Anomalías")
-    
-    # Detectar días atípicos
-    daily_counts = data.groupby(data['FechaExpendiente'].dt.date).size()
-    mean = daily_counts.mean()
-    std = daily_counts.std()
-    
-    anomalias = daily_counts[abs(daily_counts - mean) > 2 * std]
-    
-    if not anomalias.empty:
-        st.warning("📊 Días con Ingresos Atípicos")
-        anomalias_df = pd.DataFrame({
-            'Fecha': anomalias.index,
-            'Ingresos': anomalias.values,
-            'Desviación': ((anomalias - mean) / std).round(2)
-        })
-        anomalias_df['Fecha'] = anomalias_df['Fecha'].dt.strftime('%d/%m/%Y')
-        st.dataframe(
-            anomalias_df.sort_values('Desviación', ascending=False),
-            hide_index=True
-        )
-    
-    # Análisis de estacionalidad
-    st.info("📈 Insights de Estacionalidad")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Variación mensual
-        monthly_avg = data.groupby(data['FechaExpendiente'].dt.month).size().mean()
-        current_month = datetime.now().month
-        current_month_count = len(data[data['FechaExpendiente'].dt.month == current_month])
-        
-        st.metric(
-            "Promedio Mensual",
-            f"{monthly_avg:.0f}",
-            f"{((current_month_count - monthly_avg) / monthly_avg * 100):+.1f}% este mes"
-        )
-    
-    with col2:
-        # Identificar mejor y peor día
-        ingresos_por_dia = data.groupby(data['FechaExpendiente'].dt.day_name()).size()
-        mejor_dia = ingresos_por_dia.idxmax()
-        peor_dia = ingresos_por_dia.idxmin()
-        
-        st.write(f"🔝 Mejor día: **{dia_mapping[mejor_dia]}**")
-        st.write(f"⬇️ Día más bajo: **{dia_mapping[peor_dia]}**") 
+        print(f"Error detallado: {str(e)}") 

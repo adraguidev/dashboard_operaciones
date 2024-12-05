@@ -67,12 +67,12 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             help="Filtra por estados específicos"
         )
 
-        # Filtro por tipo de expediente
-        tipos_expediente = sorted(data['TipoTramite'].dropna().unique())
-        selected_tipos = st.sidebar.multiselect(
-            "Tipo de Expediente",
-            options=tipos_expediente,
-            help="Filtra por tipo de expediente"
+        # Filtro por última etapa en lugar de tipo de expediente
+        etapas_unicas = sorted(data['UltimaEtapa'].dropna().unique())
+        selected_etapas = st.sidebar.multiselect(
+            "Última Etapa",
+            options=etapas_unicas,
+            help="Filtra por última etapa del expediente"
         )
 
         # Aplicar filtros
@@ -87,8 +87,8 @@ def render_evaluator_report_tab(data: pd.DataFrame):
         if selected_estados:
             filtered_data = filtered_data[filtered_data['ESTADO'].isin(selected_estados)]
             
-        if selected_tipos:
-            filtered_data = filtered_data[filtered_data['TipoTramite'].isin(selected_tipos)]
+        if selected_etapas:  # Cambiado de tipos a etapas
+            filtered_data = filtered_data[filtered_data['UltimaEtapa'].isin(selected_etapas)]
 
         # Mostrar resumen estadístico
         st.subheader("📊 Resumen Estadístico")
@@ -153,27 +153,39 @@ def render_evaluator_report_tab(data: pd.DataFrame):
         st.subheader("📋 Detalle de Expedientes")
         
         # Preparar datos para la tabla
-        display_data = filtered_data[[
-            'NumeroTramite', 'TipoTramite', 'ESTADO', 'FechaExpendiente', 
-            'FechaPre', 'Evaluado'
-        ]].copy()
+        display_columns = [
+            'NumeroTramite', 'ESTADO', 'FechaExpendiente', 
+            'FechaPre', 'Evaluado', 'UltimaEtapa'  # Cambiado TipoTramite por UltimaEtapa
+        ]
+        
+        # Verificar qué columnas están disponibles
+        available_columns = [col for col in display_columns if col in filtered_data.columns]
+        display_data = filtered_data[available_columns].copy()
         
         # Formatear fechas
-        display_data['FechaExpendiente'] = display_data['FechaExpendiente'].dt.strftime('%d/%m/%Y')
-        display_data['FechaPre'] = display_data['FechaPre'].dt.strftime('%d/%m/%Y')
+        if 'FechaExpendiente' in display_data.columns:
+            display_data['FechaExpendiente'] = display_data['FechaExpendiente'].dt.strftime('%d/%m/%Y')
+        if 'FechaPre' in display_data.columns:
+            display_data['FechaPre'] = display_data['FechaPre'].dt.strftime('%d/%m/%Y')
+        
+        # Configuración de columnas dinámica
+        column_config = {
+            'NumeroTramite': 'Expediente',
+            'ESTADO': 'Estado',
+            'FechaExpendiente': 'Fecha Ingreso',
+            'FechaPre': 'Fecha Pre',
+            'Evaluado': 'Evaluado',
+            'UltimaEtapa': 'Última Etapa'
+        }
+        
+        # Filtrar solo las configuraciones de columnas disponibles
+        column_config = {k: v for k, v in column_config.items() if k in display_data.columns}
         
         # Mostrar tabla con formato mejorado
         st.dataframe(
             display_data,
             use_container_width=True,
-            column_config={
-                'NumeroTramite': 'Expediente',
-                'TipoTramite': 'Tipo',
-                'ESTADO': 'Estado',
-                'FechaExpendiente': 'Fecha Ingreso',
-                'FechaPre': 'Fecha Pre',
-                'Evaluado': 'Evaluado'
-            }
+            column_config=column_config
         )
 
         # Opción de descarga

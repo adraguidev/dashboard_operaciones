@@ -26,7 +26,13 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
     with col2:
         # Selector de años múltiple
         try:
-            available_years = sorted([year for year in data['Anio'].unique() if year is not None], reverse=True)
+            # Filtrar y convertir años a enteros, eliminando valores nulos
+            available_years = sorted([
+                int(year) 
+                for year in data['Anio'].unique() 
+                if year is not None and pd.notna(year)
+            ], reverse=True)
+            
             if not available_years:
                 st.error("No se encontraron años válidos en los datos")
                 return
@@ -131,7 +137,14 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
             excel_buffer = download_table_as_excel(excel_data, f"Pendientes_{selected_module}")
             
             # Crear nombre de archivo seguro
-            years_str = "_".join(str(year) for year in sorted(selected_years))
+            years_str = ""
+            if len(selected_years) == 1:
+                years_str = str(selected_years[0])
+            else:
+                # Filtrar cualquier valor None y convertir a string
+                valid_years = [str(year) for year in selected_years if year is not None]
+                years_str = "_".join(valid_years) if valid_years else "sin_año"
+            
             file_name = f"Pendientes_{selected_module}_{years_str}.xlsx"
             
             st.download_button(

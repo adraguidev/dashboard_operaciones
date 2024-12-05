@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from utils.downloads import download_table_as_excel
 from config.settings import INACTIVE_EVALUATORS
 
 def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
@@ -26,7 +25,6 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
     with col2:
         # Selector de años múltiple
         try:
-            # Filtrar y convertir años a enteros, eliminando valores nulos
             available_years = sorted([
                 int(year) 
                 for year in data['Anio'].unique() 
@@ -50,8 +48,8 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
         st.warning("Por favor seleccione al menos un año")
         return
 
-    # Filtrar datos por años seleccionados y pendientes
     try:
+        # Filtrar datos por años seleccionados y pendientes
         filtered_data = data[
             (data['Anio'].isin(selected_years)) &
             (data['Evaluado'] == 'NO')
@@ -60,11 +58,16 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
         # Aplicar filtros según la vista seleccionada
         if view_type == "Activos":
             filtered_data = filtered_data[
-                ~filtered_data['EVALASIGN'].isin(INACTIVE_EVALUATORS.get(selected_module, []))
+                (~filtered_data['EVALASIGN'].isin(INACTIVE_EVALUATORS.get(selected_module, []))) &
+                (filtered_data['EVALASIGN'].notna()) &
+                (filtered_data['EVALASIGN'] != 'VULNERABILIDAD') &
+                (filtered_data['EVALASIGN'] != 'SUSPENDIDA')
             ]
         elif view_type == "Inactivos":
             filtered_data = filtered_data[
-                filtered_data['EVALASIGN'].isin(INACTIVE_EVALUATORS.get(selected_module, []))
+                (filtered_data['EVALASIGN'].isin(INACTIVE_EVALUATORS.get(selected_module, []))) &
+                (filtered_data['EVALASIGN'] != 'VULNERABILIDAD') &
+                (filtered_data['EVALASIGN'] != 'SUSPENDIDA')
             ]
         elif view_type == "Vulnerabilidad":
             filtered_data = filtered_data[
@@ -76,14 +79,13 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
             st.info("No se encontraron expedientes pendientes con los filtros seleccionados")
             return
 
-        # Preparar datos para la tabla
+        # Preparar datos para la tabla principal
         if len(selected_years) == 1:
             # Vista por meses para un solo año
             pending_table = filtered_data.groupby(['EVALASIGN', 'Mes']).agg({
                 'NumeroTramite': 'count'
             }).reset_index()
             
-            # Pivot para mostrar meses como columnas
             pending_table = pending_table.pivot(
                 index='EVALASIGN',
                 columns='Mes',
@@ -99,7 +101,6 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
             pending_table = pending_table.rename(columns=month_names)
             
         else:
-            # Vista por años cuando hay múltiples años seleccionados
             pending_table = filtered_data.groupby(['EVALASIGN', 'Anio']).agg({
                 'NumeroTramite': 'count'
             }).reset_index()
@@ -110,14 +111,43 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
                 values='NumeroTramite'
             ).fillna(0)
         
-        # Agregar total y ordenar
         pending_table['TOTAL'] = pending_table.sum(axis=1)
         pending_table = pending_table.sort_values('TOTAL', ascending=False)
-        
-        # Convertir números a enteros
         pending_table = pending_table.astype(int)
 
-        # Mostrar tabla
+        # Mostrar métricas en paneles tipo dashboard
+        total_data = data[data['Evaluado'] == 'NO']
+        
+        # Calcular métricas
+        pendientes_asignados = total_data[
+            total_data['EVALASIGN'].notna() & 
+            (total_data['EVALASIGN'] != '')
+        ]['NumeroTramite'].count()
+        
+        pendientes_no_asignados = total_data[
+            total_data['EVALASIGN'].isna() | 
+            (total_data['EVALASIGN'] == '')
+        ]['NumeroTramite'].count()
+
+        # Mostrar métricas en un diseño de dashboard
+        st.markdown("### 📊 Panel de Control de Pendientes")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric(
+                "📋 Expedientes Pendientes Asignados",
+                f"{pendientes_asignados:,d}",
+                help="Expedientes con evaluador asignado pendientes de evaluación"
+            )
+        with col2:
+            st.metric(
+                "⚠️ Expedientes Pendientes No Asignados",
+                f"{pendientes_no_asignados:,d}",
+                help="Expedientes sin evaluador asignado"
+            )
+
+        # Mostrar tabla principal
+        st.markdown("### Detalle de Pendientes por Evaluador")
         st.dataframe(
             pending_table,
             use_container_width=True,
@@ -131,45 +161,49 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
             }
         )
 
-        # Botón de descarga
-        try:
-            excel_data = pending_table.reset_index()
-            excel_buffer = download_table_as_excel(excel_data, f"Pendientes_{selected_module}")
-            
-            # Crear nombre de archivo seguro
-            try:
-                # Asegurar que todos los años son válidos y convertirlos a string
-                valid_years = []
-                for year in selected_years:
-                    if year is not None and str(year).strip():
-                        valid_years.append(str(year))
-                
-                if not valid_years:
-                    file_name = f"Pendientes_{selected_module}_sin_año.xlsx"
-                elif len(valid_years) == 1:
-                    file_name = f"Pendientes_{selected_module}_{valid_years[0]}.xlsx"
-                else:
-                    years_str = "_".join(sorted(valid_years))
-                    file_name = f"Pendientes_{selected_module}_{years_str}.xlsx"
-            except:
-                # Si hay algún error en el procesamiento de años, usar nombre genérico
-                file_name = f"Pendientes_{selected_module}.xlsx"
-            
-            st.download_button(
-                label=" Descargar Reporte",
-                data=excel_buffer,
-                file_name=file_name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        # Tabla resumen por tipo y año
+        st.markdown("### Resumen General por Año")
+        
+        summary_data = data[data['Evaluado'] == 'NO'].copy()
+        
+        def get_status(row):
+            if pd.isna(row['EVALASIGN']) or row['EVALASIGN'] == '':
+                return 'No Asignado'
+            elif row['EVALASIGN'] == 'VULNERABILIDAD':
+                return 'Vulnerabilidad'
+            elif row['EVALASIGN'] == 'SUSPENDIDA':
+                return 'Suspendida'
+            elif row['EVALASIGN'] in INACTIVE_EVALUATORS.get(selected_module, []):
+                return 'Inactivos'
+            else:
+                return 'Activos'
 
-            # Mostrar totales
-            total_pendientes = pending_table['TOTAL'].sum()
-            st.metric("Total de Expedientes Pendientes", f"{total_pendientes:,d}")
-            
-        except Exception as e:
-            st.error(f"Error al preparar la descarga: {str(e)}")
-            # Imprimir error detallado para debugging
-            print(f"Error detallado en la descarga: {str(e)}")
+        summary_data['Estado'] = summary_data.apply(get_status, axis=1)
+        
+        summary_table = pd.pivot_table(
+            summary_data,
+            values='NumeroTramite',
+            index='Estado',
+            columns='Anio',
+            aggfunc='count',
+            fill_value=0
+        )
+        
+        summary_table['TOTAL'] = summary_table.sum(axis=1)
+        summary_table = summary_table.astype(int)
+
+        st.dataframe(
+            summary_table,
+            use_container_width=True,
+            column_config={
+                col: st.column_config.NumberColumn(
+                    col,
+                    format="%d",
+                    width="small"
+                ) for col in summary_table.columns
+            }
+        )
 
     except Exception as e:
         st.error(f"Error al procesar los datos: {str(e)}")
+        print(f"Error detallado: {str(e)}")

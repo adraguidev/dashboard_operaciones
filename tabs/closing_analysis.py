@@ -166,53 +166,58 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         # Nueva sección de distribución de tiempos
         st.subheader(f"📊 Distribución de Tiempos de Cierre ({selected_range})")
         
-        # Calcular rangos más representativos
-        tiempos_cierre_periodo = (cierre_data_range['FechaPre'] - cierre_data_range['FechaExpendiente']).dt.days
-        
-        # Definir rangos dinámicos basados en percentiles
-        percentiles = [0, 25, 50, 75, 90, 95]  # Quitamos el 100 para que coincida con las etiquetas
-        rangos = np.percentile(tiempos_cierre_periodo, percentiles)
-        
-        # Crear etiquetas personalizadas (una menos que los bins)
+        # Definir categorías de tiempo fijas
+        bins = [1, 3, 6, 9, 12, 15, 18, 21, 24, 28, float('inf')]
         labels = [
-            f"Muy rápido (0-{rangos[1]:.0f} días)",
-            f"Rápido ({rangos[1]:.0f}-{rangos[2]:.0f} días)",
-            f"Normal ({rangos[2]:.0f}-{rangos[3]:.0f} días)",
-            f"Demorado ({rangos[3]:.0f}-{rangos[4]:.0f} días)",
-            f"Casos especiales (>{rangos[4]:.0f} días)"
+            "1-3 días", 
+            "4-6 días", 
+            "7-9 días", 
+            "10-12 días",
+            "13-15 días", 
+            "16-18 días", 
+            "19-21 días", 
+            "22-24 días",
+            "25-28 días", 
+            "28+ días"
         ]
         
-        # Categorizar los tiempos (bins debe tener un elemento más que labels)
-        bins = [float('-inf')] + list(rangos)[1:] + [float('inf')]
+        # Categorizar los tiempos de cierre
         cierre_data_range['CategoríaTiempo'] = pd.cut(
-            tiempos_cierre_periodo,
+            cierre_data_range['TiempoCierre'],
             bins=bins,
             labels=labels,
             include_lowest=True
         )
 
-        # Calcular distribución
+        # Calcular distribución de tiempos
         distribucion_tiempos = cierre_data_range['CategoríaTiempo'].value_counts(normalize=True) * 100
 
-        # Crear gráfico de distribución
+        # Crear gráfico de distribución de tiempos mejorado
         fig_tiempos = px.bar(
-            distribucion_tiempos,
+            distribucion_tiempos.sort_index(),  # Ordenar por categorías
             title=f"Distribución de Tiempos de Cierre ({selected_range})",
-            labels={'index': "Categoría", 'value': "Porcentaje de Expedientes"},
+            labels={'index': "Tiempo de Cierre", 'value': "Porcentaje de Expedientes"},
             text=distribucion_tiempos.round(1).astype(str) + '%',
-            color_discrete_sequence=['#2ecc71', '#3498db', '#f1c40f', '#e67e22', '#e74c3c']
+            color_discrete_sequence=['#2ecc71', '#3498db', '#f1c40f', '#e67e22', '#e74c3c', 
+                                   '#9b59b6', '#1abc9c', '#34495e', '#95a5a6', '#d35400']
         )
-        
+
         fig_tiempos.update_traces(textposition='outside')
+        fig_tiempos.update_layout(
+            showlegend=False,
+            xaxis_title="Rango de Días",
+            yaxis_title="Porcentaje de Expedientes (%)",
+            bargap=0.2
+        )
+
         st.plotly_chart(fig_tiempos, use_container_width=True)
 
         st.info("""
-        📌 **Interpretación de las Categorías:**
-        - **Muy rápido**: El 25% más rápido de los cierres
-        - **Rápido**: Entre el percentil 25 y la mediana
-        - **Normal**: Entre la mediana y el percentil 75
-        - **Demorado**: Entre el percentil 75 y 90
-        - **Casos especiales**: Más del percentil 90 (pueden requerir atención especial)
+        📌 **Interpretación de los Rangos:**
+        - Los expedientes que se cierran en 1-6 días muestran una gestión muy eficiente
+        - El rango de 7-15 días representa el tiempo de procesamiento estándar
+        - Expedientes que toman más de 15 días pueden requerir atención especial
+        - Casos de más de 28 días generalmente indican complejidades adicionales
         """)
 
         # Nueva sección: Top 25 expedientes más demorados

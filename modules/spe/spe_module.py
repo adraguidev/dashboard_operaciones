@@ -27,27 +27,16 @@ class SPEModule:
     ]
 
     def __init__(self):
-        self.client = self._initialize_client()
-
-    @staticmethod
-    @st.cache_resource
-    def _initialize_client():
-        """Inicializar cliente de Google Sheets con caché."""
-        try:
-            credentials = get_google_credentials()
-            return gspread.authorize(credentials)
-        except Exception as e:
-            st.error(f"Error al inicializar el cliente de Google Sheets: {str(e)}")
-            return None
+        self.credentials = get_google_credentials()
 
     def load_data(self):
         """Cargar datos desde Google Sheets."""
         try:
-            if self.client is None:
+            if self.credentials is None:
                 st.error("No se pudo inicializar el cliente de Google Sheets")
                 return None
                 
-            sheet = self.client.open_by_key(SPE_SETTINGS['SPREADSHEET_ID']).worksheet(SPE_SETTINGS['WORKSHEET_NAME'])
+            sheet = gspread.authorize(self.credentials).open_by_key(SPE_SETTINGS['SPREADSHEET_ID']).worksheet(SPE_SETTINGS['WORKSHEET_NAME'])
             return pd.DataFrame(sheet.get_all_records())
         except Exception as e:
             st.error(f"Error al cargar datos de Google Sheets: {str(e)}")
@@ -483,7 +472,7 @@ class SPEModule:
         st.dataframe(pendientes_por_evaluador, use_container_width=True)
 
     def _show_pending_chart(self, pendientes):
-        """Mostrar gr��fico de pendientes."""
+        """Mostrar grfico de pendientes."""
         pendientes_por_evaluador = pendientes.groupby('EVALASIGN').size().reset_index(name='Cantidad')
         
         st.subheader("Distribución de Pendientes por Evaluador")

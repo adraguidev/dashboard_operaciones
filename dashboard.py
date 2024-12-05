@@ -1,7 +1,6 @@
 import streamlit as st
-import pymongo
 from config.settings import MODULES
-from data.data_loader import load_consolidated_cached, load_ccm_ley_data, load_spe_data
+from src.services.data_loader import DataLoader
 from tabs.pending_reports import render_pending_reports_tab
 from tabs.entry_analysis import render_entry_analysis_tab
 from tabs.closing_analysis import render_closing_analysis_tab
@@ -14,14 +13,13 @@ from src.utils.database import get_google_credentials
 st.set_page_config(layout="wide")
 
 @st.cache_resource
-def init_connection():
-    return pymongo.MongoClient(st.secrets["connections"]["mongodb"]["uri"])
+def get_data_loader():
+    """Inicializa y retorna una instancia cacheada del DataLoader."""
+    return DataLoader()
 
 def main():
-    # Inicializar conexiones
-    client = init_connection()
-    db = client.expedientes_db
-    collection = db.rankings
+    # Inicializar servicios
+    data_loader = get_data_loader()
     
     # Obtener credenciales de Google
     try:
@@ -31,6 +29,13 @@ def main():
         return
 
     st.title("Gestión de Expedientes")
+
+    # Mostrar última actualización de datos
+    st.sidebar.markdown("### Última actualización")
+    for module in MODULES:
+        last_update = data_loader.get_latest_update(module)
+        if last_update:
+            st.sidebar.text(f"{MODULES[module]}: {last_update.strftime('%d/%m/%Y %H:%M')}")
 
     # Selección de módulo
     selected_module = st.sidebar.radio(
@@ -44,9 +49,9 @@ def main():
         spe = SPEModule()
         spe.render_module()
     else:
-        data = load_module_data(selected_module)
+        data = data_loader.load_module_data(selected_module)
         if data is None:
-            st.error("No se encontró el archivo consolidado para este módulo.")
+            st.error("No se encontraron datos para este módulo en la base de datos.")
             return
 
         # Crear pestañas
@@ -71,15 +76,12 @@ def main():
         with tabs[4]:
             render_assignment_report_tab(data)
         with tabs[5]:
-            ranking_report.render_ranking_report_tab(data, selected_module, collection)
-
-def load_module_data(selected_module):
-    if selected_module == 'CCM-LEY':
-        return load_ccm_ley_data()
-    elif selected_module == 'SPE':
-        return load_spe_data()
-    else:
-        return load_consolidated_cached(selected_module)
+            # Usar la misma conexión a MongoDB para el ranking
+            ranking_report.render_ranking_report_tab(
+                data, 
+                selected_module, 
+                data_loader.db.rankings
+            )
 
 if __name__ == "__main__":
     main()

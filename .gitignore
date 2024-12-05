@@ -1,3 +1,28 @@
-.streamlit/
-migra2024-77aaf61899d3.json
+# Archivos de configuración
+.env
+.streamlit/secrets.toml
 .credentials/
+
+# Archivos de datos
+descargas/
+*.xlsx
+*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log

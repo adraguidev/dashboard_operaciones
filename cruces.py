@@ -3,6 +3,7 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from file_utils import confirmar_sobrescritura
 
 # Configuración de rutas
 carpeta_raiz = "C:/report_download/manejo_reportes/"
@@ -36,19 +37,24 @@ hojas_evaluadores = {
 }
 
 def procesar_cruces_combinados():
+    # Crear lista de archivos de salida que se generarán
+    archivos_salida = {
+        tipo: consolidado_path.replace(".xlsx", "_CRUZADO.xlsx")
+        for tipo, consolidado_path in consolidados.items()
+    }
+    
+    if not confirmar_sobrescritura(archivos_salida):
+        print("Proceso de cruces combinados omitido.")
+        return
+        
     for tipo in consolidados.keys():
         try:
             consolidado_path = consolidados[tipo]
             asignaciones_path = archivos_asignaciones[tipo]
             consolidado_filtrado_path = consolidados_filtrados.get(tipo)
             hoja_evaluador = hojas_evaluadores[tipo]
-
-            output_path = consolidado_path.replace(".xlsx", "_CRUZADO.xlsx")
-
-            if os.path.exists(output_path):
-                print(f"El archivo {output_path} ya existe. Saltando...")
-                continue
-
+            
+            output_path = archivos_salida[tipo]
             print(f"Procesando cruces para {tipo}")
 
             if not os.path.exists(consolidado_path) or not os.path.exists(asignaciones_path):
@@ -102,6 +108,7 @@ def procesar_cruces_combinados():
                 ).drop(columns=["EXPEDIENTE"], errors="ignore")
 
             guardar_como_tabla_nueva(output_path, df_consolidado, f"BASE_{tipo}")
+            print(f"Archivo cruzado guardado en: {output_path}")
 
         except Exception as e:
             print(f"Error al procesar {tipo}: {e}")

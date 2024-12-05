@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import shutil
+from file_utils import confirmar_sobrescritura
 
 # Configuración de carpetas y archivos
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -127,12 +128,20 @@ def mover_archivo(output_file, destinos):
         else:
             print(f"El archivo ya se encuentra en {destino}, no se realizó la copia.")
 
-# Ejecución directa del proceso
-for key in input_folders:
-    print(f"\nIniciando procesamiento para {key}...")
-    output_file = output_files[key]
-    destinos = output_paths[key]
-    archivo_generado = consolidar_archivos_filtrados(input_folders[key], output_file)
-    if archivo_generado:
-        mover_archivo(archivo_generado, destinos)
-    print(f"Procesamiento para {key} completado.")
+# Renombrar la ejecución directa a una función principal
+def ejecutar_consolidacion():
+    # Verificar archivos que se crearán
+    if not confirmar_sobrescritura(output_files):
+        print("Proceso de consolidación omitido.")
+        return
+        
+    for key in input_folders:
+        print(f"\nIniciando procesamiento para {key}...")
+        output_file = output_files[key]
+        destinos = output_paths[key]
+        archivo_generado = consolidar_archivos_filtrados(input_folders[key], output_file)
+        if archivo_generado:
+            mover_archivo(archivo_generado, destinos)
+        print(f"Procesamiento para {key} completado.")
+
+# El resto del código permanece igual...

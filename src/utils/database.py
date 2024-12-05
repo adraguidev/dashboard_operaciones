@@ -4,6 +4,8 @@ import streamlit as st
 from google.oauth2 import service_account
 from src.config.settings import GOOGLE_SCOPES
 import pymongo
+from pymongo import MongoClient
+from dotenv import load_dotenv
 
 def get_google_credentials():
     """
@@ -21,22 +23,18 @@ def get_google_credentials():
         )
 
 def get_mongodb_connection():
-    """
-    Obtiene la conexión a MongoDB, ya sea desde st.secrets (cloud)
-    o desde variables de entorno locales
-    """
+    """Obtiene la conexión a MongoDB."""
     try:
-        # Intenta obtener la URI desde st.secrets
-        mongo_uri = st.secrets["connections"]["mongodb"]["uri"]
-    except KeyError:
-        # Si no hay secrets, busca en variables de entorno
-        mongo_uri = os.getenv("MONGODB_URI")
-        if not mongo_uri:
-            raise ValueError(
-                "No se encontró la URI de MongoDB ni en st.secrets ni en variables de entorno"
-            )
-    
-    return pymongo.MongoClient(mongo_uri)
+        # Primero intenta desde secrets de Streamlit
+        return MongoClient(st.secrets["connections"]["mongodb"]["uri"])
+    except:
+        # Si no está en la nube, usa variables de entorno
+        load_dotenv()
+        mongo_uri = os.getenv('MONGODB_URI')
+        password = os.getenv('MONGODB_PASSWORD')
+        if not mongo_uri or not password:
+            raise ValueError("Credenciales de MongoDB no configuradas")
+        return MongoClient(mongo_uri.replace('<db_password>', password))
 
 @st.cache_resource
 def init_connection():

@@ -5,6 +5,7 @@ import glob
 import time
 from concurrent.futures import ThreadPoolExecutor
 from requests_ntlm import HttpNtlmAuth
+from file_utils import confirmar_sobrescritura
 
 # Configuración de parámetros
 tipos_tramite = {
@@ -106,8 +107,69 @@ def consolidate_csv(folder_path, output_filename):
 # Descargar y consolidar archivos
 def descargar_y_consolidar():
     output_folders = crear_carpetas()
+    
+    # Verificar archivos consolidados finales que se crearán
+    archivos_consolidados = {
+        tipo: os.path.join(folder, f"Consolidado_{tipos_tramite[tipo]}.xlsx")
+        for tipo, folder in output_folders.items()
+    }
+    
+    # Verificar archivos CSV existentes
+    archivos_csv_existentes = {}
+    for tipo, folder in output_folders.items():
+        csv_files = glob.glob(os.path.join(folder, "*.csv"))
+        if csv_files:
+            archivos_csv_existentes[tipos_tramite[tipo]] = csv_files
+    
+    if archivos_csv_existentes:
+        print("\nSe encontraron archivos CSV de descargas previas:")
+        for tipo, archivos in archivos_csv_existentes.items():
+            print(f"\n{tipo}:")
+            for archivo in archivos:
+                print(f"- {os.path.basename(archivo)}")
+        
+        while True:
+            respuesta = input("\n¿Desea eliminar los archivos CSV existentes y descargar nuevamente? (s/n): ").lower().strip()
+            if respuesta in ['s', 'n']:
+                if respuesta == 's':
+                    # Eliminar archivos CSV existentes
+                    for archivos in archivos_csv_existentes.values():
+                        for archivo in archivos:
+                            try:
+                                os.remove(archivo)
+                                print(f"Eliminado: {os.path.basename(archivo)}")
+                            except Exception as e:
+                                print(f"Error al eliminar {archivo}: {e}")
+                else:
+                    print("Se conservarán los archivos CSV existentes.")
+                break
+            print("Por favor, responde 's' para sí o 'n' para no.")
+    
+    # Verificar si se desea sobrescribir los consolidados finales
+    if not confirmar_sobrescritura(archivos_consolidados):
+        print("Proceso de consolidación final omitido.")
+        return
+    
     urls_por_partes = generar_urls_por_partes()
     for tipo, urls in urls_por_partes.items():
-        print(f"Iniciando descargas en paralelo para {tipos_tramite[tipo]}...")
-        descargar_en_paralelo(tipo, urls, output_folders[tipo], max_workers=5)
-        consolidate_csv(output_folders[tipo], f"Consolidado_{tipos_tramite[tipo]}.xlsx")
+        print(f"\nIniciando descargas en paralelo para {tipos_tramite[tipo]}...")
+        
+        # Verificar qué archivos CSV faltan
+        folder = output_folders[tipo]
+        archivos_existentes = {os.path.basename(f) for f in glob.glob(os.path.join(folder, "*.csv"))}
+        
+        # Filtrar URLs para descargar solo los archivos faltantes
+        urls_faltantes = []
+        for url, anio, estado in urls:
+            nombre_archivo = f"{anio}_{estado}.csv"
+            if nombre_archivo not in archivos_existentes:
+                urls_faltantes.append((url, anio, estado))
+        
+        if not urls_faltantes:
+            print(f"Todos los archivos CSV ya existen para {tipos_tramite[tipo]}.")
+        else:
+            print(f"Descargando {len(urls_faltantes)} archivos faltantes para {tipos_tramite[tipo]}...")
+            descargar_en_paralelo(tipo, urls_faltantes, folder, max_workers=5)
+        
+        # Consolidar todos los CSV (tanto existentes como nuevos)
+        consolidate_csv(folder, f"Consolidado_{tipos_tramite[tipo]}.xlsx")

@@ -3,6 +3,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from file_utils import confirmar_sobrescritura
 
 # Configuración de los nombres de los consolidados y sus tablas
 carpeta_raiz = "C:/report_download/descargas/"
@@ -25,6 +26,11 @@ def formatear_columnas_fecha(df, columnas):
 
 # Función principal para procesar los consolidados
 def procesar_consolidados():
+    # Verificar archivos consolidados que se modificarán
+    if not confirmar_sobrescritura(consolidados):
+        print("Proceso de gestión de consolidados omitido.")
+        return
+        
     for tabla_nombre, archivo in consolidados.items():
         try:
             if not os.path.exists(archivo):

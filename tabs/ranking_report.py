@@ -13,10 +13,11 @@ def render_ranking_report_tab(data, selected_module, collection):
             st.warning(f"No se encontraron datos para el módulo {selected_module}.")
             return
 
-        # Obtener fecha de ayer
-        yesterday = pd.Timestamp.now().normalize() - pd.Timedelta(days=1)
+        # Usar timestamp de MongoDB
+        yesterday = pd.Timestamp.now(tz='UTC').normalize() - pd.Timedelta(days=1)
         
-        # Filtrar datos hasta ayer
+        # Asegurar que las fechas estén en UTC para consistencia con MongoDB
+        data['FechaPre'] = pd.to_datetime(data['FechaPre']).dt.tz_localize('UTC')
         data_until_yesterday = data[data['FechaPre'] <= yesterday]
         
         # Obtener última fecha registrada
@@ -47,7 +48,7 @@ def render_ranking_report_tab(data, selected_module, collection):
                     except Exception as e:
                         st.error(f"Error al resetear el último día: {str(e)}")
 
-        # Resto del código original...
+        # Resto del c��digo original...
         fecha_actual = datetime.now().date()
         fecha_ayer = fecha_actual - pd.Timedelta(days=1)
         fecha_inicio_excel = fecha_actual - pd.Timedelta(days=7)
@@ -262,8 +263,13 @@ def render_ranking_report_tab(data, selected_module, collection):
 
 def get_last_date_from_db(module, collection):
     """Obtener la última fecha registrada para el módulo."""
-    ultimo_registro = collection.find_one({"modulo": module}, sort=[("fecha", -1)])
-    return ultimo_registro['fecha'] if ultimo_registro else None 
+    ultimo_registro = collection.find_one(
+        {"modulo": module}, 
+        sort=[("fecha", -1)]
+    )
+    if ultimo_registro and 'fecha' in ultimo_registro:
+        return pd.to_datetime(ultimo_registro['fecha'])
+    return None
 
 def prepare_inconsistencias_dataframe(datos_validos):
     """Prepara el DataFrame de inconsistencias para su visualización."""

@@ -37,6 +37,10 @@ def render_entry_analysis_tab(data: pd.DataFrame):
         st.markdown("---")
         render_patterns_analysis(data)
 
+    except Exception as e:
+        st.error(f"Error al procesar los datos: {str(e)}")
+        print(f"Error detallado: {str(e)}")
+
 def render_prediction_chart(data):
     """Renderiza gráfico principal de predicción"""
     daily_counts = data.groupby(data['FechaExpendiente'].dt.date).size().reset_index(name='Ingresos')

@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from config.settings import INACTIVE_EVALUATORS
+from config.settings import INACTIVE_EVALUATORS, VULNERABILIDAD_EVALUATORS
 
 def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
     st.header("Reporte de Pendientes")
@@ -59,19 +59,20 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
         if view_type == "Activos":
             filtered_data = filtered_data[
                 (~filtered_data['EVALASIGN'].isin(INACTIVE_EVALUATORS.get(selected_module, []))) &
+                (~filtered_data['EVALASIGN'].isin(VULNERABILIDAD_EVALUATORS.get(selected_module, []))) &
                 (filtered_data['EVALASIGN'].notna()) &
-                (filtered_data['EVALASIGN'] != 'VULNERABILIDAD') &
+                (filtered_data['EVALASIGN'] != '') &
                 (filtered_data['EVALASIGN'] != 'SUSPENDIDA')
             ]
         elif view_type == "Inactivos":
             filtered_data = filtered_data[
                 (filtered_data['EVALASIGN'].isin(INACTIVE_EVALUATORS.get(selected_module, []))) &
-                (filtered_data['EVALASIGN'] != 'VULNERABILIDAD') &
+                (~filtered_data['EVALASIGN'].isin(VULNERABILIDAD_EVALUATORS.get(selected_module, []))) &
                 (filtered_data['EVALASIGN'] != 'SUSPENDIDA')
             ]
         elif view_type == "Vulnerabilidad":
             filtered_data = filtered_data[
-                filtered_data['EVALASIGN'] == 'VULNERABILIDAD'
+                filtered_data['EVALASIGN'].isin(VULNERABILIDAD_EVALUATORS.get(selected_module, []))
             ]
 
         # Si no hay datos después del filtrado

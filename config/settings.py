@@ -37,7 +37,6 @@ INACTIVE_EVALUATORS = {
         "Aponte Sanchez, Paola Lita",
         "Orcada Herrera, Javier Eduardo",
         "Gomez Vera, Marcos Alberto",
-        "VULNERABILIDAD",
         "SUSPENDIDA"
     ],
     'CCM-ESP': [
@@ -49,7 +48,6 @@ INACTIVE_EVALUATORS = {
         "Aponte Sanchez, Paola Lita",
         "Orcada Herrera, Javier Eduardo",
         "Gomez Vera, Marcos Alberto",
-        "VULNERABILIDAD",
         "SUSPENDIDA"
     ],
     'CCM-LEY': [
@@ -61,7 +59,6 @@ INACTIVE_EVALUATORS = {
         "Aponte Sanchez, Paola Lita",
         "Orcada Herrera, Javier Eduardo",
         "Gomez Vera, Marcos Alberto",
-        "VULNERABILIDAD",
         "SUSPENDIDA"
     ],
     'PRR': [
@@ -77,12 +74,48 @@ INACTIVE_EVALUATORS = {
         "Pumallanque Ramirez, Mariela",
         "Valera Gaviria, Jessica Valeria",
         "Vásquez Fernandez, Anthony Piere",
-        "VULNERABILIDAD",
         "SUSPENDIDA",
         "Quispe Orosco, Karina Wendy",
         "Gomez Vera, Marcos Alberto",
         "Lucero Martinez, Carlos Martin",
         "Aponte Sanchez, Paola Lita"
+    ],
+    'SOL': [],
+    'SPE': []
+}
+
+# Lista de evaluadores de vulnerabilidad por módulo
+VULNERABILIDAD_EVALUATORS = {
+    'CCM': [
+        "Quispe Orosco, Karina Wendy",
+        "Lucero Martinez, Carlos Martin",
+        "Gomez Vera, Marcos Alberto",
+        "Aponte Sanchez, Paola Lita",
+        "Santibañez Chafalote, Lila Mariella",
+        "VULNERABILIDAD"
+    ],
+    'CCM-ESP': [
+        "Quispe Orosco, Karina Wendy",
+        "Lucero Martinez, Carlos Martin",
+        "Gomez Vera, Marcos Alberto",
+        "Aponte Sanchez, Paola Lita",
+        "Santibañez Chafalote, Lila Mariella",
+        "VULNERABILIDAD"
+    ],
+    'CCM-LEY': [
+        "Quispe Orosco, Karina Wendy",
+        "Lucero Martinez, Carlos Martin",
+        "Gomez Vera, Marcos Alberto",
+        "Aponte Sanchez, Paola Lita",
+        "Santibañez Chafalote, Lila Mariella",
+        "VULNERABILIDAD"
+    ],
+    'PRR': [
+        "Quispe Orosco, Karina Wendy",
+        "Lucero Martinez, Carlos Martin",
+        "Gomez Vera, Marcos Alberto",
+        "Aponte Sanchez, Paola Lita",
+        "VULNERABILIDAD"
     ],
     'SOL': [],
     'SPE': []

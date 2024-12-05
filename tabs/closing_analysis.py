@@ -5,7 +5,7 @@ from io import BytesIO
 
 def render_closing_analysis_tab(data: pd.DataFrame):
     try:
-        st.header("Cierre de Expedientes")
+        st.header("🎯 Análisis de Cierre de Expedientes")
         
         # Validar datos
         if data is None or data.empty:
@@ -19,18 +19,56 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         # Filtrar datos nulos
         data = data.dropna(subset=['FechaPre', 'FechaExpendiente'])
 
-        # Selección del rango de fechas
-        st.subheader("Selecciona el Rango de Fechas para la Matriz de Cierre")
-        range_options = ["Últimos 15 días", "Últimos 30 días", "Durante el último mes"]
-        selected_range = st.radio("Rango de Fechas", range_options, index=0)
+        # 1. Panel de Control de Cierres
+        st.subheader("📊 Panel de Control de Cierres")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            total_cerrados = len(data[data['FechaPre'].notna()])
+            st.metric(
+                "Total Expedientes Cerrados",
+                f"{total_cerrados:,d}",
+                help="Número total de expedientes que han sido cerrados"
+            )
+        
+        with col2:
+            tiempo_promedio = (data['FechaPre'] - data['FechaExpendiente']).dt.days.mean()
+            st.metric(
+                "Tiempo Promedio de Cierre",
+                f"{tiempo_promedio:.1f} días",
+                help="Promedio de días entre ingreso y cierre"
+            )
+        
+        with col3:
+            cierres_hoy = len(data[data['FechaPre'].dt.date == pd.Timestamp.now().date()])
+            st.metric(
+                "Cierres del Día",
+                f"{cierres_hoy:,d}",
+                help="Expedientes cerrados en el día actual"
+            )
+
+        # 2. Selección del rango de fechas
+        st.markdown("---")
+        st.subheader("📅 Matriz de Cierre por Período")
+        
+        range_options = {
+            "Últimos 15 días": 15,
+            "Últimos 30 días": 30,
+            "Durante el último mes": "month"
+        }
+        
+        selected_range = st.radio(
+            "Seleccionar Período de Análisis",
+            options=list(range_options.keys()),
+            horizontal=True
+        )
 
         # Determinar el rango de fechas basado en la selección
-        if selected_range == "Últimos 15 días":
-            date_threshold = pd.Timestamp.now() - pd.DateOffset(days=15)
-        elif selected_range == "Últimos 30 días":
-            date_threshold = pd.Timestamp.now() - pd.DateOffset(days=30)
-        elif selected_range == "Durante el último mes":
-            date_threshold = pd.Timestamp.now().replace(day=1)  # Inicio del mes actual
+        if selected_range == "Durante el último mes":
+            date_threshold = pd.Timestamp.now().replace(day=1)
+        else:
+            days = range_options[selected_range]
+            date_threshold = pd.Timestamp.now() - pd.DateOffset(days=days)
 
         cierre_data_range = data[data['FechaPre'] >= date_threshold].copy()
 

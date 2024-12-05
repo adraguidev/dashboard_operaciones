@@ -88,14 +88,42 @@ def render_daily_entries_table(data):
     last_30_days = data[data['FechaExpendiente'] >= (pd.Timestamp.now() - pd.DateOffset(days=30))]
     daily_counts = last_30_days.groupby(last_30_days['FechaExpendiente'].dt.date).agg({
         'NumeroTramite': 'count',
-        'TipoTramite': lambda x: ', '.join(x.unique())
+        'ESTADO': lambda x: ', '.join(x.unique()),
+        'Dependencia': lambda x: ', '.join(x.unique())
     }).reset_index()
     
-    daily_counts.columns = ['Fecha', 'Total Ingresos', 'Tipos de Trámite']
+    daily_counts.columns = ['Fecha', 'Total Ingresos', 'Estados', 'Dependencias']
     daily_counts['Fecha'] = daily_counts['Fecha'].dt.strftime('%d/%m/%Y')
     
-    # Mostrar tabla
+    # Ordenar por fecha descendente
+    daily_counts = daily_counts.sort_values('Fecha', ascending=False)
+    
+    # Agregar columna de promedio móvil de 7 días
+    daily_counts['Promedio 7 días'] = daily_counts['Total Ingresos'].rolling(7, min_periods=1).mean().round(1)
+    
+    # Reordenar columnas
+    columns_order = ['Fecha', 'Total Ingresos', 'Promedio 7 días', 'Estados', 'Dependencias']
+    daily_counts = daily_counts[columns_order]
+    
+    # Mostrar tabla con formato mejorado
     st.dataframe(
-        daily_counts.sort_values('Fecha', ascending=False),
-        use_container_width=True
-    ) 
+        daily_counts,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            'Fecha': st.column_config.TextColumn('Fecha', width='small'),
+            'Total Ingresos': st.column_config.NumberColumn('Total Ingresos', format='%d'),
+            'Promedio 7 días': st.column_config.NumberColumn('Promedio 7 días', format='%.1f'),
+            'Estados': st.column_config.TextColumn('Estados', width='medium'),
+            'Dependencias': st.column_config.TextColumn('Dependencias', width='medium')
+        }
+    )
+    
+    # Mostrar estadísticas resumen
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Promedio diario", f"{daily_counts['Total Ingresos'].mean():.1f}")
+    with col2:
+        st.metric("Total del período", f"{daily_counts['Total Ingresos'].sum():,.0f}")
+    with col3:
+        st.metric("Días con registros", f"{len(daily_counts):,d}") 

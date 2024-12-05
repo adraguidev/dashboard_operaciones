@@ -22,6 +22,7 @@ def render_entry_analysis_tab(data: pd.DataFrame):
         
         # Preparar datos
         last_30_days = data[data['FechaExpendiente'] >= (pd.Timestamp.now() - pd.DateOffset(days=30))]
+        last_30_days['ESTADO'] = last_30_days['ESTADO'].fillna('Sin Estado')
         daily_counts = last_30_days.groupby(last_30_days['FechaExpendiente'].dt.date).agg({
             'NumeroTramite': 'count',
             'ESTADO': lambda x: ', '.join(x.unique())

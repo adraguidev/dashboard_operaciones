@@ -110,17 +110,52 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             else:
                 st.info("No hay nuevos datos para guardar")
         
-        # Mostrar gráfico de tendencias
-        st.subheader("📈 Tendencia de Expedientes Trabajados")
+        # En lugar del gráfico, mostrar ranking por evaluador
+        st.subheader("🏆 Ranking de Evaluadores")
         if not datos_nuevos.empty:
-            fig = px.line(
-                datos_nuevos.groupby('FECHA DE TRABAJO').size().reset_index(name='cantidad'),
-                x='FECHA DE TRABAJO',
-                y='cantidad',
-                title="Expedientes Trabajados por Día",
-                labels={'FECHA DE TRABAJO': 'Fecha', 'cantidad': 'Expedientes'}
+            # Agrupar por evaluador
+            ranking_evaluadores = datos_nuevos.groupby('EVALASIGN').size().reset_index(name='Expedientes')
+            ranking_evaluadores = ranking_evaluadores.sort_values('Expedientes', ascending=False)
+            
+            # Calcular porcentaje del total
+            total_expedientes = ranking_evaluadores['Expedientes'].sum()
+            ranking_evaluadores['Porcentaje'] = (ranking_evaluadores['Expedientes'] / total_expedientes * 100).round(2)
+            
+            # Agregar posición en el ranking
+            ranking_evaluadores.insert(0, 'Posición', range(1, len(ranking_evaluadores) + 1))
+            
+            # Mostrar tabla de ranking
+            st.dataframe(
+                ranking_evaluadores,
+                use_container_width=True,
+                column_config={
+                    "Posición": st.column_config.NumberColumn(
+                        "🏅 Posición",
+                        help="Posición en el ranking"
+                    ),
+                    "EVALASIGN": st.column_config.TextColumn(
+                        "👨‍💼 Evaluador"
+                    ),
+                    "Expedientes": st.column_config.NumberColumn(
+                        "📊 Expedientes Trabajados",
+                        help="Cantidad total de expedientes trabajados"
+                    ),
+                    "Porcentaje": st.column_config.NumberColumn(
+                        "📈 % del Total",
+                        help="Porcentaje del total de expedientes",
+                        format="%.2f%%"
+                    )
+                },
+                hide_index=True
             )
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # Mostrar top 3 con emojis
+            st.markdown("### 🏆 Top 3 Evaluadores")
+            top_3 = ranking_evaluadores.head(3)
+            
+            for idx, row in top_3.iterrows():
+                emoji = "🥇" if row['Posición'] == 1 else "🥈" if row['Posición'] == 2 else "🥉"
+                st.markdown(f"{emoji} **{row['EVALASIGN']}** - {row['Expedientes']} expedientes ({row['Porcentaje']}%)")
 
     except Exception as e:
         st.error(f"Error al procesar el ranking: {str(e)}")

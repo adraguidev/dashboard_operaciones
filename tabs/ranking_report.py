@@ -77,6 +77,22 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
             matriz_ranking = matriz_ranking.reset_index()
 
+            # Aplicar CSS personalizado para centrar números y fijar primera columna
+            st.markdown("""
+                <style>
+                    .stDataFrame td:not(:first-child) {
+                        text-align: center !important;
+                    }
+                    .stDataFrame th:first-child, 
+                    .stDataFrame td:first-child {
+                        position: sticky;
+                        left: 0;
+                        background: white;
+                        z-index: 1;
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+            
             # Mostrar matriz
             st.subheader("📊 Matriz de Expedientes Trabajados por Evaluador")
             st.dataframe(
@@ -86,7 +102,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     "evaluador": st.column_config.TextColumn(
                         "👨‍💼 Evaluador",
                         width="large",
-                        required=True
+                        frozen=True  # Fijar la columna
                     ),
                     "Total": st.column_config.NumberColumn(
                         "📊 Total",
@@ -98,7 +114,8 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                             col,
                             width="small",
                             help="Expedientes trabajados",
-                            format="%d"
+                            format="%d",
+                            step=1
                         )
                         for col in matriz_ranking.columns
                         if col not in ["evaluador", "Total"]

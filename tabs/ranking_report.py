@@ -68,10 +68,10 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     columnas_formateadas[col] = col
                 elif isinstance(col, (datetime, pd.Timestamp)):
                     # Convertir la fecha al formato dd/mm
-                    fecha_formateada = col.strftime('%d/%m')
-                    # Asegurarnos que el día tenga dos dígitos
+                    fecha_formateada = pd.to_datetime(col).strftime('%d/%m')
+                    # Asegurarnos que el día y mes tengan dos dígitos
                     dia, mes = fecha_formateada.split('/')
-                    columnas_formateadas[col] = f"{dia:0>2}/{mes:0>2}"
+                    columnas_formateadas[col] = f"{int(dia):02d}/{int(mes):02d}"
                 else:
                     columnas_formateadas[col] = col
             

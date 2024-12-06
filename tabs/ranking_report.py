@@ -351,6 +351,26 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         if not expedientes_sin_evaluador.empty:
             st.warning(f"Se encontraron {len(expedientes_sin_evaluador)} expedientes sin evaluador asignado")
             
+            # Convertir timestamps a fechas legibles
+            for fecha_col in ['FechaExpendiente', 'FechaEtapaAprobacionMasivaFin', 'FechaPre']:
+                if fecha_col in expedientes_sin_evaluador.columns:
+                    try:
+                        # Convertir valores numéricos a fechas
+                        mask_numeric = expedientes_sin_evaluador[fecha_col].astype(str).str.match(r'^\d+$')
+                        if mask_numeric.any():
+                            expedientes_sin_evaluador.loc[mask_numeric, fecha_col] = pd.to_datetime(
+                                expedientes_sin_evaluador.loc[mask_numeric, fecha_col].astype(float) / 1000,
+                                unit='s'
+                            )
+                        
+                        # Convertir todas las fechas a formato dd/mm/yyyy
+                        expedientes_sin_evaluador[fecha_col] = pd.to_datetime(
+                            expedientes_sin_evaluador[fecha_col], 
+                            errors='coerce'
+                        ).dt.strftime('%d/%m/%Y')
+                    except Exception as e:
+                        print(f"Error al convertir {fecha_col}: {str(e)}")
+            
             # Mostrar todas las columnas disponibles
             st.dataframe(
                 expedientes_sin_evaluador,

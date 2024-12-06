@@ -67,7 +67,7 @@ def load_ccm_ley_data():
     ccm_esp_data = load_consolidated_cached('CCM-ESP')
     
     if ccm_data is not None and ccm_esp_data is not None:
-        # Filtrar CCM-LEY
+        # Filtrar CCM-LEY: registros de CCM que no están en CCM-ESP
         ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
         return process_loaded_data(ccm_ley_data)
     

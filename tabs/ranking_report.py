@@ -2,6 +2,22 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
+import os
+
+@st.cache_data
+def load_consolidated_cached(module_name):
+    """Carga datos consolidados del módulo especificado."""
+    folder = f"descargas/{module_name}"
+    for file in os.listdir(folder):
+        if file.startswith(f"Consolidado_{module_name}_CRUZADO") and file.endswith(".xlsx"):
+            file_path = os.path.join(folder, file)
+            data = pd.read_excel(file_path)
+            data['Anio'] = data['Anio'].astype(int)
+            data['Mes'] = data['Mes'].astype(int)
+            if 'FechaExpendiente' in data.columns:
+                data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'])
+            return data
+    return None
 
 def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings_collection):
     try:
@@ -10,6 +26,23 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         if data is None or data.empty:
             st.error("No hay datos disponibles para mostrar")
             return
+
+        # Agregar procesamiento especial para CCM-LEY
+        if selected_module == 'CCM-LEY':
+            # Obtener datos de CCM y CCM-ESP
+            ccm_data = load_consolidated_cached('CCM')
+            ccm_esp_data = load_consolidated_cached('CCM-ESP')
+            
+            if ccm_data is not None and ccm_esp_data is not None:
+                # Filtrar CCM-LEY: registros de CCM que no están en CCM-ESP
+                data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
+                
+                # Verificar si existe la columna TipoTramite y filtrar
+                if 'TipoTramite' in data.columns:
+                    data = data[data['TipoTramite'] == 'LEY'].copy()
+            else:
+                st.error("No se pudieron cargar los datos necesarios para CCM-LEY")
+                return
 
         # Obtener última fecha registrada en MongoDB
         ultima_fecha_registrada = get_last_date_from_db(selected_module, rankings_collection)
@@ -69,7 +102,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             # Ordenar las columnas de fecha
             columnas_fecha = [col for col in matriz_ranking.columns if col != 'Evaluador']
             
-            # Asegurar que tengamos exactamente los últimos 15 días
+            # Asegurar que tengamos exactamente los últimos 15 das
             fecha_fin = fecha_ayer
             fecha_inicio_15 = fecha_fin - timedelta(days=14)  # 14 días atrás para tener 15 días en total
             
@@ -577,36 +610,55 @@ def get_rankings_from_db(module, collection, start_date):
         start_datetime = datetime.combine(start_date, datetime.min.time())
         end_datetime = datetime.combine(datetime.now().date(), datetime.min.time())
         
-        # Modificar la consulta para usar una sintaxis más simple
+        st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
+        
+        # Buscar registros del módulo específico sin filtro de fecha inicial
         registros = collection.find({
-            "modulo": module,
-            "fecha": {
-                "$gte": start_datetime,
-                "$lte": end_datetime
-            }
-        }).sort("fecha", 1)
+            "modulo": module
+        }).sort([("fecha.$date.$numberLong", 1)])
         
         data_list = []
+        fechas_procesadas = set()
         
         for registro in registros:
             try:
-                fecha = registro['fecha']
-                if isinstance(fecha, datetime):
-                    for evaluador_data in registro.get('datos', []):
-                        cantidad = evaluador_data.get('cantidad')
-                        if isinstance(cantidad, dict):
-                            cantidad = int(cantidad.get('$numberInt', 0))
+                if 'fecha' in registro and isinstance(registro['fecha'], dict):
+                    if '$date' in registro['fecha'] and '$numberLong' in registro['fecha']['$date']:
+                        timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
+                        fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
                         
-                        data_list.append({
-                            'fecha': fecha,
-                            'evaluador': evaluador_data['evaluador'],
-                            'cantidad': int(cantidad) if cantidad is not None else 0
-                        })
+                        # Solo procesar si está en el rango de fechas deseado
+                        if start_date <= fecha <= end_datetime.date():
+                            st.write(f"Procesando registro con fecha: {fecha}")
+                            fechas_procesadas.add(fecha)
+                            
+                            if 'datos' in registro:
+                                for evaluador_data in registro['datos']:
+                                    cantidad = evaluador_data.get('cantidad')
+                                    if isinstance(cantidad, dict) and '$numberInt' in cantidad:
+                                        cantidad = int(cantidad['$numberInt'])
+                                    elif cantidad is not None:
+                                        cantidad = int(cantidad)
+                                    
+                                    data_list.append({
+                                        'fecha': fecha,
+                                        'evaluador': evaluador_data['evaluador'],
+                                        'cantidad': cantidad
+                                    })
+
             except Exception as e:
-                st.write(f"Error procesando registro individual: {str(e)}")
+                st.write(f"Error procesando registro: {str(e)}")
+                st.write(f"Registro problemático: {registro}")
                 continue
 
-        return pd.DataFrame(data_list) if data_list else pd.DataFrame()
+        st.write(f"Fechas encontradas: {sorted(fechas_procesadas)}")
+
+        if data_list:
+            df = pd.DataFrame(data_list)
+            st.write(f"Total registros: {len(df)}")
+            return df
+
+        return pd.DataFrame()
         
     except Exception as e:
         st.write(f"Error al obtener rankings: {str(e)}")

@@ -86,7 +86,29 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             st.dataframe(
                 matriz_ranking,
                 use_container_width=True,
-                hide_index=True
+                hide_index=True,
+                column_config={
+                    "Evaluador": st.column_config.Column(
+                        "👨‍💼 Evaluador",
+                        width="large",
+                        sticky=True  # Esta es la clave para fijar la columna
+                    ),
+                    "Total": st.column_config.NumberColumn(
+                        "📊 Total",
+                        help="Total de expedientes trabajados",
+                        format="%d"
+                    ),
+                    **{
+                        col: st.column_config.NumberColumn(
+                            col,
+                            help="Expedientes trabajados",
+                            format="%d",
+                            width="small"
+                        )
+                        for col in matriz_ranking.columns
+                        if col not in ["Evaluador", "Total"]
+                    }
+                }
             )
 
         # Opciones para guardar/resetear datos

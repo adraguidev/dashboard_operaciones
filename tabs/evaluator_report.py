@@ -11,10 +11,12 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             st.error("No hay datos disponibles para mostrar")
             return
 
-        # Verificar si es módulo SOL por la estructura de los datos
-        is_sol_module = ('EVALASIGN' not in data.columns or 
-                        data['EVALASIGN'].isna().all() or 
-                        (data['EVALASIGN'] == '').all())
+        # Verificar si es módulo SOL de manera más precisa
+        is_sol_module = (
+            'EstadoTramite' in data.columns and 
+            'ESTADO' not in data.columns and
+            ('EVALASIGN' not in data.columns or data['EVALASIGN'].isna().all())
+        )
 
         if is_sol_module:
             # Filtros específicos para SOL
@@ -150,6 +152,12 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 st.info("No se encontraron expedientes con los filtros seleccionados")
 
         else:
+            # Verificar que existen las columnas necesarias para otros módulos
+            required_columns = ['EVALASIGN', 'ESTADO', 'Evaluado']
+            if not all(col in data.columns for col in required_columns):
+                st.error("Estructura de datos no válida para este módulo")
+                return
+
             # Código existente para otros módulos
             data['EVALASIGN'] = data['EVALASIGN'].fillna('')
             evaluators = sorted(data[data['EVALASIGN'] != '']['EVALASIGN'].unique())

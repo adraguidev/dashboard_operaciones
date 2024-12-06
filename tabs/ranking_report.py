@@ -577,7 +577,7 @@ def get_rankings_from_db(module, collection, start_date):
         start_datetime = datetime.combine(start_date, datetime.min.time())
         end_datetime = datetime.combine(datetime.now().date(), datetime.min.time())
         
-        print(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
+        st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
         
         # Buscar todos los registros del módulo sin filtro de fecha
         registros = collection.find({
@@ -585,7 +585,7 @@ def get_rankings_from_db(module, collection, start_date):
         }).sort("fecha", 1)
         
         data_list = []
-        fechas_procesadas = set()  # Para debug
+        fechas_procesadas = set()
         
         for registro in registros:
             try:
@@ -597,8 +597,8 @@ def get_rankings_from_db(module, collection, start_date):
                     elif isinstance(registro['fecha'], datetime):
                         fecha = registro['fecha'].date()
 
-                    fechas_procesadas.add(fecha)  # Para debug
-                    print(f"Procesando registro con fecha: {fecha}")
+                    fechas_procesadas.add(fecha)
+                    st.write(f"Procesando registro con fecha: {fecha}")
 
                     if fecha and 'datos' in registro:
                         for evaluador_data in registro['datos']:
@@ -614,30 +614,30 @@ def get_rankings_from_db(module, collection, start_date):
                                 'cantidad': cantidad
                             })
             except Exception as e:
-                print(f"Error procesando registro: {str(e)}")
+                st.write(f"Error procesando registro: {str(e)}")
                 continue
 
-        print(f"Todas las fechas encontradas: {sorted(fechas_procesadas)}")  # Debug
+        st.write(f"Todas las fechas encontradas: {sorted(fechas_procesadas)}")
 
         if data_list:
             df = pd.DataFrame(data_list)
-            print(f"Fechas únicas en DataFrame antes del filtro: {sorted(df['fecha'].unique())}")
+            st.write(f"Fechas únicas en DataFrame antes del filtro: {sorted(df['fecha'].unique())}")
             
             # Filtrar por rango de fechas después de crear el DataFrame
             mask = (df['fecha'] >= start_date) & (df['fecha'] <= end_datetime.date())
-            print(f"Registros que cumplen el filtro de fechas: {sum(mask)}")
+            st.write(f"Registros que cumplen el filtro de fechas: {sum(mask)}")
             df = df[mask]
             
-            print(f"Fechas únicas en DataFrame después del filtro: {sorted(df['fecha'].unique())}")
-            print(f"Total de registros en DataFrame final: {len(df)}")
+            st.write(f"Fechas únicas en DataFrame después del filtro: {sorted(df['fecha'].unique())}")
+            st.write(f"Total de registros en DataFrame final: {len(df)}")
             
             return df
 
         return pd.DataFrame()
         
     except Exception as e:
-        print(f"Error al obtener rankings: {str(e)}")
-        print(f"Detalles del error: {str(e.__class__.__name__)}")
+        st.write(f"Error al obtener rankings: {str(e)}")
+        st.write(f"Detalles del error: {str(e.__class__.__name__)}")
         return pd.DataFrame()
 
 def save_rankings_to_db(module, collection, data):

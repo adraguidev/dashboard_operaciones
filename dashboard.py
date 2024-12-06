@@ -23,8 +23,9 @@ def get_data_loader():
     """Inicializa y retorna una instancia cacheada del DataLoader."""
     try:
         loader = DataLoader()
-        # Verificar conexión
-        loader.db.command('ping')
+        # Verificar conexión a ambas bases de datos
+        loader.migraciones_db.command('ping')
+        loader.expedientes_db.command('ping')
         return loader
     except Exception as e:
         st.error(f"Error al inicializar DataLoader: {str(e)}")

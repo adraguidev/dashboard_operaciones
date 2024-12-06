@@ -149,4 +149,4 @@ class DataLoader:
 
     def get_rankings_collection(_self):
         """Retorna la colección de rankings de expedientes_db."""
-        return _self.expedientes_db.rankings
+        return _self.expedientes_db['rankings']

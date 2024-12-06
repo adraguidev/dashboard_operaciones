@@ -451,7 +451,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
 
         # Sección de inconsistencias
         st.markdown("---")
-        st.subheader("⚠️ Inconsistencias Detectadas")
+        st.subheader("⚠��� Inconsistencias Detectadas")
 
         # Filtrar expedientes sin evaluador
         expedientes_sin_evaluador = data[
@@ -579,9 +579,17 @@ def get_rankings_from_db(module, collection, start_date):
         
         st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
         
-        # Buscar todos los registros del módulo sin filtro de fecha
+        # Convertir las fechas a timestamps para la consulta
+        start_timestamp = int(start_datetime.timestamp() * 1000)
+        end_timestamp = int(end_datetime.timestamp() * 1000)
+        
+        # Buscar registros usando el formato de timestamp de MongoDB
         registros = collection.find({
-            "modulo": module
+            "modulo": module,
+            "fecha.$date.$numberLong": {
+                "$gte": str(start_timestamp),
+                "$lte": str(end_timestamp)
+            }
         }).sort("fecha", 1)
         
         data_list = []
@@ -597,22 +605,23 @@ def get_rankings_from_db(module, collection, start_date):
                     elif isinstance(registro['fecha'], datetime):
                         fecha = registro['fecha'].date()
 
-                    fechas_procesadas.add(fecha)
-                    st.write(f"Procesando registro con fecha: {fecha}")
+                    if fecha:
+                        fechas_procesadas.add(fecha)
+                        st.write(f"Procesando registro con fecha: {fecha}")
 
-                    if fecha and 'datos' in registro:
-                        for evaluador_data in registro['datos']:
-                            cantidad = evaluador_data.get('cantidad')
-                            if isinstance(cantidad, dict) and '$numberInt' in cantidad:
-                                cantidad = int(cantidad['$numberInt'])
-                            elif cantidad is not None:
-                                cantidad = int(cantidad)
-                            
-                            data_list.append({
-                                'fecha': fecha,
-                                'evaluador': evaluador_data['evaluador'],
-                                'cantidad': cantidad
-                            })
+                        if 'datos' in registro:
+                            for evaluador_data in registro['datos']:
+                                cantidad = evaluador_data.get('cantidad')
+                                if isinstance(cantidad, dict) and '$numberInt' in cantidad:
+                                    cantidad = int(cantidad['$numberInt'])
+                                elif cantidad is not None:
+                                    cantidad = int(cantidad)
+                                
+                                data_list.append({
+                                    'fecha': fecha,
+                                    'evaluador': evaluador_data['evaluador'],
+                                    'cantidad': cantidad
+                                })
             except Exception as e:
                 st.write(f"Error procesando registro: {str(e)}")
                 continue
@@ -623,13 +632,8 @@ def get_rankings_from_db(module, collection, start_date):
             df = pd.DataFrame(data_list)
             st.write(f"Fechas únicas en DataFrame antes del filtro: {sorted(df['fecha'].unique())}")
             
-            # Filtrar por rango de fechas después de crear el DataFrame
-            mask = (df['fecha'] >= start_date) & (df['fecha'] <= end_datetime.date())
-            st.write(f"Registros que cumplen el filtro de fechas: {sum(mask)}")
-            df = df[mask]
-            
-            st.write(f"Fechas únicas en DataFrame después del filtro: {sorted(df['fecha'].unique())}")
-            st.write(f"Total de registros en DataFrame final: {len(df)}")
+            # Ya no necesitamos filtrar por fechas aquí porque la consulta MongoDB ya lo hizo
+            st.write(f"Total de registros en DataFrame: {len(df)}")
             
             return df
 

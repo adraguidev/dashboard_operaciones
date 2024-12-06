@@ -252,9 +252,12 @@ def save_rankings_to_db(module, collection, data):
 def reset_last_day(module, collection, last_date):
     """Eliminar registros del último día."""
     try:
+        # Convertir last_date (date) a datetime
+        last_datetime = datetime.combine(last_date, datetime.min.time())
+        
         collection.delete_one({
             "modulo": module,
-            "fecha": last_date
+            "fecha": last_datetime
         })
     except Exception as e:
         raise Exception(f"Error al resetear último día: {str(e)}")

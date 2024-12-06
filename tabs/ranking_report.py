@@ -227,21 +227,31 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     fecha_datetime = datetime.combine(fecha_editar, datetime.min.time())
                     
                     # Buscar el documento existente
-                    documento = collection.find_one({
+                    documento = rankings_collection.find_one({
                         "fecha": fecha_datetime,
                         "modulo": selected_module
                     })
                     
                     if documento:
                         # Actualizar el valor específico
-                        datos_actualizados = documento['datos']
+                        datos_actualizados = documento.get('datos', [])
+                        evaluador_encontrado = False
+                        
                         for dato in datos_actualizados:
                             if dato['evaluador'] == evaluador_editar:
                                 dato['cantidad'] = nuevo_valor
+                                evaluador_encontrado = True
                                 break
                         
-                        # Actualizar documento en MongoDB
-                        collection.update_one(
+                        # Si no se encontró el evaluador, agregarlo
+                        if not evaluador_encontrado:
+                            datos_actualizados.append({
+                                "evaluador": evaluador_editar,
+                                "cantidad": nuevo_valor
+                            })
+                        
+                        # Actualizar documento en MongoDB usando update_one
+                        rankings_collection.update_one(
                             {
                                 "fecha": fecha_datetime,
                                 "modulo": selected_module
@@ -256,7 +266,19 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                         st.success("✅ Registro actualizado correctamente")
                         st.rerun()
                     else:
-                        st.error("❌ No se encontró el registro en la base de datos")
+                        # Si no existe el documento, crearlo
+                        nuevo_documento = {
+                            "fecha": fecha_datetime,
+                            "modulo": selected_module,
+                            "datos": [{
+                                "evaluador": evaluador_editar,
+                                "cantidad": nuevo_valor
+                            }]
+                        }
+                        rankings_collection.insert_one(nuevo_documento)
+                        st.success("✅ Nuevo registro creado correctamente")
+                        st.rerun()
+                        
                 except Exception as e:
                     st.error(f"❌ Error al actualizar el registro: {str(e)}")
         else:
@@ -287,7 +309,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     (data['FECHA DE TRABAJO'].notna())  # Asegurar que la fecha no sea nula
                 ]['FECHA DE TRABAJO'].dt.date.unique()
                 
-                # Filtrar fechas válidas
+                # Filtrar fechas v��lidas
                 fechas_disponibles = [f for f in fechas_disponibles if f is not None]
                 fechas_disponibles = sorted(fechas_disponibles)[-15:]  # Últimos 15 días
                 

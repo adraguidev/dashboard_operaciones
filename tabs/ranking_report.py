@@ -181,37 +181,79 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     # Mostrar cantidad de expedientes encontrados
                     st.info(f"📁 {len(expedientes)} expedientes encontrados")
                     
-                    # Seleccionar y ordenar columnas relevantes
-                    columnas_mostrar = [
-                        'NumeroTramite', 
-                        'FECHA DE TRABAJO',
+                    # Lista completa de columnas deseadas
+                    columnas_deseadas = [
+                        'Dependencia',
+                        'Anio',
+                        'Mes',
+                        'NumeroTramite',
+                        'UltimaEtapa',
+                        'FechaExpendiente',
+                        'FechaEtapaAprobacionMasivaFin',
+                        'FechaPre',
+                        'OperadorPre',
+                        'EstadoPre',
+                        'EstadoTramite',
+                        'Pre_Concluido',
+                        'Evaluado',
                         'EVALASIGN',
                         'ESTADO',
-                        'TIPO DE TRAMITE'
+                        'DESCRIPCION',
+                        'FECHA DE TRABAJO'
                     ]
+                    
+                    # Filtrar solo las columnas que existen en el DataFrame
+                    columnas_mostrar = [col for col in columnas_deseadas if col in expedientes.columns]
                     expedientes_mostrar = expedientes[columnas_mostrar].sort_values('NumeroTramite')
+                    
+                    # Configuración de columnas para la visualización
+                    column_config = {
+                        "NumeroTramite": st.column_config.TextColumn(
+                            "N° Expediente",
+                            width="medium"
+                        ),
+                        "FECHA DE TRABAJO": st.column_config.DateColumn(
+                            "Fecha de Trabajo",
+                            format="DD/MM/YYYY"
+                        ),
+                        "FechaExpendiente": st.column_config.TextColumn(
+                            "Fecha Expediente",
+                            width="medium"
+                        ),
+                        "FechaEtapaAprobacionMasivaFin": st.column_config.TextColumn(
+                            "Fecha Aprobación",
+                            width="medium"
+                        ),
+                        "UltimaEtapa": st.column_config.TextColumn(
+                            "Última Etapa",
+                            width="large"
+                        ),
+                        "EstadoTramite": st.column_config.TextColumn(
+                            "Estado Trámite",
+                            width="medium"
+                        ),
+                        "EVALASIGN": "Evaluador",
+                        "ESTADO": "Estado",
+                        "Dependencia": "Dependencia",
+                        "Anio": st.column_config.NumberColumn(
+                            "Año",
+                            format="%d"
+                        ),
+                        "Mes": st.column_config.NumberColumn(
+                            "Mes",
+                            format="%d"
+                        )
+                    }
                     
                     # Mostrar tabla de expedientes
                     st.dataframe(
                         expedientes_mostrar,
                         use_container_width=True,
-                        column_config={
-                            "NumeroTramite": st.column_config.TextColumn(
-                                "N° Expediente",
-                                width="medium"
-                            ),
-                            "FECHA DE TRABAJO": st.column_config.DateColumn(
-                                "Fecha",
-                                format="DD/MM/YYYY"
-                            ),
-                            "EVALASIGN": "Evaluador",
-                            "ESTADO": "Estado",
-                            "TIPO DE TRAMITE": "Tipo de Trámite"
-                        },
+                        column_config=column_config,
                         hide_index=True
                     )
                     
-                    # Botón para descargar
+                    # Botón para descargar todos los datos
                     if st.download_button(
                         label="📥 Descargar Expedientes",
                         data=expedientes_mostrar.to_csv(index=False),

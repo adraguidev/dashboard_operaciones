@@ -44,6 +44,13 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
 
         # Crear matriz de ranking solo con datos históricos
         if not datos_historicos.empty:
+            # Filtrar registros sin evaluador de los datos históricos
+            datos_historicos = datos_historicos[
+                (datos_historicos['evaluador'].notna()) &
+                (datos_historicos['evaluador'] != '') &
+                (datos_historicos['evaluador'].str.strip() != '')
+            ]
+            
             # Convertir la columna 'fecha' a datetime si no lo está ya
             datos_historicos['fecha'] = pd.to_datetime(datos_historicos['fecha'])
             

@@ -584,68 +584,48 @@ def get_rankings_from_db(module, collection, start_date):
                     "$gte": start_datetime,
                     "$lte": end_datetime
                 }},
-                {"$or": [
-                    {"modulo": module},
-                    {"modulo": {"$exists": False}}
-                ]}
+                {"modulo": module}  # Solo buscar registros del módulo específico
             ]
         }).sort("fecha", 1)
         
         data_list = []
         for registro in registros:
-            # Convertir el timestamp de MongoDB a fecha
-            if 'fecha' in registro:
-                if isinstance(registro['fecha'], dict) and '$date' in registro['fecha']:
-                    # Si es un timestamp en formato MongoDB
-                    timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
-                    fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
-                else:
-                    # Si es un datetime normal
-                    fecha = registro['fecha'].date() if isinstance(registro['fecha'], datetime) else None
-                
-                if fecha and 'datos' in registro:
-                    for evaluador_data in registro['datos']:
-                        cantidad = evaluador_data.get('cantidad')
-                        # Manejar el caso donde cantidad es un dict con $numberInt
-                        if isinstance(cantidad, dict) and '$numberInt' in cantidad:
-                            cantidad = int(cantidad['$numberInt'])
-                        
-                        data_list.append({
-                            'fecha': fecha,
-                            'evaluador': evaluador_data['evaluador'],
-                            'cantidad': int(cantidad) if cantidad is not None else 0
-                        })
-        
+            try:
+                # Manejar diferentes formatos de fecha de MongoDB
+                if 'fecha' in registro:
+                    fecha = None
+                    if isinstance(registro['fecha'], dict):
+                        if '$date' in registro['fecha']:
+                            # Formato MongoDB extendido
+                            timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
+                            fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                    else:
+                        # Formato datetime normal
+                        fecha = registro['fecha'].date() if isinstance(registro['fecha'], datetime) else None
+
+                    if fecha and 'datos' in registro:
+                        for evaluador_data in registro['datos']:
+                            cantidad = evaluador_data.get('cantidad')
+                            if isinstance(cantidad, dict) and '$numberInt' in cantidad:
+                                cantidad = int(cantidad['$numberInt'])
+                            elif cantidad is not None:
+                                cantidad = int(cantidad)
+                            
+                            data_list.append({
+                                'fecha': fecha,
+                                'evaluador': evaluador_data['evaluador'],
+                                'cantidad': cantidad
+                            })
+            except Exception as e:
+                print(f"Error procesando registro: {str(e)}")
+                continue
+
         if data_list:
             df = pd.DataFrame(data_list)
-            
-            # Crear DataFrame con todas las fechas posibles
-            todas_fechas = pd.date_range(start=start_date, end=end_datetime.date(), freq='D')
-            
-            # Obtener lista única de evaluadores
-            evaluadores = df['evaluador'].unique()
-            
-            # Crear todas las combinaciones posibles
-            fechas_evaluadores = pd.MultiIndex.from_product(
-                [todas_fechas.date, evaluadores],
-                names=['fecha', 'evaluador']
-            )
-            
-            # Crear DataFrame completo
-            df_completo = pd.DataFrame(index=fechas_evaluadores).reset_index()
-            
-            # Combinar con los datos existentes
-            df_completo = df_completo.merge(
-                df,
-                on=['fecha', 'evaluador'],
-                how='left'
-            )
-            
-            # Llenar valores faltantes con 0
-            df_completo['cantidad'] = df_completo['cantidad'].fillna(0)
-            
-            return df_completo
-        
+            print(f"Datos encontrados para {module}: {len(df)} registros")
+            print(f"Fechas encontradas: {sorted(df['fecha'].unique())}")
+            return df
+
         return pd.DataFrame()
         
     except Exception as e:

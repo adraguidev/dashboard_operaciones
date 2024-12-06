@@ -579,58 +579,43 @@ def get_rankings_from_db(module, collection, start_date):
         
         st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
         
-        # Buscar registros del módulo específico
+        # Buscar registros del módulo específico sin filtro de fecha inicial
         registros = collection.find({
-            "modulo": module,
-            "$or": [
-                {
-                    "fecha": {
-                        "$gte": start_datetime,
-                        "$lte": end_datetime
-                    }
-                },
-                {
-                    "fecha.$date": {
-                        "$gte": {"$date": start_datetime.isoformat()},
-                        "$lte": {"$date": end_datetime.isoformat()}
-                    }
-                }
-            ]
-        }).sort("fecha", 1)
+            "modulo": module
+        }).sort([("fecha.$date.$numberLong", 1)])
         
         data_list = []
         fechas_procesadas = set()
         
         for registro in registros:
             try:
-                if 'fecha' in registro:
-                    fecha = None
-                    if isinstance(registro['fecha'], dict) and '$date' in registro['fecha']:
-                        if '$numberLong' in registro['fecha']['$date']:
-                            timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
-                            fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
-                            st.write(f"Procesando timestamp: {timestamp_ms} -> {fecha}")
-                    elif isinstance(registro['fecha'], datetime):
-                        fecha = registro['fecha'].date()
-                    
-                    if fecha:
-                        fechas_procesadas.add(fecha)
-                        if 'datos' in registro:
-                            for evaluador_data in registro['datos']:
-                                cantidad = evaluador_data.get('cantidad')
-                                if isinstance(cantidad, dict) and '$numberInt' in cantidad:
-                                    cantidad = int(cantidad['$numberInt'])
-                                elif cantidad is not None:
-                                    cantidad = int(cantidad)
-                                
-                                data_list.append({
-                                    'fecha': fecha,
-                                    'evaluador': evaluador_data['evaluador'],
-                                    'cantidad': cantidad
-                                })
+                if 'fecha' in registro and isinstance(registro['fecha'], dict):
+                    if '$date' in registro['fecha'] and '$numberLong' in registro['fecha']['$date']:
+                        timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
+                        fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                        
+                        # Solo procesar si está en el rango de fechas deseado
+                        if start_date <= fecha <= end_datetime.date():
+                            st.write(f"Procesando registro con fecha: {fecha}")
+                            fechas_procesadas.add(fecha)
+                            
+                            if 'datos' in registro:
+                                for evaluador_data in registro['datos']:
+                                    cantidad = evaluador_data.get('cantidad')
+                                    if isinstance(cantidad, dict) and '$numberInt' in cantidad:
+                                        cantidad = int(cantidad['$numberInt'])
+                                    elif cantidad is not None:
+                                        cantidad = int(cantidad)
+                                    
+                                    data_list.append({
+                                        'fecha': fecha,
+                                        'evaluador': evaluador_data['evaluador'],
+                                        'cantidad': cantidad
+                                    })
 
             except Exception as e:
                 st.write(f"Error procesando registro: {str(e)}")
+                st.write(f"Registro problemático: {registro}")
                 continue
 
         st.write(f"Fechas encontradas: {sorted(fechas_procesadas)}")

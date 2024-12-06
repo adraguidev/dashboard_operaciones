@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
-def render_closing_analysis_tab(data: pd.DataFrame, module_name: str = None):
+def render_closing_analysis_tab(data, module_name=None):
     """
     Renderiza el análisis de cierre de expedientes.
     
@@ -45,7 +45,7 @@ def render_closing_analysis_tab(data: pd.DataFrame, module_name: str = None):
             return
 
         # Mostrar estadísticas generales
-        st.subheader("�� Estadísticas Generales de Cierre")
+        st.subheader(" Estadísticas Generales de Cierre")
         col1, col2, col3 = st.columns(3)
         
         with col1:

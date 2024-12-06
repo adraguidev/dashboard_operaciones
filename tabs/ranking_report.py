@@ -157,6 +157,95 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                         st.success("✅ Datos guardados correctamente")
                         st.rerun()
 
+        # Sección de edición manual
+        st.markdown("---")
+        st.subheader("✏️ Edición Manual de Registros")
+        
+        # Solo mostrar si hay datos históricos
+        if not datos_historicos.empty:
+            # Obtener lista de evaluadores únicos
+            evaluadores_historicos = sorted(datos_historicos['evaluador'].unique())
+            
+            # Obtener fechas disponibles (solo las que ya están en la BD)
+            fechas_historicas = sorted(datos_historicos['fecha'].unique())
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                evaluador_editar = st.selectbox(
+                    "👤 Seleccionar Evaluador",
+                    options=evaluadores_historicos,
+                    key="evaluador_editar"
+                )
+            
+            with col2:
+                fecha_editar = st.selectbox(
+                    "📅 Seleccionar Fecha",
+                    options=fechas_historicas,
+                    format_func=lambda x: x.strftime('%d/%m/%Y'),
+                    key="fecha_editar"
+                )
+            
+            with col3:
+                # Obtener valor actual
+                valor_actual = datos_historicos[
+                    (datos_historicos['evaluador'] == evaluador_editar) &
+                    (datos_historicos['fecha'] == fecha_editar)
+                ]['cantidad'].iloc[0] if len(datos_historicos[
+                    (datos_historicos['evaluador'] == evaluador_editar) &
+                    (datos_historicos['fecha'] == fecha_editar)
+                ]) > 0 else 0
+                
+                nuevo_valor = st.number_input(
+                    "🔢 Nueva Cantidad",
+                    min_value=0,
+                    value=int(valor_actual),
+                    step=1,
+                    key="nuevo_valor"
+                )
+            
+            # Botón para actualizar
+            if st.button("💾 Actualizar Registro"):
+                try:
+                    # Convertir fecha a datetime para MongoDB
+                    fecha_datetime = datetime.combine(fecha_editar, datetime.min.time())
+                    
+                    # Buscar el documento existente
+                    documento = collection.find_one({
+                        "fecha": fecha_datetime,
+                        "modulo": selected_module
+                    })
+                    
+                    if documento:
+                        # Actualizar el valor específico
+                        datos_actualizados = documento['datos']
+                        for dato in datos_actualizados:
+                            if dato['evaluador'] == evaluador_editar:
+                                dato['cantidad'] = nuevo_valor
+                                break
+                        
+                        # Actualizar documento en MongoDB
+                        collection.update_one(
+                            {
+                                "fecha": fecha_datetime,
+                                "modulo": selected_module
+                            },
+                            {
+                                "$set": {
+                                    "datos": datos_actualizados
+                                }
+                            }
+                        )
+                        
+                        st.success("✅ Registro actualizado correctamente")
+                        st.rerun()
+                    else:
+                        st.error("❌ No se encontró el registro en la base de datos")
+                except Exception as e:
+                    st.error(f"❌ Error al actualizar el registro: {str(e)}")
+        else:
+            st.info("ℹ️ No hay datos históricos disponibles para editar")
+
         # Agregar sección de detalle por evaluador y día
         st.markdown("---")
         st.subheader("🔍 Detalle de Expedientes por Evaluador")

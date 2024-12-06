@@ -61,9 +61,17 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     )
                 
                 with col2:
-                    # Rango de fechas
-                    fecha_inicio = st.date_input("Fecha Desde", value=None)
-                    fecha_fin = st.date_input("Fecha Hasta", value=None)
+                    # Rango de fechas (con keys únicos)
+                    fecha_inicio = st.date_input(
+                        "Fecha Desde", 
+                        value=None,
+                        key="fecha_inicio_sol"  # Key única
+                    )
+                    fecha_fin = st.date_input(
+                        "Fecha Hasta", 
+                        value=None,
+                        key="fecha_fin_sol"  # Key única
+                    )
 
             # Aplicar filtros para SOL
             filtered_data = data.copy()
@@ -192,14 +200,17 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                         help="Filtra por última etapa del expediente"
                     )
                     
-                    # Rango de fechas
-                    fecha_inicio = st.date_input("Fecha Desde", value=None)
-                    fecha_fin = st.date_input("Fecha Hasta", value=None)
-                
-                with col2:
-                    # Rango de fechas
-                    fecha_inicio = st.date_input("Fecha Desde", value=None)
-                    fecha_fin = st.date_input("Fecha Hasta", value=None)
+                    # Rango de fechas (con keys únicos)
+                    fecha_inicio = st.date_input(
+                        "Fecha Desde", 
+                        value=None,
+                        key="fecha_inicio_otros"
+                    )
+                    fecha_fin = st.date_input(
+                        "Fecha Hasta", 
+                        value=None,
+                        key="fecha_fin_otros"
+                    )
 
             # Aplicar filtros
             filtered_data = data[data['EVALASIGN'] == selected_evaluator]

@@ -94,9 +94,10 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                         format="%d"
                     ),
                     **{
-                        col: st.column_config.NumberColumn(
+                        col: st.column_config.Column(
                             col,
-                            format="%d",
+                            width="small",
+                            help="Expedientes trabajados",
                             text_align="center"
                         )
                         for col in matriz_ranking.columns
@@ -105,7 +106,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 },
                 hide_index=True,
                 column_order=["evaluador"] + [col for col in matriz_ranking.columns if col != "evaluador"],
-                height=500  # Ajusta este valor según necesites
+                height=500
             )
 
         # Opciones para guardar/resetear datos

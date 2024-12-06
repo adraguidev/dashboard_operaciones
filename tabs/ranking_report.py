@@ -530,7 +530,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 hide_index=True
             )
             
-            # Botón para descargar inconsistencias
+            # Bot��n para descargar inconsistencias
             if st.download_button(
                 label="📥 Descargar Expedientes Sin Evaluador",
                 data=expedientes_sin_evaluador.to_csv(index=False),
@@ -577,49 +577,51 @@ def get_rankings_from_db(module, collection, start_date):
         start_datetime = datetime.combine(start_date, datetime.min.time())
         end_datetime = datetime.combine(datetime.now().date(), datetime.min.time())
         
-        print(f"Buscando registros para módulo {module} desde {start_datetime} hasta {end_datetime}")
-        
-        # Buscar registros del módulo específico con filtro de fechas
+        # Buscar registros del módulo específico
         registros = collection.find({
-            "$and": [
-                {"modulo": module},
-                {"fecha": {
-                    "$gte": start_datetime,
-                    "$lte": end_datetime
-                }}
-            ]
+            "modulo": module
         }).sort("fecha", 1)
         
         data_list = []
         for registro in registros:
             try:
                 # Extraer y convertir la fecha de MongoDB
-                if 'fecha' in registro and '$date' in registro['fecha']:
-                    timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
-                    fecha = datetime.fromtimestamp(timestamp_ms / 1000)
-                    
-                    if 'datos' in registro:
+                if 'fecha' in registro:
+                    fecha = None
+                    if isinstance(registro['fecha'], dict) and '$date' in registro['fecha']:
+                        # Formato MongoDB extendido
+                        timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
+                        fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                    elif isinstance(registro['fecha'], datetime):
+                        fecha = registro['fecha'].date()
+
+                    if fecha and 'datos' in registro:
                         for evaluador_data in registro['datos']:
-                            # Extraer la cantidad del formato MongoDB
-                            if isinstance(evaluador_data['cantidad'], dict) and '$numberInt' in evaluador_data['cantidad']:
-                                cantidad = int(evaluador_data['cantidad']['$numberInt'])
-                            else:
-                                cantidad = int(evaluador_data['cantidad'])
+                            cantidad = evaluador_data.get('cantidad')
+                            if isinstance(cantidad, dict) and '$numberInt' in cantidad:
+                                cantidad = int(cantidad['$numberInt'])
+                            elif cantidad is not None:
+                                cantidad = int(cantidad)
                             
                             data_list.append({
-                                'fecha': fecha.date(),
+                                'fecha': fecha,
                                 'evaluador': evaluador_data['evaluador'],
                                 'cantidad': cantidad
                             })
             except Exception as e:
-                print(f"Error procesando registro individual: {str(e)}")
+                print(f"Error procesando registro: {str(e)}")
                 continue
 
+        # Crear DataFrame con los datos encontrados
         if data_list:
             df = pd.DataFrame(data_list)
-            print(f"Datos encontrados para {module}:")
-            print(f"Total registros: {len(df)}")
-            print(f"Fechas únicas encontradas: {sorted(df['fecha'].unique())}")
+            
+            # Filtrar por rango de fechas después de crear el DataFrame
+            df = df[
+                (df['fecha'] >= start_datetime.date()) & 
+                (df['fecha'] <= end_datetime.date())
+            ]
+            
             return df
 
         return pd.DataFrame()

@@ -103,9 +103,10 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 matriz_ranking,
                 use_container_width=True,
                 column_config={
-                    "evaluador": st.column_config.TextColumn(
+                    "evaluador": st.column_config.Column(
                         "👨‍💼 Evaluador",
-                        width="large"
+                        width="large",
+                        pin="left"
                     ),
                     "Total": st.column_config.NumberColumn(
                         "📊 Total",

@@ -593,8 +593,10 @@ def get_rankings_from_db(module, collection, start_date):
                     fecha = None
                     if isinstance(registro['fecha'], dict) and '$date' in registro['fecha']:
                         # Manejar el formato específico de MongoDB
-                        timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
-                        fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                        if '$numberLong' in registro['fecha']['$date']:
+                            timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
+                            fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                            st.write(f"Timestamp encontrado: {timestamp_ms}, convertido a fecha: {fecha}")
                     elif isinstance(registro['fecha'], datetime):
                         fecha = registro['fecha'].date()
 
@@ -616,8 +618,11 @@ def get_rankings_from_db(module, collection, start_date):
                                     'evaluador': evaluador_data['evaluador'],
                                     'cantidad': cantidad
                                 })
+                    else:
+                        st.write(f"Fecha {fecha} fuera del rango {start_date} - {end_datetime.date()}")
             except Exception as e:
                 st.write(f"Error procesando registro: {str(e)}")
+                st.write(f"Registro problemático: {registro}")
                 continue
 
         st.write(f"Todas las fechas encontradas: {sorted(fechas_procesadas)}")

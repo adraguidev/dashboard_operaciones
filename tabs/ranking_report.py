@@ -78,7 +78,92 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 fill_value=0
             )
             
-            # Continuar con el resto del código para mostrar la matriz...
+            # Ordenar columnas por fecha
+            matriz_ranking = matriz_ranking.reindex(sorted(matriz_ranking.columns), axis=1)
+            
+            # Mantener solo los últimos 15 días
+            ultimas_columnas = sorted(matriz_ranking.columns)[-15:]
+            matriz_ranking = matriz_ranking[ultimas_columnas]
+
+            # Agregar columna de total
+            matriz_ranking['Total'] = matriz_ranking.sum(axis=1)
+            
+            # Ordenar por total descendente
+            matriz_ranking = matriz_ranking.sort_values('Total', ascending=False)
+            
+            # Convertir todos los valores a enteros
+            matriz_ranking = matriz_ranking.astype(int)
+
+            # Formatear nombres de columnas (fechas) a dd/mm
+            columnas_formateadas = {
+                col: col.strftime('%d/%m') if isinstance(col, (datetime, pd.Timestamp)) else col 
+                for col in matriz_ranking.columns if col != 'Total'
+            }
+            matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
+
+            # Resetear el índice para mostrar el nombre del evaluador como columna
+            matriz_ranking = matriz_ranking.reset_index()
+
+            # Mostrar matriz
+            st.subheader("📊 Matriz de Expedientes Trabajados por Evaluador")
+            st.dataframe(
+                matriz_ranking,
+                use_container_width=True,
+                column_config={
+                    "evaluador": st.column_config.TextColumn(
+                        "👨‍💼 Evaluador",
+                        width="large"
+                    ),
+                    "Total": st.column_config.NumberColumn(
+                        "📊 Total",
+                        help="Total de expedientes trabajados",
+                        format="%d"
+                    )
+                },
+                hide_index=True
+            )
+
+            # Opciones para guardar/resetear datos
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if ultima_fecha_registrada:
+                    if st.button("🔄 Resetear último día", 
+                               help="Elimina los registros del último día para poder grabarlos nuevamente"):
+                        reset_last_day(selected_module, rankings_collection, ultima_fecha_registrada)
+                        st.success("✅ Último día reseteado correctamente")
+                        st.rerun()
+
+            with col2:
+                if not datos_nuevos.empty:
+                    # Preparar datos nuevos para guardar
+                    fechas_disponibles = sorted(
+                        datos_nuevos['FECHA DE TRABAJO'].dt.date.unique()
+                    )
+                    fechas_disponibles = [f for f in fechas_disponibles if f > (ultima_fecha_registrada or datetime.min.date())]
+                    
+                    if fechas_disponibles:
+                        selected_dates = st.multiselect(
+                            "Seleccionar fechas para guardar",
+                            options=fechas_disponibles,
+                            default=fechas_disponibles,
+                            format_func=lambda x: x.strftime('%d/%m/%Y')
+                        )
+                        
+                        if selected_dates and st.button("💾 Guardar datos seleccionados"):
+                            datos_a_guardar = datos_nuevos[
+                                datos_nuevos['FECHA DE TRABAJO'].dt.date.isin(selected_dates)
+                            ].copy()
+                            
+                            # Agrupar por fecha y evaluador
+                            datos_agrupados = datos_a_guardar.groupby(
+                                ['FECHA DE TRABAJO', 'EVALASIGN']
+                            ).size().reset_index(name='cantidad')
+                            
+                            save_rankings_to_db(selected_module, rankings_collection, datos_agrupados)
+                            st.success("✅ Datos guardados correctamente")
+                            st.rerun()
 
     except Exception as e:
         st.error(f"Error al procesar el ranking: {str(e)}")

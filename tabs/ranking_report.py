@@ -94,11 +94,11 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                         format="%d"
                     ),
                     **{
-                        col: st.column_config.Column(
+                        col: st.column_config.NumberColumn(
                             col,
                             width="small",
                             help="Expedientes trabajados",
-                            text_align="center"
+                            format="%d"
                         )
                         for col in matriz_ranking.columns
                         if col not in ["evaluador", "Total"]

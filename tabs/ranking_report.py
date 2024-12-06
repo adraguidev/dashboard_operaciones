@@ -75,35 +75,18 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     columnas_formateadas[col] = fecha.strftime('%d/%m')
 
             matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
-            matriz_ranking = matriz_ranking.reset_index()
-
-            # Aplicar CSS personalizado para centrar números y fijar primera columna
-            st.markdown("""
-                <style>
-                    div[data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"] {
-                        text-align: center;
-                    }
-                    div[data-testid="stDataFrame"] td {
-                        text-align: center;
-                    }
-                    div[data-testid="stDataFrame"] td:first-child,
-                    div[data-testid="stDataFrame"] th:first-child {
-                        position: sticky;
-                        left: 0;
-                        background-color: white;
-                        z-index: 1;
-                        text-align: left;
-                    }
-                </style>
-            """, unsafe_allow_html=True)
             
+            # Convertir el índice en una columna normal y renombrarla
+            matriz_ranking = matriz_ranking.reset_index()
+            matriz_ranking = matriz_ranking.rename(columns={'evaluador': 'Evaluador'})
+
             # Mostrar matriz
             st.subheader("📊 Matriz de Expedientes Trabajados por Evaluador")
             st.dataframe(
                 matriz_ranking,
                 use_container_width=True,
                 column_config={
-                    "evaluador": st.column_config.TextColumn(
+                    "Evaluador": st.column_config.TextColumn(
                         "👨‍💼 Evaluador",
                         width="large"
                     ),
@@ -120,11 +103,10 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                             format="%d"
                         )
                         for col in matriz_ranking.columns
-                        if col not in ["evaluador", "Total"]
+                        if col not in ["Evaluador", "Total"]
                     }
                 },
-                hide_index=True,
-                height=500
+                hide_index=True
             )
 
         # Opciones para guardar/resetear datos

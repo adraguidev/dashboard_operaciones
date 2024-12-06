@@ -68,7 +68,23 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             
             # Ordenar las columnas de fecha
             columnas_fecha = [col for col in matriz_ranking.columns if col != 'Evaluador']
-            columnas_fecha = sorted(columnas_fecha)[-15:]  # Últimos 15 días
+            
+            # Asegurar que tengamos exactamente los últimos 15 días
+            fecha_fin = fecha_ayer
+            fecha_inicio_15 = fecha_fin - timedelta(days=14)  # 14 días atrás para tener 15 días en total
+            
+            # Crear lista de todas las fechas necesarias
+            todas_fechas = [fecha_inicio_15 + timedelta(days=x) for x in range(15)]
+            
+            # Asegurar que todas las fechas existan en la matriz
+            for fecha in todas_fechas:
+                if fecha not in columnas_fecha:
+                    matriz_ranking[fecha] = 0
+            
+            # Obtener solo las columnas de los últimos 15 días
+            columnas_fecha = sorted([col for col in matriz_ranking.columns 
+                                   if isinstance(col, (datetime, pd.Timestamp)) and 
+                                   fecha_inicio_15 <= col.date() <= fecha_fin])
             
             # Reordenar las columnas manteniendo 'Evaluador' primero
             matriz_ranking = matriz_ranking[['Evaluador'] + columnas_fecha]

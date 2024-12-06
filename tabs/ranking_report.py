@@ -80,15 +80,19 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             # Aplicar CSS personalizado para centrar números y fijar primera columna
             st.markdown("""
                 <style>
-                    .stDataFrame td:not(:first-child) {
-                        text-align: center !important;
+                    div[data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"] {
+                        text-align: center;
                     }
-                    .stDataFrame th:first-child, 
-                    .stDataFrame td:first-child {
+                    div[data-testid="stDataFrame"] td {
+                        text-align: center;
+                    }
+                    div[data-testid="stDataFrame"] td:first-child,
+                    div[data-testid="stDataFrame"] th:first-child {
                         position: sticky;
                         left: 0;
-                        background: white;
+                        background-color: white;
                         z-index: 1;
+                        text-align: left;
                     }
                 </style>
             """, unsafe_allow_html=True)
@@ -101,8 +105,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 column_config={
                     "evaluador": st.column_config.TextColumn(
                         "👨‍💼 Evaluador",
-                        width="large",
-                        frozen=True  # Fijar la columna
+                        width="large"
                     ),
                     "Total": st.column_config.NumberColumn(
                         "📊 Total",
@@ -114,8 +117,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                             col,
                             width="small",
                             help="Expedientes trabajados",
-                            format="%d",
-                            step=1
+                            format="%d"
                         )
                         for col in matriz_ranking.columns
                         if col not in ["evaluador", "Total"]

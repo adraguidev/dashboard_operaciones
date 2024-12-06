@@ -23,6 +23,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
     try:
         st.header("🏆 Ranking de Expedientes Trabajados")
         
+        # Verificar que estamos usando la colección correcta
+        st.write(f"Usando colección: {rankings_collection.database.name}.{rankings_collection.name}")
+        
         if data is None or data.empty:
             st.error("No hay datos disponibles para mostrar")
             return
@@ -607,63 +610,20 @@ def get_last_date_from_db(module, collection):
 def get_rankings_from_db(module, collection, start_date):
     """Obtener los rankings desde expedientes_db.rankings."""
     try:
-        st.write(f"Buscando registros para el módulo: {module}")
+        st.write(f"""
+        Información de conexión:
+        - Base de datos: {collection.database.name}
+        - Colección: {collection.name}
+        - Módulo: {module}
+        """)
         
-        # Buscar todos los registros del módulo sin filtro de fecha inicial
-        registros = collection.find({
-            "modulo": module
-        }).sort("fecha", 1)
+        # Mostrar un ejemplo de documento para verificar estructura
+        ejemplo = collection.find_one({"modulo": module})
+        if ejemplo:
+            st.write("Ejemplo de documento en la colección:")
+            st.write({k: v for k, v in ejemplo.items() if k != '_id'})
         
-        data_list = []
-        fechas_procesadas = set()
-        
-        for registro in registros:
-            try:
-                fecha = registro.get('fecha')
-                if isinstance(fecha, dict) and '$date' in fecha:
-                    # Manejar formato específico de MongoDB
-                    timestamp_ms = int(fecha['$date'].get('$numberLong', 0))
-                    fecha = datetime.fromtimestamp(timestamp_ms / 1000)
-                
-                if fecha:
-                    fecha_date = fecha.date() if isinstance(fecha, datetime) else fecha
-                    fechas_procesadas.add(fecha_date)
-                    
-                    if 'datos' in registro:
-                        for evaluador_data in registro['datos']:
-                            cantidad = evaluador_data.get('cantidad')
-                            # Manejar cantidad en formato MongoDB
-                            if isinstance(cantidad, dict) and '$numberInt' in cantidad:
-                                cantidad = int(cantidad['$numberInt'])
-                            elif cantidad is not None:
-                                cantidad = int(cantidad)
-                            
-                            data_list.append({
-                                'fecha': fecha_date,
-                                'evaluador': evaluador_data['evaluador'],
-                                'cantidad': cantidad
-                            })
-
-            except Exception as e:
-                st.write(f"Error procesando registro individual: {str(e)}")
-                continue
-
-        # Información de depuración
-        st.write(f"Total de fechas encontradas: {len(fechas_procesadas)}")
-        st.write(f"Fechas: {sorted(fechas_procesadas)}")
-        st.write(f"Total de registros procesados: {len(data_list)}")
-
-        if data_list:
-            df = pd.DataFrame(data_list)
-            # Ordenar por fecha
-            df = df.sort_values('fecha')
-            return df
-
-        return pd.DataFrame()
-        
-    except Exception as e:
-        st.error(f"Error al obtener rankings: {str(e)}")
-        return pd.DataFrame()
+        # Resto del código...
 
 def save_rankings_to_db(module, collection, data):
     """Guardar nuevos rankings en MongoDB."""

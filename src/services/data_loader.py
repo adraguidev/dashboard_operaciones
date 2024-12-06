@@ -10,7 +10,8 @@ class DataLoader:
         """Inicializa la conexión a MongoDB usando los secrets de Streamlit."""
         try:
             _self.client = MongoClient(st.secrets["connections"]["mongodb"]["uri"])
-            _self.db = _self.client['migraciones_db']
+            _self.db = _self.client['expedientes_db']
+            _self.db.command('ping')
         except Exception as e:
             st.error(f"Error al conectar con MongoDB: {str(e)}")
             raise

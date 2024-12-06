@@ -44,68 +44,48 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             # Convertir la columna 'fecha' a datetime si no lo está ya
             datos_historicos['fecha'] = pd.to_datetime(datos_historicos['fecha'])
             
+            # Crear la matriz con el formato correcto desde el inicio
             matriz_ranking = pd.pivot_table(
                 datos_historicos,
                 values='cantidad',
                 index='evaluador',
                 columns='fecha',
                 fill_value=0
-            )
+            ).reset_index()
             
-            # Ordenar columnas por fecha
-            matriz_ranking = matriz_ranking.reindex(sorted(matriz_ranking.columns), axis=1)
-            
-            # Mantener solo los últimos 15 días
-            ultimas_columnas = sorted(matriz_ranking.columns)[-15:]
-            matriz_ranking = matriz_ranking[ultimas_columnas]
-
-            # Agregar columna de total
-            matriz_ranking['Total'] = matriz_ranking.sum(axis=1)
-            matriz_ranking = matriz_ranking.sort_values('Total', ascending=False)
-            matriz_ranking = matriz_ranking.astype(int)
-
-            # Formatear nombres de columnas
-            columnas_formateadas = {}
-            for col in matriz_ranking.columns:
-                if col == 'Total':
-                    columnas_formateadas[col] = col
-                else:
-                    # Asegurarnos de que la fecha esté en formato datetime
-                    fecha = pd.to_datetime(col)
-                    columnas_formateadas[col] = fecha.strftime('%d/%m')
-
-            matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
-            
-            # Convertir el índice en una columna normal y renombrarla
-            matriz_ranking = matriz_ranking.reset_index()
+            # Renombrar la columna del índice
             matriz_ranking = matriz_ranking.rename(columns={'evaluador': 'Evaluador'})
+            
+            # Ordenar las columnas de fecha
+            columnas_fecha = [col for col in matriz_ranking.columns if col != 'Evaluador']
+            columnas_fecha = sorted(columnas_fecha)[-15:]  # Últimos 15 días
+            
+            # Reordenar las columnas manteniendo 'Evaluador' primero
+            matriz_ranking = matriz_ranking[['Evaluador'] + columnas_fecha]
+            
+            # Calcular el total y agregarlo como última columna
+            matriz_ranking['Total'] = matriz_ranking[columnas_fecha].sum(axis=1)
+            
+            # Ordenar por total descendente
+            matriz_ranking = matriz_ranking.sort_values('Total', ascending=False)
+            
+            # Convertir a enteros
+            for col in matriz_ranking.columns:
+                if col != 'Evaluador':
+                    matriz_ranking[col] = matriz_ranking[col].astype(int)
+            
+            # Formatear las fechas en las columnas
+            columnas_formateadas = {
+                col: col.strftime('%d/%m') if isinstance(col, pd.Timestamp) else col
+                for col in matriz_ranking.columns
+            }
+            matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
 
-            # Mostrar matriz
+            # Mostrar la matriz
             st.subheader("📊 Matriz de Expedientes Trabajados por Evaluador")
             st.dataframe(
                 matriz_ranking,
                 use_container_width=True,
-                column_config={
-                    "Evaluador": st.column_config.TextColumn(
-                        "👨‍💼 Evaluador",
-                        width="large"
-                    ),
-                    "Total": st.column_config.NumberColumn(
-                        "📊 Total",
-                        help="Total de expedientes trabajados",
-                        format="%d"
-                    ),
-                    **{
-                        col: st.column_config.NumberColumn(
-                            col,
-                            width="small",
-                            help="Expedientes trabajados",
-                            format="%d"
-                        )
-                        for col in matriz_ranking.columns
-                        if col not in ["Evaluador", "Total"]
-                    }
-                },
                 hide_index=True
             )
 

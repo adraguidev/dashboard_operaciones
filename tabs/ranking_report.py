@@ -62,10 +62,19 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             matriz_ranking = matriz_ranking.astype(int)
 
             # Formatear nombres de columnas
-            columnas_formateadas = {
-                col: col.strftime('%d/%m') if isinstance(col, (datetime, pd.Timestamp)) else col 
-                for col in matriz_ranking.columns if col != 'Total'
-            }
+            columnas_formateadas = {}
+            for col in matriz_ranking.columns:
+                if col == 'Total':
+                    columnas_formateadas[col] = col
+                elif isinstance(col, (datetime, pd.Timestamp)):
+                    # Convertir la fecha al formato dd/mm
+                    fecha_formateada = col.strftime('%d/%m')
+                    # Asegurarnos que el día tenga dos dígitos
+                    dia, mes = fecha_formateada.split('/')
+                    columnas_formateadas[col] = f"{dia:0>2}/{mes:0>2}"
+                else:
+                    columnas_formateadas[col] = col
+            
             matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
             matriz_ranking = matriz_ranking.reset_index()
 

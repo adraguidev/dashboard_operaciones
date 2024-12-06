@@ -610,19 +610,6 @@ def get_last_date_from_db(module, collection):
 def get_rankings_from_db(module, collection, start_date):
     """Obtener los rankings desde expedientes_db.rankings."""
     try:
-        st.write(f"""
-        Información de conexión:
-        - Base de datos: {collection.database.name}
-        - Colección: {collection.name}
-        - Módulo: {module}
-        """)
-        
-        # Mostrar un ejemplo de documento para verificar estructura
-        ejemplo = collection.find_one({"modulo": module})
-        if ejemplo:
-            st.write("Ejemplo de documento en la colección:")
-            st.write({k: v for k, v in ejemplo.items() if k != '_id'})
-        
         # Buscar todos los registros del módulo sin filtro de fecha inicial
         registros = collection.find({
             "modulo": module
@@ -659,13 +646,7 @@ def get_rankings_from_db(module, collection, start_date):
                             })
 
             except Exception as e:
-                st.write(f"Error procesando registro individual: {str(e)}")
                 continue
-
-        # Información de depuración
-        st.write(f"Total de fechas encontradas: {len(fechas_procesadas)}")
-        st.write(f"Fechas: {sorted(fechas_procesadas)}")
-        st.write(f"Total de registros procesados: {len(data_list)}")
 
         if data_list:
             df = pd.DataFrame(data_list)

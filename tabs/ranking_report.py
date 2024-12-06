@@ -26,7 +26,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         fecha_ayer = fecha_actual - timedelta(days=1)
         fecha_inicio = fecha_ayer - timedelta(days=14)
         
-        # Obtener solo datos históricos de la base de datos
+        # Obtener solo datos hist��ricos de la base de datos
         datos_historicos = get_rankings_from_db(
             selected_module, 
             rankings_collection, 
@@ -205,6 +205,19 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     # Filtrar solo las columnas que existen en el DataFrame
                     columnas_mostrar = [col for col in columnas_deseadas if col in expedientes.columns]
                     expedientes_mostrar = expedientes[columnas_mostrar].sort_values('NumeroTramite')
+                    
+                    # Convertir timestamps a fechas legibles
+                    if 'FechaExpendiente' in expedientes_mostrar.columns:
+                        expedientes_mostrar['FechaExpendiente'] = pd.to_datetime(
+                            expedientes_mostrar['FechaExpendiente'].astype(float) / 1000,  # Dividir por 1000 para convertir de milisegundos a segundos
+                            unit='s'
+                        ).dt.strftime('%d/%m/%Y')
+                    
+                    if 'FechaEtapaAprobacionMasivaFin' in expedientes_mostrar.columns:
+                        expedientes_mostrar['FechaEtapaAprobacionMasivaFin'] = pd.to_datetime(
+                            expedientes_mostrar['FechaEtapaAprobacionMasivaFin'].astype(float) / 1000,
+                            unit='s'
+                        ).dt.strftime('%d/%m/%Y')
                     
                     # Configuración de columnas para la visualización
                     column_config = {

@@ -1,5 +1,5 @@
 import streamlit as st
-from config.settings import MODULES
+from config import MODULES
 from src.services.data_loader import DataLoader
 from tabs.pending_reports import render_pending_reports_tab
 from tabs.entry_analysis import render_entry_analysis_tab

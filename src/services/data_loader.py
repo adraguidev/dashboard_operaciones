@@ -3,7 +3,7 @@ import streamlit as st
 from datetime import datetime
 from pymongo import MongoClient
 import os
-from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS
+from config import MONGODB_COLLECTIONS, DATE_FORMAT
 
 class DataLoader:
     def __init__(_self):

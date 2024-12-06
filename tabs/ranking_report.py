@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
 import os
+from config import DATE_FORMAT
 
 @st.cache_data
 def load_consolidated_cached(module_name):

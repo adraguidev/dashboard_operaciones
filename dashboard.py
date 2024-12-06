@@ -84,7 +84,7 @@ def main():
             with tabs[1]:
                 render_entry_analysis_tab(data)
             with tabs[2]:
-                render_closing_analysis_tab(data)
+                render_closing_analysis_tab(data, selected_module)
             with tabs[3]:
                 render_evaluator_report_tab(data, selected_module)
             with tabs[4]:

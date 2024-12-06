@@ -582,10 +582,20 @@ def get_rankings_from_db(module, collection, start_date):
         # Buscar registros del módulo específico
         registros = collection.find({
             "modulo": module,
-            "fecha": {
-                "$gte": start_datetime,
-                "$lte": end_datetime
-            }
+            "$or": [
+                {
+                    "fecha": {
+                        "$gte": start_datetime,
+                        "$lte": end_datetime
+                    }
+                },
+                {
+                    "fecha.$date": {
+                        "$gte": {"$date": start_datetime.isoformat()},
+                        "$lte": {"$date": end_datetime.isoformat()}
+                    }
+                }
+            ]
         }).sort("fecha", 1)
         
         data_list = []
@@ -596,16 +606,15 @@ def get_rankings_from_db(module, collection, start_date):
                 if 'fecha' in registro:
                     fecha = None
                     if isinstance(registro['fecha'], dict) and '$date' in registro['fecha']:
-                        timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
-                        fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
-                        st.write(f"Timestamp encontrado: {timestamp_ms}, convertido a fecha: {fecha}")
+                        if '$numberLong' in registro['fecha']['$date']:
+                            timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
+                            fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                            st.write(f"Procesando timestamp: {timestamp_ms} -> {fecha}")
                     elif isinstance(registro['fecha'], datetime):
                         fecha = registro['fecha'].date()
                     
                     if fecha:
                         fechas_procesadas.add(fecha)
-                        st.write(f"Procesando registro con fecha: {fecha}")
-                        
                         if 'datos' in registro:
                             for evaluador_data in registro['datos']:
                                 cantidad = evaluador_data.get('cantidad')
@@ -622,21 +631,19 @@ def get_rankings_from_db(module, collection, start_date):
 
             except Exception as e:
                 st.write(f"Error procesando registro: {str(e)}")
-                st.write(f"Registro problemático: {registro}")
                 continue
 
-        st.write(f"Todas las fechas encontradas: {sorted(fechas_procesadas)}")
+        st.write(f"Fechas encontradas: {sorted(fechas_procesadas)}")
 
         if data_list:
             df = pd.DataFrame(data_list)
-            st.write(f"Total de registros en DataFrame: {len(df)}")
+            st.write(f"Total registros: {len(df)}")
             return df
 
         return pd.DataFrame()
         
     except Exception as e:
         st.write(f"Error al obtener rankings: {str(e)}")
-        st.write(f"Detalles del error: {str(e.__class__.__name__)}")
         return pd.DataFrame()
 
 def save_rankings_to_db(module, collection, data):

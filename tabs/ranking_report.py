@@ -170,14 +170,22 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         print(f"Error detallado: {str(e)}")
 
 def get_last_date_from_db(module, collection):
-    """Obtener la última fecha registrada para el módulo en expedientes_db.rankings."""
+    """Obtener la última fecha registrada para el módulo."""
     try:
+        # Buscar primero con módulo específico
         ultimo_registro = collection.find_one(
             {"modulo": module},
             sort=[("fecha", -1)]
         )
+        
+        # Si no encuentra, buscar sin filtro de módulo
+        if not ultimo_registro:
+            ultimo_registro = collection.find_one(
+                {},
+                sort=[("fecha", -1)]
+            )
+        
         if ultimo_registro and 'fecha' in ultimo_registro:
-            # Asegurarnos de que la fecha se convierta correctamente
             fecha = ultimo_registro['fecha']
             if isinstance(fecha, str):
                 return datetime.strptime(fecha, '%Y-%m-%dT%H:%M:%S.%f%z').date()
@@ -190,18 +198,21 @@ def get_last_date_from_db(module, collection):
 def get_rankings_from_db(module, collection, start_date):
     """Obtener los rankings desde expedientes_db.rankings."""
     try:
-        # Convertir start_date a datetime para la consulta
         start_datetime = datetime.combine(start_date, datetime.min.time())
         
-        # Obtener registros desde la fecha de inicio
+        # Buscar registros con o sin módulo
         registros = collection.find({
-            "modulo": module,
-            "fecha": {"$gte": start_datetime}
+            "$and": [
+                {"fecha": {"$gte": start_datetime}},
+                {"$or": [
+                    {"modulo": module},
+                    {"modulo": {"$exists": False}}
+                ]}
+            ]
         }).sort("fecha", 1)
         
         data_list = []
         for registro in registros:
-            # Asegurarnos de que la fecha se convierta correctamente
             fecha = registro['fecha']
             if isinstance(fecha, str):
                 fecha = datetime.strptime(fecha, '%Y-%m-%dT%H:%M:%S.%f%z')
@@ -215,7 +226,6 @@ def get_rankings_from_db(module, collection, start_date):
                         'cantidad': int(evaluador_data.get('cantidad', 0))
                     })
         
-        # Imprimir información de depuración
         print(f"Módulo: {module}")
         print(f"Fecha inicio: {start_date}")
         print(f"Registros encontrados: {len(data_list)}")
@@ -252,12 +262,17 @@ def save_rankings_to_db(module, collection, data):
 def reset_last_day(module, collection, last_date):
     """Eliminar registros del último día."""
     try:
-        # Convertir last_date (date) a datetime
         last_datetime = datetime.combine(last_date, datetime.min.time())
         
-        collection.delete_one({
-            "modulo": module,
-            "fecha": last_datetime
+        # Eliminar registro con o sin módulo para esa fecha
+        collection.delete_many({
+            "$and": [
+                {"fecha": last_datetime},
+                {"$or": [
+                    {"modulo": module},
+                    {"modulo": {"$exists": False}}
+                ]}
+            ]
         })
     except Exception as e:
         raise Exception(f"Error al resetear último día: {str(e)}")

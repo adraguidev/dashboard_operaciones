@@ -84,15 +84,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             # Mostrar la matriz
             st.subheader("📊 Matriz de Expedientes Trabajados por Evaluador")
             st.dataframe(
-                matriz_ranking,
+                matriz_ranking.set_index('Evaluador'),  # Establecer Evaluador como índice
                 use_container_width=True,
-                hide_index=True,
                 column_config={
-                    "Evaluador": st.column_config.Column(
-                        "👨‍💼 Evaluador",
-                        width="large",
-                        frozen=True  # Correcto atributo para fijar la columna
-                    ),
                     "Total": st.column_config.NumberColumn(
                         "📊 Total",
                         help="Total de expedientes trabajados",

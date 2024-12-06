@@ -1,16 +1,4 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from datetime import datetime, timedelta
-
-def render_closing_analysis_tab(data, module_name=None):
-    """
-    Renderiza el análisis de cierre de expedientes.
-    
-    Args:
-        data (pd.DataFrame): DataFrame con los datos a analizar
-        module_name (str, optional): Nombre del módulo actual. Por defecto None.
-    """
+def render_closing_analysis_tab(data: pd.DataFrame, module_name: str = None):
     try:
         st.header("🔒 Análisis de Cierre de Expedientes")
         
@@ -23,25 +11,36 @@ def render_closing_analysis_tab(data, module_name=None):
             render_sol_closing_analysis(data)
             return
 
-        # Convertir y validar fechas
-        data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
-        data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], errors='coerce')
+        # Resto del código existente para otros módulos...
+        # [código actual]
 
-        # Calcular tiempo de cierre
-        data['TiempoCierre'] = (data['FECHA DE TRABAJO'] - data['FechaExpendiente']).dt.total_seconds() / (24 * 60 * 60)
+    except Exception as e:
+        st.error(f"Error al procesar la pestaña de cierre de expedientes: {str(e)}")
 
-        # Filtrar últimos 15 días y expedientes cerrados
-        fecha_actual = datetime.now()
-        fecha_inicio = fecha_actual - timedelta(days=15)
-        
+def render_sol_closing_analysis(data: pd.DataFrame):
+    """Renderiza el análisis de cierre específico para el módulo SOL."""
+    try:
+        # Convertir fechas
+        data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], format='%d/%m/%Y', errors='coerce')
+        data['FechaEtapaAprobacionMasivaFin'] = pd.to_datetime(
+            data['FechaEtapaAprobacionMasivaFin'], 
+            format='%d/%m/%Y', 
+            errors='coerce'
+        )
+
+        # Calcular tiempo de cierre en días
+        data['TiempoCierre'] = (
+            data['FechaEtapaAprobacionMasivaFin'] - data['FechaExpendiente']
+        ).dt.total_seconds() / (24 * 60 * 60)  # Convertir a días
+
+        # Filtrar expedientes cerrados (con fecha de aprobación)
         expedientes_cerrados = data[
-            (data['FECHA DE TRABAJO'] >= fecha_inicio) &
-            (data['FECHA DE TRABAJO'] <= fecha_actual) &
-            (data['TiempoCierre'] >= 0)
+            data['FechaEtapaAprobacionMasivaFin'].notna() &
+            (data['TiempoCierre'] >= 0)  # Evitar tiempos negativos
         ].copy()
 
         if expedientes_cerrados.empty:
-            st.warning("No se encontraron expedientes cerrados en los últimos 15 días")
+            st.warning("No se encontraron expedientes cerrados para analizar")
             return
 
         # Mostrar estadísticas generales
@@ -70,21 +69,22 @@ def render_closing_analysis_tab(data, module_name=None):
             )
 
         # Top 25 expedientes con mayor tiempo de cierre
-        st.subheader("📈 Top 25 Expedientes con Mayor Tiempo de Cierre (Últimos 15 días)")
+        st.subheader("📈 Top 25 Expedientes con Mayor Tiempo de Cierre")
         
+        # Ordenar por tiempo de cierre descendente y tomar los primeros 25
         top_25 = expedientes_cerrados.nlargest(25, 'TiempoCierre')[[
             'NumeroTramite',
+            'Dependencia',
             'FechaExpendiente',
-            'FECHA DE TRABAJO',
+            'FechaEtapaAprobacionMasivaFin',
             'TiempoCierre',
-            'EVALASIGN',
-            'ESTADO',
+            'EstadoTramite',
             'UltimaEtapa'
         ]].copy()
 
-        # Formatear fechas y números
+        # Formatear fechas para visualización
         top_25['FechaExpendiente'] = top_25['FechaExpendiente'].dt.strftime('%d/%m/%Y')
-        top_25['FECHA DE TRABAJO'] = top_25['FECHA DE TRABAJO'].dt.strftime('%d/%m/%Y')
+        top_25['FechaEtapaAprobacionMasivaFin'] = top_25['FechaEtapaAprobacionMasivaFin'].dt.strftime('%d/%m/%Y')
         top_25['TiempoCierre'] = top_25['TiempoCierre'].round(1)
 
         # Mostrar tabla
@@ -93,19 +93,19 @@ def render_closing_analysis_tab(data, module_name=None):
             use_container_width=True,
             column_config={
                 'NumeroTramite': 'Expediente',
+                'Dependencia': 'Dependencia',
                 'FechaExpendiente': 'Fecha Ingreso',
-                'FECHA DE TRABAJO': 'Fecha Cierre',
+                'FechaEtapaAprobacionMasivaFin': 'Fecha Cierre',
                 'TiempoCierre': st.column_config.NumberColumn(
                     'Tiempo de Cierre (días)',
                     format="%.1f"
                 ),
-                'EVALASIGN': 'Evaluador',
-                'ESTADO': 'Estado',
+                'EstadoTramite': 'Estado',
                 'UltimaEtapa': 'Última Etapa'
             }
         )
 
-        # Gráfico de distribución
+        # Gráfico de distribución de tiempos de cierre
         st.subheader("📊 Distribución de Tiempos de Cierre")
         fig = px.histogram(
             expedientes_cerrados,
@@ -115,37 +115,6 @@ def render_closing_analysis_tab(data, module_name=None):
             labels={'TiempoCierre': 'Tiempo de Cierre (días)', 'count': 'Cantidad de Expedientes'}
         )
         st.plotly_chart(fig, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"Error al procesar la pestaña de cierre de expedientes: {str(e)}")
-        print(f"Error detallado: {str(e)}")
-
-def render_sol_closing_analysis(data):
-    """
-    Renderiza el análisis de cierre específico para el módulo SOL.
-    
-    Args:
-        data (pd.DataFrame): DataFrame con los datos de SOL a analizar
-    """
-    try:
-        # Convertir fechas
-        data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], format='%d/%m/%Y', errors='coerce')
-        data['FechaPre'] = pd.to_datetime(data['FechaPre'], format='%d/%m/%Y', errors='coerce')
-
-        # Calcular tiempo de cierre en días
-        data['TiempoCierre'] = (data['FechaPre'] - data['FechaExpendiente']).dt.total_seconds() / (24 * 60 * 60)
-
-        # Filtrar expedientes cerrados (con fecha de pre)
-        expedientes_cerrados = data[
-            data['FechaPre'].notna() &
-            (data['TiempoCierre'] >= 0)
-        ].copy()
-
-        if expedientes_cerrados.empty:
-            st.warning("No se encontraron expedientes cerrados para analizar")
-            return
-
-        # [Resto del código de SOL se mantiene igual]
 
     except Exception as e:
         st.error(f"Error al procesar el análisis de cierre SOL: {str(e)}")

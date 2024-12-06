@@ -334,6 +334,64 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         else:
             st.info("No hay datos disponibles para mostrar el detalle")
 
+        # Sección de inconsistencias
+        st.markdown("---")
+        st.subheader("⚠️ Inconsistencias Detectadas")
+
+        # Filtrar expedientes sin evaluador
+        expedientes_sin_evaluador = data[
+            (data['EVALASIGN'].isna()) | 
+            (data['EVALASIGN'] == '') | 
+            (data['EVALASIGN'].str.strip() == '')
+        ].copy()
+
+        if not expedientes_sin_evaluador.empty:
+            st.warning(f"Se encontraron {len(expedientes_sin_evaluador)} expedientes sin evaluador asignado")
+            
+            # Mostrar detalles de los expedientes sin evaluador
+            columnas_mostrar = [
+                'NumeroTramite',
+                'FECHA DE TRABAJO',
+                'EVALASIGN',
+                'ESTADO',
+                'UltimaEtapa',
+                'EstadoTramite'
+            ]
+            
+            # Filtrar solo las columnas que existen
+            columnas_mostrar = [col for col in columnas_mostrar if col in expedientes_sin_evaluador.columns]
+            
+            st.dataframe(
+                expedientes_sin_evaluador[columnas_mostrar],
+                use_container_width=True,
+                column_config={
+                    "NumeroTramite": st.column_config.TextColumn(
+                        "N° Expediente",
+                        width="medium"
+                    ),
+                    "FECHA DE TRABAJO": st.column_config.DateColumn(
+                        "Fecha de Trabajo",
+                        format="DD/MM/YYYY"
+                    ),
+                    "EVALASIGN": "Evaluador",
+                    "ESTADO": "Estado",
+                    "UltimaEtapa": "Última Etapa",
+                    "EstadoTramite": "Estado Trámite"
+                },
+                hide_index=True
+            )
+            
+            # Botón para descargar inconsistencias
+            if st.download_button(
+                label="📥 Descargar Expedientes Sin Evaluador",
+                data=expedientes_sin_evaluador.to_csv(index=False),
+                file_name='expedientes_sin_evaluador.csv',
+                mime='text/csv'
+            ):
+                st.success("✅ Archivo de inconsistencias descargado exitosamente")
+        else:
+            st.success("✅ No se encontraron expedientes sin evaluador asignado")
+
     except Exception as e:
         st.error(f"Error al procesar el ranking: {str(e)}")
         print(f"Error detallado: {str(e)}")

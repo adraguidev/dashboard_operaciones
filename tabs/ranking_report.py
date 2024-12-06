@@ -127,6 +127,92 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                         st.success("✅ Datos guardados correctamente")
                         st.rerun()
 
+        # Agregar sección de detalle por evaluador y día
+        st.markdown("---")
+        st.subheader("🔍 Detalle de Expedientes por Evaluador")
+
+        if not data.empty:  # Usamos data original que contiene el detalle de expedientes
+            # Obtener lista de evaluadores únicos
+            evaluadores = sorted(data['EVALASIGN'].unique())
+            
+            # Crear selectores en dos columnas
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                evaluador_seleccionado = st.selectbox(
+                    "👤 Seleccionar Evaluador",
+                    options=evaluadores,
+                    key="evaluador_detalle"
+                )
+            
+            with col2:
+                # Obtener fechas disponibles para el evaluador seleccionado
+                fechas_disponibles = data[
+                    data['EVALASIGN'] == evaluador_seleccionado
+                ]['FECHA DE TRABAJO'].dt.date.unique()
+                fechas_disponibles = sorted(fechas_disponibles)[-15:]  # Últimos 15 días
+                
+                fecha_seleccionada = st.selectbox(
+                    "📅 Seleccionar Fecha",
+                    options=fechas_disponibles,
+                    format_func=lambda x: x.strftime('%d/%m/%Y'),
+                    key="fecha_detalle"
+                )
+            
+            # Mostrar detalle del día seleccionado
+            if evaluador_seleccionado and fecha_seleccionada:
+                expedientes = data[
+                    (data['EVALASIGN'] == evaluador_seleccionado) &
+                    (data['FECHA DE TRABAJO'].dt.date == fecha_seleccionada)
+                ].copy()
+                
+                if not expedientes.empty:
+                    # Mostrar cantidad de expedientes encontrados
+                    st.info(f"📁 {len(expedientes)} expedientes encontrados")
+                    
+                    # Seleccionar y ordenar columnas relevantes
+                    columnas_mostrar = [
+                        'NumeroTramite', 
+                        'FECHA DE TRABAJO',
+                        'EVALASIGN',
+                        'ESTADO',
+                        'TIPO DE TRAMITE'
+                    ]
+                    expedientes_mostrar = expedientes[columnas_mostrar].sort_values('NumeroTramite')
+                    
+                    # Mostrar tabla de expedientes
+                    st.dataframe(
+                        expedientes_mostrar,
+                        use_container_width=True,
+                        column_config={
+                            "NumeroTramite": st.column_config.TextColumn(
+                                "N° Expediente",
+                                width="medium"
+                            ),
+                            "FECHA DE TRABAJO": st.column_config.DateColumn(
+                                "Fecha",
+                                format="DD/MM/YYYY"
+                            ),
+                            "EVALASIGN": "Evaluador",
+                            "ESTADO": "Estado",
+                            "TIPO DE TRAMITE": "Tipo de Trámite"
+                        },
+                        hide_index=True
+                    )
+                    
+                    # Botón para descargar
+                    if st.download_button(
+                        label="📥 Descargar Expedientes",
+                        data=expedientes_mostrar.to_csv(index=False),
+                        file_name=f'expedientes_{evaluador_seleccionado}_{fecha_seleccionada}.csv',
+                        mime='text/csv'
+                    ):
+                        st.success("✅ Archivo descargado exitosamente")
+                else:
+                    st.info("No hay expedientes registrados para la fecha seleccionada")
+        else:
+            st.info("No hay datos disponibles para mostrar el detalle")
+
     except Exception as e:
         st.error(f"Error al procesar el ranking: {str(e)}")
         print(f"Error detallado: {str(e)}")

@@ -7,7 +7,6 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
     try:
         st.header("🏆 Ranking de Expedientes Trabajados")
         
-        # Validar datos
         if data is None or data.empty:
             st.error("No hay datos disponibles para mostrar")
             return
@@ -22,56 +21,25 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
         fecha_actual = datetime.now().date()
         fecha_ayer = fecha_actual - timedelta(days=1)
-        fecha_inicio = fecha_ayer - timedelta(days=14)  # Para obtener 15 días en total
+        fecha_inicio = fecha_ayer - timedelta(days=14)
         
-        # Obtener datos históricos de expedientes_db.rankings
+        # Obtener solo datos históricos de la base de datos
         datos_historicos = get_rankings_from_db(
             selected_module, 
             rankings_collection, 
             fecha_inicio
         )
         
-        # Preparar datos nuevos de migraciones_db
+        # Preparar datos nuevos solo para mostrar en el selector de guardado
         datos_nuevos = data[
             (data['FECHA DE TRABAJO'].dt.date >= fecha_inicio) &
             (data['FECHA DE TRABAJO'].dt.date <= fecha_ayer)
         ].copy()
 
-        # Si hay datos en ambas fuentes, combinarlos evitando duplicados
+        # Crear matriz de ranking solo con datos históricos
         if not datos_historicos.empty:
-            # Convertir datos_nuevos al mismo formato que datos_historicos
-            if not datos_nuevos.empty:
-                datos_nuevos_fmt = datos_nuevos.groupby(
-                    ['FECHA DE TRABAJO', 'EVALASIGN']
-                ).size().reset_index(name='cantidad')
-                datos_nuevos_fmt.columns = ['fecha', 'evaluador', 'cantidad']
-                datos_nuevos_fmt['fecha'] = datos_nuevos_fmt['fecha'].dt.date
-                
-                # Eliminar fechas que ya están en datos_historicos
-                fechas_historicas = set(datos_historicos['fecha'])
-                datos_nuevos_fmt = datos_nuevos_fmt[
-                    ~datos_nuevos_fmt['fecha'].isin(fechas_historicas)
-                ]
-                
-                # Combinar datos
-                datos_combinados = pd.concat([datos_historicos, datos_nuevos_fmt])
-            else:
-                datos_combinados = datos_historicos
-        else:
-            # Si no hay datos históricos, usar solo los nuevos
-            if not datos_nuevos.empty:
-                datos_combinados = datos_nuevos.groupby(
-                    ['FECHA DE TRABAJO', 'EVALASIGN']
-                ).size().reset_index(name='cantidad')
-                datos_combinados.columns = ['fecha', 'evaluador', 'cantidad']
-                datos_combinados['fecha'] = datos_combinados['fecha'].dt.date
-            else:
-                datos_combinados = pd.DataFrame()
-
-        # Crear matriz de ranking
-        if not datos_combinados.empty:
             matriz_ranking = pd.pivot_table(
-                datos_combinados,
+                datos_historicos,
                 values='cantidad',
                 index='evaluador',
                 columns='fecha',
@@ -87,21 +55,15 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
 
             # Agregar columna de total
             matriz_ranking['Total'] = matriz_ranking.sum(axis=1)
-            
-            # Ordenar por total descendente
             matriz_ranking = matriz_ranking.sort_values('Total', ascending=False)
-            
-            # Convertir todos los valores a enteros
             matriz_ranking = matriz_ranking.astype(int)
 
-            # Formatear nombres de columnas (fechas) a dd/mm
+            # Formatear nombres de columnas
             columnas_formateadas = {
                 col: col.strftime('%d/%m') if isinstance(col, (datetime, pd.Timestamp)) else col 
                 for col in matriz_ranking.columns if col != 'Total'
             }
             matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
-
-            # Resetear el índice para mostrar el nombre del evaluador como columna
             matriz_ranking = matriz_ranking.reset_index()
 
             # Mostrar matriz
@@ -123,47 +85,47 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 hide_index=True
             )
 
-            # Opciones para guardar/resetear datos
-            st.markdown("---")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if ultima_fecha_registrada:
-                    if st.button("🔄 Resetear último día", 
-                               help="Elimina los registros del último día para poder grabarlos nuevamente"):
-                        reset_last_day(selected_module, rankings_collection, ultima_fecha_registrada)
-                        st.success("✅ Último día reseteado correctamente")
-                        st.rerun()
+        # Opciones para guardar/resetear datos
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if ultima_fecha_registrada:
+                if st.button("🔄 Resetear último día", 
+                           help="Elimina los registros del último día para poder grabarlos nuevamente"):
+                    reset_last_day(selected_module, rankings_collection, ultima_fecha_registrada)
+                    st.success("✅ Último día reseteado correctamente")
+                    st.rerun()
 
-            with col2:
-                if not datos_nuevos.empty:
-                    # Preparar datos nuevos para guardar
-                    fechas_disponibles = sorted(
-                        datos_nuevos['FECHA DE TRABAJO'].dt.date.unique()
+        with col2:
+            if not datos_nuevos.empty:
+                # Mostrar fechas disponibles para guardar
+                fechas_disponibles = sorted(
+                    datos_nuevos['FECHA DE TRABAJO'].dt.date.unique()
+                )
+                fechas_disponibles = [f for f in fechas_disponibles if f > (ultima_fecha_registrada or datetime.min.date())]
+                
+                if fechas_disponibles:
+                    st.warning("⚠️ Hay fechas pendientes por guardar")
+                    selected_dates = st.multiselect(
+                        "Seleccionar fechas para guardar",
+                        options=fechas_disponibles,
+                        default=fechas_disponibles,
+                        format_func=lambda x: x.strftime('%d/%m/%Y')
                     )
-                    fechas_disponibles = [f for f in fechas_disponibles if f > (ultima_fecha_registrada or datetime.min.date())]
                     
-                    if fechas_disponibles:
-                        selected_dates = st.multiselect(
-                            "Seleccionar fechas para guardar",
-                            options=fechas_disponibles,
-                            default=fechas_disponibles,
-                            format_func=lambda x: x.strftime('%d/%m/%Y')
-                        )
+                    if selected_dates and st.button("💾 Guardar datos seleccionados"):
+                        datos_a_guardar = datos_nuevos[
+                            datos_nuevos['FECHA DE TRABAJO'].dt.date.isin(selected_dates)
+                        ].copy()
                         
-                        if selected_dates and st.button("💾 Guardar datos seleccionados"):
-                            datos_a_guardar = datos_nuevos[
-                                datos_nuevos['FECHA DE TRABAJO'].dt.date.isin(selected_dates)
-                            ].copy()
-                            
-                            # Agrupar por fecha y evaluador
-                            datos_agrupados = datos_a_guardar.groupby(
-                                ['FECHA DE TRABAJO', 'EVALASIGN']
-                            ).size().reset_index(name='cantidad')
-                            
-                            save_rankings_to_db(selected_module, rankings_collection, datos_agrupados)
-                            st.success("✅ Datos guardados correctamente")
-                            st.rerun()
+                        datos_agrupados = datos_a_guardar.groupby(
+                            ['FECHA DE TRABAJO', 'EVALASIGN']
+                        ).size().reset_index(name='cantidad')
+                        
+                        save_rankings_to_db(selected_module, rankings_collection, datos_agrupados)
+                        st.success("✅ Datos guardados correctamente")
+                        st.rerun()
 
     except Exception as e:
         st.error(f"Error al procesar el ranking: {str(e)}")

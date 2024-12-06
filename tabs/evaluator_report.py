@@ -15,7 +15,8 @@ def render_evaluator_report_tab(data: pd.DataFrame):
         is_sol_module = (
             'EstadoTramite' in data.columns and 
             'Pre_Concluido' in data.columns and
-            'FechaEtapaAprobacionMasivaFin' in data.columns
+            'FechaEtapaAprobacionMasivaFin' in data.columns and
+            'ESTADO' not in data.columns  # Asegurarnos que es SOL y no otro módulo
         )
 
         if is_sol_module:

@@ -579,9 +579,15 @@ def get_rankings_from_db(module, collection, start_date):
         
         print(f"Buscando registros para módulo {module} desde {start_datetime} hasta {end_datetime}")
         
-        # Buscar registros del módulo específico
+        # Buscar registros del módulo específico con filtro de fechas
         registros = collection.find({
-            "modulo": module
+            "$and": [
+                {"modulo": module},
+                {"fecha": {
+                    "$gte": start_datetime,
+                    "$lte": end_datetime
+                }}
+            ]
         }).sort("fecha", 1)
         
         data_list = []
@@ -591,8 +597,6 @@ def get_rankings_from_db(module, collection, start_date):
                 if 'fecha' in registro and '$date' in registro['fecha']:
                     timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
                     fecha = datetime.fromtimestamp(timestamp_ms / 1000)
-                    
-                    print(f"Procesando registro con fecha: {fecha}")
                     
                     if 'datos' in registro:
                         for evaluador_data in registro['datos']:
@@ -616,10 +620,8 @@ def get_rankings_from_db(module, collection, start_date):
             print(f"Datos encontrados para {module}:")
             print(f"Total registros: {len(df)}")
             print(f"Fechas únicas encontradas: {sorted(df['fecha'].unique())}")
-            print(f"Evaluadores únicos encontrados: {sorted(df['evaluador'].unique())}")
             return df
 
-        print(f"No se encontraron datos para el módulo {module}")
         return pd.DataFrame()
         
     except Exception as e:

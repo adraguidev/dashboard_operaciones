@@ -41,6 +41,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
 
         # Crear matriz de ranking solo con datos históricos
         if not datos_historicos.empty:
+            # Convertir la columna 'fecha' a datetime si no lo está ya
+            datos_historicos['fecha'] = pd.to_datetime(datos_historicos['fecha'])
+            
             matriz_ranking = pd.pivot_table(
                 datos_historicos,
                 values='cantidad',
@@ -66,15 +69,11 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             for col in matriz_ranking.columns:
                 if col == 'Total':
                     columnas_formateadas[col] = col
-                elif isinstance(col, (datetime, pd.Timestamp)):
-                    # Convertir la fecha al formato dd/mm
-                    fecha_formateada = pd.to_datetime(col).strftime('%d/%m')
-                    # Asegurarnos que el día y mes tengan dos dígitos
-                    dia, mes = fecha_formateada.split('/')
-                    columnas_formateadas[col] = f"{int(dia):02d}/{int(mes):02d}"
                 else:
-                    columnas_formateadas[col] = col
-            
+                    # Asegurarnos de que la fecha esté en formato datetime
+                    fecha = pd.to_datetime(col)
+                    columnas_formateadas[col] = fecha.strftime('%d/%m')
+
             matriz_ranking = matriz_ranking.rename(columns=columnas_formateadas)
             matriz_ranking = matriz_ranking.reset_index()
 

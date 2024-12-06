@@ -577,55 +577,49 @@ def get_rankings_from_db(module, collection, start_date):
         start_datetime = datetime.combine(start_date, datetime.min.time())
         end_datetime = datetime.combine(datetime.now().date(), datetime.min.time())
         
-        # Buscar registros con o sin módulo
+        print(f"Buscando registros para módulo {module} desde {start_datetime} hasta {end_datetime}")
+        
+        # Buscar registros del módulo específico
         registros = collection.find({
-            "$and": [
-                {"fecha": {
-                    "$gte": start_datetime,
-                    "$lte": end_datetime
-                }},
-                {"modulo": module}  # Solo buscar registros del módulo específico
-            ]
+            "modulo": module
         }).sort("fecha", 1)
         
         data_list = []
         for registro in registros:
             try:
-                # Manejar diferentes formatos de fecha de MongoDB
-                if 'fecha' in registro:
-                    fecha = None
-                    if isinstance(registro['fecha'], dict):
-                        if '$date' in registro['fecha']:
-                            # Formato MongoDB extendido
-                            timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
-                            fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
-                    else:
-                        # Formato datetime normal
-                        fecha = registro['fecha'].date() if isinstance(registro['fecha'], datetime) else None
-
-                    if fecha and 'datos' in registro:
+                # Extraer y convertir la fecha de MongoDB
+                if 'fecha' in registro and '$date' in registro['fecha']:
+                    timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
+                    fecha = datetime.fromtimestamp(timestamp_ms / 1000)
+                    
+                    print(f"Procesando registro con fecha: {fecha}")
+                    
+                    if 'datos' in registro:
                         for evaluador_data in registro['datos']:
-                            cantidad = evaluador_data.get('cantidad')
-                            if isinstance(cantidad, dict) and '$numberInt' in cantidad:
-                                cantidad = int(cantidad['$numberInt'])
-                            elif cantidad is not None:
-                                cantidad = int(cantidad)
+                            # Extraer la cantidad del formato MongoDB
+                            if isinstance(evaluador_data['cantidad'], dict) and '$numberInt' in evaluador_data['cantidad']:
+                                cantidad = int(evaluador_data['cantidad']['$numberInt'])
+                            else:
+                                cantidad = int(evaluador_data['cantidad'])
                             
                             data_list.append({
-                                'fecha': fecha,
+                                'fecha': fecha.date(),
                                 'evaluador': evaluador_data['evaluador'],
                                 'cantidad': cantidad
                             })
             except Exception as e:
-                print(f"Error procesando registro: {str(e)}")
+                print(f"Error procesando registro individual: {str(e)}")
                 continue
 
         if data_list:
             df = pd.DataFrame(data_list)
-            print(f"Datos encontrados para {module}: {len(df)} registros")
-            print(f"Fechas encontradas: {sorted(df['fecha'].unique())}")
+            print(f"Datos encontrados para {module}:")
+            print(f"Total registros: {len(df)}")
+            print(f"Fechas únicas encontradas: {sorted(df['fecha'].unique())}")
+            print(f"Evaluadores únicos encontrados: {sorted(df['evaluador'].unique())}")
             return df
 
+        print(f"No se encontraron datos para el módulo {module}")
         return pd.DataFrame()
         
     except Exception as e:

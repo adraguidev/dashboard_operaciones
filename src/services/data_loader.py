@@ -7,18 +7,23 @@ from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS
 
 class DataLoader:
     def __init__(_self):
-        """Inicializa la conexión a MongoDB usando los secrets de Streamlit."""
+        """Inicializa las conexiones a MongoDB usando los secrets de Streamlit."""
         try:
             _self.client = MongoClient(st.secrets["connections"]["mongodb"]["uri"])
-            _self.db = _self.client['expedientes_db']
-            _self.db.command('ping')
+            # Base de datos para datos consolidados
+            _self.migraciones_db = _self.client['migraciones_db']
+            # Base de datos para rankings
+            _self.expedientes_db = _self.client['expedientes_db']
+            # Verificar conexiones
+            _self.migraciones_db.command('ping')
+            _self.expedientes_db.command('ping')
         except Exception as e:
             st.error(f"Error al conectar con MongoDB: {str(e)}")
             raise
 
-    @st.cache_data(ttl=3600)  # Cache por 1 hora
+    @st.cache_data(ttl=3600)
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos de cualquier módulo de manera unificada."""
+        """Carga datos consolidados desde migraciones_db."""
         try:
             # SPE usa Google Sheets
             if module_name == 'SPE':
@@ -46,8 +51,8 @@ class DataLoader:
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
-            # Obtener datos de MongoDB
-            collection = _self.db[collection_name]
+            # Obtener datos de migraciones_db
+            collection = _self.migraciones_db[collection_name]
             cursor = collection.find({}, {'_id': 0})
             data = pd.DataFrame(list(cursor))
 
@@ -114,7 +119,7 @@ class DataLoader:
         """Obtiene la fecha de la última actualización de un módulo."""
         try:
             collection_name = f"consolidado_{module_name.lower()}_historical"
-            historical_collection = _self.db[collection_name]
+            historical_collection = _self.expedientes_db[collection_name]
             latest = historical_collection.find_one(
                 {},
                 sort=[('metadata.fecha_actualizacion', -1)],
@@ -141,3 +146,7 @@ class DataLoader:
         except Exception as e:
             st.error(f"Error al cargar datos de SPE: {str(e)}")
             return None
+
+    def get_rankings_collection(_self):
+        """Retorna la colección de rankings de expedientes_db."""
+        return _self.expedientes_db.rankings

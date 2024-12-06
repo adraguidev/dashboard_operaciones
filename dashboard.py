@@ -89,10 +89,11 @@ def main():
             with tabs[4]:
                 render_assignment_report_tab(data)
             with tabs[5]:
+                rankings_collection = data_loader.get_rankings_collection()
                 ranking_report.render_ranking_report_tab(
                     data, 
                     selected_module, 
-                    data_loader.db.rankings
+                    rankings_collection
                 )
 
     except Exception as e:

@@ -103,10 +103,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 matriz_ranking,
                 use_container_width=True,
                 column_config={
-                    "evaluador": st.column_config.Column(
+                    "evaluador": st.column_config.TextColumn(
                         "👨‍💼 Evaluador",
-                        width="large",
-                        pin="left"
+                        width="large"
                     ),
                     "Total": st.column_config.NumberColumn(
                         "📊 Total",
@@ -125,7 +124,6 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     }
                 },
                 hide_index=True,
-                column_order=["evaluador"] + [col for col in matriz_ranking.columns if col != "evaluador"],
                 height=500
             )
 

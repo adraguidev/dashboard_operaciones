@@ -591,40 +591,47 @@ def get_rankings_from_db(module, collection, start_date):
             ]
         }).sort("fecha", 1)
         
-        # Crear un DataFrame con todas las fechas posibles
-        todas_fechas = pd.date_range(start=start_date, end=end_datetime.date(), freq='D')
-        fechas_df = pd.DataFrame({'fecha': todas_fechas})
-        
-        # Procesar los registros encontrados
         data_list = []
         for registro in registros:
-            fecha = registro['fecha']
-            if isinstance(fecha, str):
-                fecha = datetime.strptime(fecha, '%Y-%m-%dT%H:%M:%S.%f%z')
-            fecha = fecha.date() if isinstance(fecha, datetime) else None
-            
-            if fecha and 'datos' in registro:
-                for evaluador_data in registro['datos']:
-                    data_list.append({
-                        'fecha': fecha,
-                        'evaluador': evaluador_data['evaluador'],
-                        'cantidad': int(evaluador_data.get('cantidad', 0))
-                    })
+            # Convertir el timestamp de MongoDB a fecha
+            if 'fecha' in registro:
+                if isinstance(registro['fecha'], dict) and '$date' in registro['fecha']:
+                    # Si es un timestamp en formato MongoDB
+                    timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
+                    fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                else:
+                    # Si es un datetime normal
+                    fecha = registro['fecha'].date() if isinstance(registro['fecha'], datetime) else None
+                
+                if fecha and 'datos' in registro:
+                    for evaluador_data in registro['datos']:
+                        cantidad = evaluador_data.get('cantidad')
+                        # Manejar el caso donde cantidad es un dict con $numberInt
+                        if isinstance(cantidad, dict) and '$numberInt' in cantidad:
+                            cantidad = int(cantidad['$numberInt'])
+                        
+                        data_list.append({
+                            'fecha': fecha,
+                            'evaluador': evaluador_data['evaluador'],
+                            'cantidad': int(cantidad) if cantidad is not None else 0
+                        })
         
-        # Crear DataFrame con los datos encontrados
         if data_list:
             df = pd.DataFrame(data_list)
+            
+            # Crear DataFrame con todas las fechas posibles
+            todas_fechas = pd.date_range(start=start_date, end=end_datetime.date(), freq='D')
             
             # Obtener lista única de evaluadores
             evaluadores = df['evaluador'].unique()
             
-            # Crear todas las combinaciones posibles de fechas y evaluadores
+            # Crear todas las combinaciones posibles
             fechas_evaluadores = pd.MultiIndex.from_product(
                 [todas_fechas.date, evaluadores],
                 names=['fecha', 'evaluador']
             )
             
-            # Crear DataFrame completo con todas las combinaciones
+            # Crear DataFrame completo
             df_completo = pd.DataFrame(index=fechas_evaluadores).reset_index()
             
             # Combinar con los datos existentes
@@ -636,10 +643,6 @@ def get_rankings_from_db(module, collection, start_date):
             
             # Llenar valores faltantes con 0
             df_completo['cantidad'] = df_completo['cantidad'].fillna(0)
-            
-            print(f"Módulo: {module}")
-            print(f"Fecha inicio: {start_date}")
-            print(f"Registros encontrados: {len(df_completo)}")
             
             return df_completo
         

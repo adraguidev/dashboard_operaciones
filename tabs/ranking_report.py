@@ -19,6 +19,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         
         # Preparar datos actuales
         data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
+        # Eliminar filas con fechas nulas
+        data = data.dropna(subset=['FECHA DE TRABAJO'])
+        
         fecha_actual = datetime.now().date()
         fecha_ayer = fecha_actual - timedelta(days=1)
         fecha_inicio = fecha_ayer - timedelta(days=14)
@@ -131,7 +134,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         st.markdown("---")
         st.subheader("🔍 Detalle de Expedientes por Evaluador")
 
-        if not data.empty:  # Usamos data original que contiene el detalle de expedientes
+        if not data.empty:
             # Obtener lista de evaluadores únicos
             evaluadores = sorted(data['EVALASIGN'].unique())
             
@@ -148,16 +151,24 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             with col2:
                 # Obtener fechas disponibles para el evaluador seleccionado
                 fechas_disponibles = data[
-                    data['EVALASIGN'] == evaluador_seleccionado
+                    (data['EVALASIGN'] == evaluador_seleccionado) &
+                    (data['FECHA DE TRABAJO'].notna())  # Asegurar que la fecha no sea nula
                 ]['FECHA DE TRABAJO'].dt.date.unique()
+                
+                # Filtrar fechas válidas
+                fechas_disponibles = [f for f in fechas_disponibles if f is not None]
                 fechas_disponibles = sorted(fechas_disponibles)[-15:]  # Últimos 15 días
                 
-                fecha_seleccionada = st.selectbox(
-                    "📅 Seleccionar Fecha",
-                    options=fechas_disponibles,
-                    format_func=lambda x: x.strftime('%d/%m/%Y'),
-                    key="fecha_detalle"
-                )
+                if len(fechas_disponibles) > 0:
+                    fecha_seleccionada = st.selectbox(
+                        "📅 Seleccionar Fecha",
+                        options=fechas_disponibles,
+                        format_func=lambda x: x.strftime('%d/%m/%Y'),
+                        key="fecha_detalle"
+                    )
+                else:
+                    st.warning("No hay fechas disponibles para este evaluador")
+                    fecha_seleccionada = None
             
             # Mostrar detalle del día seleccionado
             if evaluador_seleccionado and fecha_seleccionada:

@@ -579,29 +579,14 @@ def get_rankings_from_db(module, collection, start_date):
         
         st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
         
-        # Convertir las fechas a timestamps para la consulta de MongoDB
-        start_timestamp = int(start_datetime.timestamp() * 1000)  # Convertir a milisegundos
-        end_timestamp = int(end_datetime.timestamp() * 1000)
-        
-        # Buscar registros usando el formato específico de MongoDB
+        # Buscar registros del módulo específico
         registros = collection.find({
             "modulo": module,
             "fecha": {
-                "$exists": True,
-                "$type": "object",
-                "$elemMatch": {
-                    "$date": {
-                        "$numberLong": {
-                            "$gte": str(start_timestamp),
-                            "$lte": str(end_timestamp)
-                        }
-                    }
-                }
+                "$gte": start_datetime,
+                "$lte": end_datetime
             }
         }).sort("fecha", 1)
-        
-        # Debug: Mostrar la consulta
-        st.write(f"Buscando timestamps entre {start_timestamp} y {end_timestamp}")
         
         data_list = []
         fechas_procesadas = set()
@@ -614,8 +599,10 @@ def get_rankings_from_db(module, collection, start_date):
                         timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
                         fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
                         st.write(f"Timestamp encontrado: {timestamp_ms}, convertido a fecha: {fecha}")
+                    elif isinstance(registro['fecha'], datetime):
+                        fecha = registro['fecha'].date()
                     
-                    if fecha and start_date <= fecha <= end_datetime.date():
+                    if fecha:
                         fechas_procesadas.add(fecha)
                         st.write(f"Procesando registro con fecha: {fecha}")
                         
@@ -632,8 +619,7 @@ def get_rankings_from_db(module, collection, start_date):
                                     'evaluador': evaluador_data['evaluador'],
                                     'cantidad': cantidad
                                 })
-                    else:
-                        st.write(f"Fecha {fecha} fuera del rango {start_date} - {end_datetime.date()}")
+
             except Exception as e:
                 st.write(f"Error procesando registro: {str(e)}")
                 st.write(f"Registro problemático: {registro}")

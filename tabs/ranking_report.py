@@ -612,43 +612,47 @@ def get_rankings_from_db(module, collection, start_date):
         
         st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
         
-        # Buscar registros del módulo específico sin filtro de fecha inicial
+        # Buscar registros del módulo específico y ordenar por fecha
         registros = collection.find({
-            "modulo": module
-        }).sort([("fecha.$date.$numberLong", 1)])
+            "modulo": module,
+            "fecha": {"$gte": start_datetime, "$lte": end_datetime}
+        }).sort("fecha", 1)  # Cambio aquí: simplificamos el sort
         
         data_list = []
         fechas_procesadas = set()
         
         for registro in registros:
             try:
-                if 'fecha' in registro and isinstance(registro['fecha'], dict):
-                    if '$date' in registro['fecha'] and '$numberLong' in registro['fecha']['$date']:
-                        timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
-                        fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                fecha = registro.get('fecha')
+                if fecha:
+                    # Convertir fecha a datetime si es necesario
+                    if isinstance(fecha, dict) and '$date' in fecha:
+                        timestamp_ms = int(fecha['$date']['$numberLong'])
+                        fecha = datetime.fromtimestamp(timestamp_ms / 1000)
+                    elif isinstance(fecha, str):
+                        fecha = datetime.fromisoformat(fecha.replace('Z', '+00:00'))
+                    
+                    fecha = fecha.date()  # Convertir a date para comparación
+                    
+                    if start_date <= fecha <= end_datetime.date():
+                        fechas_procesadas.add(fecha)
                         
-                        # Solo procesar si está en el rango de fechas deseado
-                        if start_date <= fecha <= end_datetime.date():
-                            st.write(f"Procesando registro con fecha: {fecha}")
-                            fechas_procesadas.add(fecha)
-                            
-                            if 'datos' in registro:
-                                for evaluador_data in registro['datos']:
-                                    cantidad = evaluador_data.get('cantidad')
-                                    if isinstance(cantidad, dict) and '$numberInt' in cantidad:
-                                        cantidad = int(cantidad['$numberInt'])
-                                    elif cantidad is not None:
-                                        cantidad = int(cantidad)
-                                    
-                                    data_list.append({
-                                        'fecha': fecha,
-                                        'evaluador': evaluador_data['evaluador'],
-                                        'cantidad': cantidad
-                                    })
+                        if 'datos' in registro:
+                            for evaluador_data in registro['datos']:
+                                cantidad = evaluador_data.get('cantidad')
+                                if isinstance(cantidad, dict) and '$numberInt' in cantidad:
+                                    cantidad = int(cantidad['$numberInt'])
+                                elif cantidad is not None:
+                                    cantidad = int(cantidad)
+                                
+                                data_list.append({
+                                    'fecha': fecha,
+                                    'evaluador': evaluador_data['evaluador'],
+                                    'cantidad': cantidad
+                                })
 
             except Exception as e:
                 st.write(f"Error procesando registro: {str(e)}")
-                st.write(f"Registro problemático: {registro}")
                 continue
 
         st.write(f"Fechas encontradas: {sorted(fechas_procesadas)}")

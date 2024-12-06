@@ -451,7 +451,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
 
         # Sección de inconsistencias
         st.markdown("---")
-        st.subheader("⚠��� Inconsistencias Detectadas")
+        st.subheader("⚠ Inconsistencias Detectadas")
 
         # Filtrar expedientes sin evaluador
         expedientes_sin_evaluador = data[
@@ -579,17 +579,9 @@ def get_rankings_from_db(module, collection, start_date):
         
         st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
         
-        # Convertir las fechas a timestamps para la consulta
-        start_timestamp = int(start_datetime.timestamp() * 1000)
-        end_timestamp = int(end_datetime.timestamp() * 1000)
-        
-        # Buscar registros usando el formato de timestamp de MongoDB
+        # Buscar registros del módulo específico
         registros = collection.find({
-            "modulo": module,
-            "fecha.$date.$numberLong": {
-                "$gte": str(start_timestamp),
-                "$lte": str(end_timestamp)
-            }
+            "modulo": module
         }).sort("fecha", 1)
         
         data_list = []
@@ -600,12 +592,14 @@ def get_rankings_from_db(module, collection, start_date):
                 if 'fecha' in registro:
                     fecha = None
                     if isinstance(registro['fecha'], dict) and '$date' in registro['fecha']:
+                        # Manejar el formato específico de MongoDB
                         timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
                         fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
                     elif isinstance(registro['fecha'], datetime):
                         fecha = registro['fecha'].date()
 
-                    if fecha:
+                    # Solo procesar si la fecha está en el rango deseado
+                    if fecha and start_date <= fecha <= end_datetime.date():
                         fechas_procesadas.add(fecha)
                         st.write(f"Procesando registro con fecha: {fecha}")
 
@@ -630,11 +624,7 @@ def get_rankings_from_db(module, collection, start_date):
 
         if data_list:
             df = pd.DataFrame(data_list)
-            st.write(f"Fechas únicas en DataFrame antes del filtro: {sorted(df['fecha'].unique())}")
-            
-            # Ya no necesitamos filtrar por fechas aquí porque la consulta MongoDB ya lo hizo
             st.write(f"Total de registros en DataFrame: {len(df)}")
-            
             return df
 
         return pd.DataFrame()

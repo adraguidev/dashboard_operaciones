@@ -4,6 +4,13 @@ import plotly.express as px
 from datetime import datetime, timedelta
 
 def render_closing_analysis_tab(data: pd.DataFrame, module_name: str = None):
+    """
+    Renderiza el análisis de cierre de expedientes.
+    
+    Args:
+        data (pd.DataFrame): DataFrame con los datos a analizar
+        module_name (str, optional): Nombre del módulo actual. Por defecto None.
+    """
     try:
         st.header("🔒 Análisis de Cierre de Expedientes")
         
@@ -38,7 +45,7 @@ def render_closing_analysis_tab(data: pd.DataFrame, module_name: str = None):
             return
 
         # Mostrar estadísticas generales
-        st.subheader("📊 Estadísticas Generales de Cierre")
+        st.subheader("�� Estadísticas Generales de Cierre")
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -114,7 +121,12 @@ def render_closing_analysis_tab(data: pd.DataFrame, module_name: str = None):
         print(f"Error detallado: {str(e)}")
 
 def render_sol_closing_analysis(data: pd.DataFrame):
-    """Renderiza el análisis de cierre específico para el módulo SOL."""
+    """
+    Renderiza el análisis de cierre específico para el módulo SOL.
+    
+    Args:
+        data (pd.DataFrame): DataFrame con los datos de SOL a analizar
+    """
     try:
         # Convertir fechas
         data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], format='%d/%m/%Y', errors='coerce')

@@ -530,7 +530,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 hide_index=True
             )
             
-            # Bot��n para descargar inconsistencias
+            # Botón para descargar inconsistencias
             if st.download_button(
                 label="📥 Descargar Expedientes Sin Evaluador",
                 data=expedientes_sin_evaluador.to_csv(index=False),
@@ -577,7 +577,9 @@ def get_rankings_from_db(module, collection, start_date):
         start_datetime = datetime.combine(start_date, datetime.min.time())
         end_datetime = datetime.combine(datetime.now().date(), datetime.min.time())
         
-        # Buscar registros del módulo específico
+        print(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
+        
+        # Buscar todos los registros del módulo sin filtro de fecha inicial
         registros = collection.find({
             "modulo": module
         }).sort("fecha", 1)
@@ -585,15 +587,15 @@ def get_rankings_from_db(module, collection, start_date):
         data_list = []
         for registro in registros:
             try:
-                # Extraer y convertir la fecha de MongoDB
                 if 'fecha' in registro:
                     fecha = None
                     if isinstance(registro['fecha'], dict) and '$date' in registro['fecha']:
-                        # Formato MongoDB extendido
                         timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
                         fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
                     elif isinstance(registro['fecha'], datetime):
                         fecha = registro['fecha'].date()
+
+                    print(f"Procesando fecha: {fecha}")  # Debug
 
                     if fecha and 'datos' in registro:
                         for evaluador_data in registro['datos']:
@@ -612,16 +614,17 @@ def get_rankings_from_db(module, collection, start_date):
                 print(f"Error procesando registro: {str(e)}")
                 continue
 
-        # Crear DataFrame con los datos encontrados
         if data_list:
             df = pd.DataFrame(data_list)
+            print(f"Fechas antes del filtro: {sorted(df['fecha'].unique())}")  # Debug
             
             # Filtrar por rango de fechas después de crear el DataFrame
             df = df[
-                (df['fecha'] >= start_datetime.date()) & 
+                (df['fecha'] >= start_date) & 
                 (df['fecha'] <= end_datetime.date())
             ]
             
+            print(f"Fechas después del filtro: {sorted(df['fecha'].unique())}")  # Debug
             return df
 
         return pd.DataFrame()

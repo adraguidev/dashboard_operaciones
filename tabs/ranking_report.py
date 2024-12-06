@@ -85,15 +85,27 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 column_config={
                     "evaluador": st.column_config.TextColumn(
                         "👨‍💼 Evaluador",
-                        width="large"
+                        width="large",
+                        required=True
                     ),
                     "Total": st.column_config.NumberColumn(
                         "📊 Total",
                         help="Total de expedientes trabajados",
                         format="%d"
-                    )
+                    ),
+                    **{
+                        col: st.column_config.NumberColumn(
+                            col,
+                            format="%d",
+                            text_align="center"
+                        )
+                        for col in matriz_ranking.columns
+                        if col not in ["evaluador", "Total"]
+                    }
                 },
-                hide_index=True
+                hide_index=True,
+                column_order=["evaluador"] + [col for col in matriz_ranking.columns if col != "evaluador"],
+                height=500  # Ajusta este valor según necesites
             )
 
         # Opciones para guardar/resetear datos

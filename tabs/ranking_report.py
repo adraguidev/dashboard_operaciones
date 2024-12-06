@@ -36,7 +36,10 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         # Preparar datos nuevos solo para mostrar en el selector de guardado
         datos_nuevos = data[
             (data['FECHA DE TRABAJO'].dt.date >= fecha_inicio) &
-            (data['FECHA DE TRABAJO'].dt.date <= fecha_ayer)
+            (data['FECHA DE TRABAJO'].dt.date <= fecha_ayer) &
+            (data['EVALASIGN'].notna()) &  # Filtrar registros con evaluador
+            (data['EVALASIGN'] != '') &
+            (data['EVALASIGN'].str.strip() != '')
         ].copy()
 
         # Crear matriz de ranking solo con datos históricos
@@ -348,21 +351,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         if not expedientes_sin_evaluador.empty:
             st.warning(f"Se encontraron {len(expedientes_sin_evaluador)} expedientes sin evaluador asignado")
             
-            # Mostrar detalles de los expedientes sin evaluador
-            columnas_mostrar = [
-                'NumeroTramite',
-                'FECHA DE TRABAJO',
-                'EVALASIGN',
-                'ESTADO',
-                'UltimaEtapa',
-                'EstadoTramite'
-            ]
-            
-            # Filtrar solo las columnas que existen
-            columnas_mostrar = [col for col in columnas_mostrar if col in expedientes_sin_evaluador.columns]
-            
+            # Mostrar todas las columnas disponibles
             st.dataframe(
-                expedientes_sin_evaluador[columnas_mostrar],
+                expedientes_sin_evaluador,
                 use_container_width=True,
                 column_config={
                     "NumeroTramite": st.column_config.TextColumn(
@@ -373,10 +364,36 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                         "Fecha de Trabajo",
                         format="DD/MM/YYYY"
                     ),
+                    "FechaExpendiente": st.column_config.TextColumn(
+                        "Fecha Expediente",
+                        width="medium"
+                    ),
+                    "FechaEtapaAprobacionMasivaFin": st.column_config.TextColumn(
+                        "Fecha Aprobación",
+                        width="medium"
+                    ),
+                    "FechaPre": st.column_config.TextColumn(
+                        "Fecha Pre",
+                        width="medium"
+                    ),
                     "EVALASIGN": "Evaluador",
                     "ESTADO": "Estado",
                     "UltimaEtapa": "Última Etapa",
-                    "EstadoTramite": "Estado Trámite"
+                    "EstadoTramite": "Estado Trámite",
+                    "EstadoPre": "Estado Pre",
+                    "Pre_Concluido": "Pre Concluido",
+                    "Evaluado": "Evaluado",
+                    "Dependencia": "Dependencia",
+                    "Anio": st.column_config.NumberColumn(
+                        "Año",
+                        format="%d"
+                    ),
+                    "Mes": st.column_config.NumberColumn(
+                        "Mes",
+                        format="%d"
+                    ),
+                    "OperadorPre": "Operador Pre",
+                    "DESCRIPCION": "Descripción"
                 },
                 hide_index=True
             )

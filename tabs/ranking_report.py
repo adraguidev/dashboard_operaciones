@@ -607,16 +607,12 @@ def get_last_date_from_db(module, collection):
 def get_rankings_from_db(module, collection, start_date):
     """Obtener los rankings desde expedientes_db.rankings."""
     try:
-        start_datetime = datetime.combine(start_date, datetime.min.time())
-        end_datetime = datetime.combine(datetime.now().date(), datetime.min.time())
+        st.write(f"Buscando registros para el módulo: {module}")
         
-        st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
-        
-        # Buscar registros del módulo específico y ordenar por fecha
+        # Buscar todos los registros del módulo sin filtro de fecha inicial
         registros = collection.find({
-            "modulo": module,
-            "fecha": {"$gte": start_datetime, "$lte": end_datetime}
-        }).sort("fecha", 1)  # Cambio aquí: simplificamos el sort
+            "modulo": module
+        }).sort("fecha", 1)
         
         data_list = []
         fechas_procesadas = set()
@@ -624,48 +620,49 @@ def get_rankings_from_db(module, collection, start_date):
         for registro in registros:
             try:
                 fecha = registro.get('fecha')
+                if isinstance(fecha, dict) and '$date' in fecha:
+                    # Manejar formato específico de MongoDB
+                    timestamp_ms = int(fecha['$date'].get('$numberLong', 0))
+                    fecha = datetime.fromtimestamp(timestamp_ms / 1000)
+                
                 if fecha:
-                    # Convertir fecha a datetime si es necesario
-                    if isinstance(fecha, dict) and '$date' in fecha:
-                        timestamp_ms = int(fecha['$date']['$numberLong'])
-                        fecha = datetime.fromtimestamp(timestamp_ms / 1000)
-                    elif isinstance(fecha, str):
-                        fecha = datetime.fromisoformat(fecha.replace('Z', '+00:00'))
+                    fecha_date = fecha.date() if isinstance(fecha, datetime) else fecha
+                    fechas_procesadas.add(fecha_date)
                     
-                    fecha = fecha.date()  # Convertir a date para comparación
-                    
-                    if start_date <= fecha <= end_datetime.date():
-                        fechas_procesadas.add(fecha)
-                        
-                        if 'datos' in registro:
-                            for evaluador_data in registro['datos']:
-                                cantidad = evaluador_data.get('cantidad')
-                                if isinstance(cantidad, dict) and '$numberInt' in cantidad:
-                                    cantidad = int(cantidad['$numberInt'])
-                                elif cantidad is not None:
-                                    cantidad = int(cantidad)
-                                
-                                data_list.append({
-                                    'fecha': fecha,
-                                    'evaluador': evaluador_data['evaluador'],
-                                    'cantidad': cantidad
-                                })
+                    if 'datos' in registro:
+                        for evaluador_data in registro['datos']:
+                            cantidad = evaluador_data.get('cantidad')
+                            # Manejar cantidad en formato MongoDB
+                            if isinstance(cantidad, dict) and '$numberInt' in cantidad:
+                                cantidad = int(cantidad['$numberInt'])
+                            elif cantidad is not None:
+                                cantidad = int(cantidad)
+                            
+                            data_list.append({
+                                'fecha': fecha_date,
+                                'evaluador': evaluador_data['evaluador'],
+                                'cantidad': cantidad
+                            })
 
             except Exception as e:
-                st.write(f"Error procesando registro: {str(e)}")
+                st.write(f"Error procesando registro individual: {str(e)}")
                 continue
 
-        st.write(f"Fechas encontradas: {sorted(fechas_procesadas)}")
+        # Información de depuración
+        st.write(f"Total de fechas encontradas: {len(fechas_procesadas)}")
+        st.write(f"Fechas: {sorted(fechas_procesadas)}")
+        st.write(f"Total de registros procesados: {len(data_list)}")
 
         if data_list:
             df = pd.DataFrame(data_list)
-            st.write(f"Total registros: {len(df)}")
+            # Ordenar por fecha
+            df = df.sort_values('fecha')
             return df
 
         return pd.DataFrame()
         
     except Exception as e:
-        st.write(f"Error al obtener rankings: {str(e)}")
+        st.error(f"Error al obtener rankings: {str(e)}")
         return pd.DataFrame()
 
 def save_rankings_to_db(module, collection, data):

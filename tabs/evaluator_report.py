@@ -65,12 +65,12 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     fecha_inicio = st.date_input(
                         "Fecha Desde", 
                         value=None,
-                        key="fecha_inicio_sol"  # Key única
+                        key="fecha_inicio_sol"
                     )
                     fecha_fin = st.date_input(
                         "Fecha Hasta", 
                         value=None,
-                        key="fecha_fin_sol"  # Key única
+                        key="fecha_fin_sol"
                     )
 
             # Aplicar filtros para SOL
@@ -98,12 +98,12 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 st.markdown("### 📊 Resumen")
                 total = len(filtered_data)
                 aprobados = len(filtered_data[filtered_data['EstadoTramite'] == 'APROBADO'])
-                otros = total - aprobados
+                pre_concluidos = len(filtered_data[filtered_data['Pre_Concluido'] == 'SI'])
                 
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Total Expedientes", f"{total:,d}")
                 col2.metric("Aprobados", f"{aprobados:,d}")
-                col3.metric("Otros Estados", f"{otros:,d}")
+                col3.metric("Pre Concluidos", f"{pre_concluidos:,d}")
 
                 # Mostrar datos filtrados
                 st.markdown("### 📋 Detalle de Expedientes")
@@ -112,7 +112,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 display_data = filtered_data[[
                     'NumeroTramite', 'Dependencia', 'EstadoTramite', 
                     'UltimaEtapa', 'FechaExpendiente', 
-                    'FechaEtapaAprobacionMasivaFin'
+                    'FechaEtapaAprobacionMasivaFin', 'Pre_Concluido'
                 ]].copy()
                 
                 # Mostrar tabla
@@ -125,7 +125,8 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                         'EstadoTramite': 'Estado',
                         'UltimaEtapa': 'Última Etapa',
                         'FechaExpendiente': 'Fecha Ingreso',
-                        'FechaEtapaAprobacionMasivaFin': 'Fecha Aprobación'
+                        'FechaEtapaAprobacionMasivaFin': 'Fecha Aprobación',
+                        'Pre_Concluido': 'Pre Concluido'
                     }
                 )
 

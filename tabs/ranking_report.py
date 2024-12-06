@@ -227,31 +227,21 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     fecha_datetime = datetime.combine(fecha_editar, datetime.min.time())
                     
                     # Buscar el documento existente
-                    documento = rankings_collection.find_one({
+                    documento = collection.find_one({
                         "fecha": fecha_datetime,
                         "modulo": selected_module
                     })
                     
                     if documento:
                         # Actualizar el valor específico
-                        datos_actualizados = documento.get('datos', [])
-                        evaluador_encontrado = False
-                        
+                        datos_actualizados = documento['datos']
                         for dato in datos_actualizados:
                             if dato['evaluador'] == evaluador_editar:
                                 dato['cantidad'] = nuevo_valor
-                                evaluador_encontrado = True
                                 break
                         
-                        # Si no se encontró el evaluador, agregarlo
-                        if not evaluador_encontrado:
-                            datos_actualizados.append({
-                                "evaluador": evaluador_editar,
-                                "cantidad": nuevo_valor
-                            })
-                        
-                        # Actualizar documento en MongoDB usando update_one
-                        rankings_collection.update_one(
+                        # Actualizar documento en MongoDB
+                        collection.update_one(
                             {
                                 "fecha": fecha_datetime,
                                 "modulo": selected_module
@@ -266,19 +256,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                         st.success("✅ Registro actualizado correctamente")
                         st.rerun()
                     else:
-                        # Si no existe el documento, crearlo
-                        nuevo_documento = {
-                            "fecha": fecha_datetime,
-                            "modulo": selected_module,
-                            "datos": [{
-                                "evaluador": evaluador_editar,
-                                "cantidad": nuevo_valor
-                            }]
-                        }
-                        rankings_collection.insert_one(nuevo_documento)
-                        st.success("✅ Nuevo registro creado correctamente")
-                        st.rerun()
-                        
+                        st.error("❌ No se encontró el registro en la base de datos")
                 except Exception as e:
                     st.error(f"❌ Error al actualizar el registro: {str(e)}")
         else:
@@ -309,7 +287,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     (data['FECHA DE TRABAJO'].notna())  # Asegurar que la fecha no sea nula
                 ]['FECHA DE TRABAJO'].dt.date.unique()
                 
-                # Filtrar fechas v��lidas
+                # Filtrar fechas válidas
                 fechas_disponibles = [f for f in fechas_disponibles if f is not None]
                 fechas_disponibles = sorted(fechas_disponibles)[-15:]  # Últimos 15 días
                 
@@ -599,55 +577,36 @@ def get_rankings_from_db(module, collection, start_date):
         start_datetime = datetime.combine(start_date, datetime.min.time())
         end_datetime = datetime.combine(datetime.now().date(), datetime.min.time())
         
-        st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
-        
-        # Buscar registros del módulo específico sin filtro de fecha inicial
+        # Modificar la consulta para usar una sintaxis más simple
         registros = collection.find({
-            "modulo": module
-        }).sort([("fecha.$date.$numberLong", 1)])
+            "modulo": module,
+            "fecha": {
+                "$gte": start_datetime,
+                "$lte": end_datetime
+            }
+        }).sort("fecha", 1)
         
         data_list = []
-        fechas_procesadas = set()
         
         for registro in registros:
             try:
-                if 'fecha' in registro and isinstance(registro['fecha'], dict):
-                    if '$date' in registro['fecha'] and '$numberLong' in registro['fecha']['$date']:
-                        timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
-                        fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                fecha = registro['fecha']
+                if isinstance(fecha, datetime):
+                    for evaluador_data in registro.get('datos', []):
+                        cantidad = evaluador_data.get('cantidad')
+                        if isinstance(cantidad, dict):
+                            cantidad = int(cantidad.get('$numberInt', 0))
                         
-                        # Solo procesar si está en el rango de fechas deseado
-                        if start_date <= fecha <= end_datetime.date():
-                            st.write(f"Procesando registro con fecha: {fecha}")
-                            fechas_procesadas.add(fecha)
-                            
-                            if 'datos' in registro:
-                                for evaluador_data in registro['datos']:
-                                    cantidad = evaluador_data.get('cantidad')
-                                    if isinstance(cantidad, dict) and '$numberInt' in cantidad:
-                                        cantidad = int(cantidad['$numberInt'])
-                                    elif cantidad is not None:
-                                        cantidad = int(cantidad)
-                                    
-                                    data_list.append({
-                                        'fecha': fecha,
-                                        'evaluador': evaluador_data['evaluador'],
-                                        'cantidad': cantidad
-                                    })
-
+                        data_list.append({
+                            'fecha': fecha,
+                            'evaluador': evaluador_data['evaluador'],
+                            'cantidad': int(cantidad) if cantidad is not None else 0
+                        })
             except Exception as e:
-                st.write(f"Error procesando registro: {str(e)}")
-                st.write(f"Registro problemático: {registro}")
+                st.write(f"Error procesando registro individual: {str(e)}")
                 continue
 
-        st.write(f"Fechas encontradas: {sorted(fechas_procesadas)}")
-
-        if data_list:
-            df = pd.DataFrame(data_list)
-            st.write(f"Total registros: {len(df)}")
-            return df
-
-        return pd.DataFrame()
+        return pd.DataFrame(data_list) if data_list else pd.DataFrame()
         
     except Exception as e:
         st.write(f"Error al obtener rankings: {str(e)}")

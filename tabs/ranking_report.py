@@ -579,10 +579,29 @@ def get_rankings_from_db(module, collection, start_date):
         
         st.write(f"Buscando registros desde {start_datetime} hasta {end_datetime}")
         
-        # Buscar registros del módulo específico
+        # Convertir las fechas a timestamps para la consulta de MongoDB
+        start_timestamp = int(start_datetime.timestamp() * 1000)  # Convertir a milisegundos
+        end_timestamp = int(end_datetime.timestamp() * 1000)
+        
+        # Buscar registros usando el formato específico de MongoDB
         registros = collection.find({
-            "modulo": module
+            "modulo": module,
+            "fecha": {
+                "$exists": True,
+                "$type": "object",
+                "$elemMatch": {
+                    "$date": {
+                        "$numberLong": {
+                            "$gte": str(start_timestamp),
+                            "$lte": str(end_timestamp)
+                        }
+                    }
+                }
+            }
         }).sort("fecha", 1)
+        
+        # Debug: Mostrar la consulta
+        st.write(f"Buscando timestamps entre {start_timestamp} y {end_timestamp}")
         
         data_list = []
         fechas_procesadas = set()
@@ -592,19 +611,14 @@ def get_rankings_from_db(module, collection, start_date):
                 if 'fecha' in registro:
                     fecha = None
                     if isinstance(registro['fecha'], dict) and '$date' in registro['fecha']:
-                        # Manejar el formato específico de MongoDB
-                        if '$numberLong' in registro['fecha']['$date']:
-                            timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
-                            fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
-                            st.write(f"Timestamp encontrado: {timestamp_ms}, convertido a fecha: {fecha}")
-                    elif isinstance(registro['fecha'], datetime):
-                        fecha = registro['fecha'].date()
-
-                    # Solo procesar si la fecha está en el rango deseado
+                        timestamp_ms = int(registro['fecha']['$date']['$numberLong'])
+                        fecha = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                        st.write(f"Timestamp encontrado: {timestamp_ms}, convertido a fecha: {fecha}")
+                    
                     if fecha and start_date <= fecha <= end_datetime.date():
                         fechas_procesadas.add(fecha)
                         st.write(f"Procesando registro con fecha: {fecha}")
-
+                        
                         if 'datos' in registro:
                             for evaluador_data in registro['datos']:
                                 cantidad = evaluador_data.get('cantidad')

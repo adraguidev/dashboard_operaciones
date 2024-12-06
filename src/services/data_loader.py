@@ -23,6 +23,24 @@ class DataLoader:
             if module_name == 'SPE':
                 return _self._load_spe_from_sheets()
             
+            # Procesamiento especial para CCM-LEY
+            if module_name == 'CCM-LEY':
+                # Cargar datos de CCM y CCM-ESP
+                ccm_data = _self.load_module_data('CCM')
+                ccm_esp_data = _self.load_module_data('CCM-ESP')
+                
+                if ccm_data is not None and ccm_esp_data is not None:
+                    # Filtrar CCM-LEY: registros de CCM que no están en CCM-ESP
+                    data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
+                    
+                    # Verificar si existe la columna TipoTramite y filtrar
+                    if 'TipoTramite' in data.columns:
+                        data = data[data['TipoTramite'] == 'LEY'].copy()
+                    return data
+                else:
+                    st.error("No se pudieron cargar los datos necesarios para CCM-LEY")
+                    return None
+
             collection_name = MONGODB_COLLECTIONS.get(module_name)
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")

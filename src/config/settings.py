@@ -79,4 +79,14 @@ GOOGLE_SCOPES = [
 # Agregar al archivo de configuración
 ADMIN_PASSWORD = "Ka260314!"  # Idealmente esto debería estar en st.secrets
 
+# Configuración de colecciones MongoDB
+MONGODB_COLLECTIONS = {
+    'CCM': 'consolidado_ccm',
+    'PRR': 'consolidado_prr',
+    'CCM-ESP': 'consolidado_ccm_esp',
+    'CCM-LEY': 'consolidado_ccm',  # Usa la misma colección que CCM
+    'SOL': 'consolidado_sol',
+    'SPE': 'consolidado_spe'
+}
+
 # Otras configuraciones... 

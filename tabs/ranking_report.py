@@ -26,7 +26,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         fecha_ayer = fecha_actual - timedelta(days=1)
         fecha_inicio = fecha_ayer - timedelta(days=14)
         
-        # Obtener solo datos hist��ricos de la base de datos
+        # Obtener solo datos histricos de la base de datos
         datos_historicos = get_rankings_from_db(
             selected_module, 
             rankings_collection, 
@@ -208,16 +208,54 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     
                     # Convertir timestamps a fechas legibles
                     if 'FechaExpendiente' in expedientes_mostrar.columns:
-                        expedientes_mostrar['FechaExpendiente'] = pd.to_datetime(
-                            expedientes_mostrar['FechaExpendiente'].astype(float) / 1000,  # Dividir por 1000 para convertir de milisegundos a segundos
-                            unit='s'
-                        ).dt.strftime('%d/%m/%Y')
+                        try:
+                            # Intentar primero si ya es una fecha en formato string
+                            expedientes_mostrar['FechaExpendiente'] = pd.to_datetime(
+                                expedientes_mostrar['FechaExpendiente'], 
+                                errors='coerce',
+                                format='%d/%m/%Y'
+                            ).fillna(expedientes_mostrar['FechaExpendiente'])
+                            
+                            # Si hay valores numéricos, convertirlos desde timestamp
+                            mask_numeric = expedientes_mostrar['FechaExpendiente'].astype(str).str.match(r'^\d+$')
+                            if mask_numeric.any():
+                                expedientes_mostrar.loc[mask_numeric, 'FechaExpendiente'] = pd.to_datetime(
+                                    expedientes_mostrar.loc[mask_numeric, 'FechaExpendiente'].astype(float) / 1000,
+                                    unit='s'
+                                )
+                            
+                            # Formatear todas las fechas
+                            expedientes_mostrar['FechaExpendiente'] = pd.to_datetime(
+                                expedientes_mostrar['FechaExpendiente'], 
+                                errors='coerce'
+                            ).dt.strftime('%d/%m/%Y')
+                        except Exception as e:
+                            print(f"Error al convertir FechaExpendiente: {str(e)}")
                     
                     if 'FechaEtapaAprobacionMasivaFin' in expedientes_mostrar.columns:
-                        expedientes_mostrar['FechaEtapaAprobacionMasivaFin'] = pd.to_datetime(
-                            expedientes_mostrar['FechaEtapaAprobacionMasivaFin'].astype(float) / 1000,
-                            unit='s'
-                        ).dt.strftime('%d/%m/%Y')
+                        try:
+                            # Intentar primero si ya es una fecha en formato string
+                            expedientes_mostrar['FechaEtapaAprobacionMasivaFin'] = pd.to_datetime(
+                                expedientes_mostrar['FechaEtapaAprobacionMasivaFin'], 
+                                errors='coerce',
+                                format='%d/%m/%Y'
+                            ).fillna(expedientes_mostrar['FechaEtapaAprobacionMasivaFin'])
+                            
+                            # Si hay valores numéricos, convertirlos desde timestamp
+                            mask_numeric = expedientes_mostrar['FechaEtapaAprobacionMasivaFin'].astype(str).str.match(r'^\d+$')
+                            if mask_numeric.any():
+                                expedientes_mostrar.loc[mask_numeric, 'FechaEtapaAprobacionMasivaFin'] = pd.to_datetime(
+                                    expedientes_mostrar.loc[mask_numeric, 'FechaEtapaAprobacionMasivaFin'].astype(float) / 1000,
+                                    unit='s'
+                                )
+                            
+                            # Formatear todas las fechas
+                            expedientes_mostrar['FechaEtapaAprobacionMasivaFin'] = pd.to_datetime(
+                                expedientes_mostrar['FechaEtapaAprobacionMasivaFin'], 
+                                errors='coerce'
+                            ).dt.strftime('%d/%m/%Y')
+                        except Exception as e:
+                            print(f"Error al convertir FechaEtapaAprobacionMasivaFin: {str(e)}")
                     
                     # Configuración de columnas para la visualización
                     column_config = {

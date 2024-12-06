@@ -3,7 +3,7 @@ import streamlit as st
 from datetime import datetime
 from pymongo import MongoClient
 import os
-from config import MONGODB_COLLECTIONS, DATE_FORMAT
+from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS
 
 class DataLoader:
     def __init__(_self):
@@ -31,7 +31,21 @@ class DataLoader:
             
             # Procesamiento especial para CCM-LEY
             if module_name == 'CCM-LEY':
-                return _self.load_ccm_ley_data()
+                # Cargar datos de CCM y CCM-ESP
+                ccm_data = _self.load_module_data('CCM')
+                ccm_esp_data = _self.load_module_data('CCM-ESP')
+                
+                if ccm_data is not None and ccm_esp_data is not None:
+                    # Filtrar CCM-LEY: registros de CCM que no están en CCM-ESP
+                    data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
+                    
+                    # Verificar si existe la columna TipoTramite y filtrar
+                    if 'TipoTramite' in data.columns:
+                        data = data[data['TipoTramite'] == 'LEY'].copy()
+                    return data
+                else:
+                    st.error("No se pudieron cargar los datos necesarios para CCM-LEY")
+                    return None
 
             collection_name = MONGODB_COLLECTIONS.get(module_name)
             if not collection_name:
@@ -136,31 +150,3 @@ class DataLoader:
     def get_rankings_collection(_self):
         """Retorna la colección de rankings de expedientes_db."""
         return _self.expedientes_db['rankings']
-
-    @st.cache_data(ttl=3600)
-    def load_ccm_ley_data(_self) -> pd.DataFrame:
-        """Carga y procesa datos de CCM-LEY de manera optimizada."""
-        try:
-            # Cargar datos de las colecciones de migraciones_db
-            ccm_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CCM']]
-            ccm_esp_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CCM-ESP']]
-            
-            # Obtener solo los números de trámite de CCM-ESP (más eficiente)
-            ccm_esp_numeros = set(doc['NumeroTramite'] for doc in ccm_esp_collection.find({}, {'NumeroTramite': 1, '_id': 0}))
-            
-            # Obtener datos de CCM filtrando directamente en la consulta
-            pipeline = [
-                {
-                    "$match": {
-                        "NumeroTramite": {"$nin": list(ccm_esp_numeros)},
-                        "TipoTramite": "LEY"
-                    }
-                }
-            ]
-            
-            ccm_ley_data = pd.DataFrame(list(ccm_collection.aggregate(pipeline)))
-            return ccm_ley_data if not ccm_ley_data.empty else None
-            
-        except Exception as e:
-            st.error(f"Error al cargar datos de CCM-LEY: {str(e)}")
-            return None

@@ -3,14 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
-def render_closing_analysis_tab(data: pd.DataFrame, module_name: str = None) -> None:
-    """
-    Renderiza el análisis de cierre de expedientes.
-    
-    Args:
-        data (pd.DataFrame): DataFrame con los datos a analizar
-        module_name (str, optional): Nombre del módulo actual. Defaults to None.
-    """
+def render_closing_analysis_tab(data: pd.DataFrame, module_name: str = None):
     try:
         st.header("🔒 Análisis de Cierre de Expedientes")
         
@@ -44,7 +37,7 @@ def render_closing_analysis_tab(data: pd.DataFrame, module_name: str = None) -> 
             st.warning("No se encontraron expedientes cerrados en los últimos 15 días")
             return
 
-        # Mostrar estad��sticas generales
+        # Mostrar estadísticas generales
         st.subheader("📊 Estadísticas Generales de Cierre")
         col1, col2, col3 = st.columns(3)
         

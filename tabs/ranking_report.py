@@ -177,11 +177,7 @@ def get_last_date_from_db(module, collection):
             sort=[("fecha", -1)]
         )
         if ultimo_registro and 'fecha' in ultimo_registro:
-            # Asegurarnos de que la fecha se convierta correctamente
-            fecha = ultimo_registro['fecha']
-            if isinstance(fecha, str):
-                return datetime.strptime(fecha, '%Y-%m-%dT%H:%M:%S.%f%z').date()
-            return fecha.date() if isinstance(fecha, datetime) else None
+            return ultimo_registro['fecha'].date() if isinstance(ultimo_registro['fecha'], datetime) else None
         return None
     except Exception as e:
         print(f"Error al obtener última fecha: {str(e)}")
@@ -190,23 +186,15 @@ def get_last_date_from_db(module, collection):
 def get_rankings_from_db(module, collection, start_date):
     """Obtener los rankings desde expedientes_db.rankings."""
     try:
-        # Convertir start_date a datetime para la consulta
-        start_datetime = datetime.combine(start_date, datetime.min.time())
-        
         # Obtener registros desde la fecha de inicio
         registros = collection.find({
             "modulo": module,
-            "fecha": {"$gte": start_datetime}
+            "fecha": {"$gte": start_date}
         }).sort("fecha", 1)
         
         data_list = []
         for registro in registros:
-            # Asegurarnos de que la fecha se convierta correctamente
-            fecha = registro['fecha']
-            if isinstance(fecha, str):
-                fecha = datetime.strptime(fecha, '%Y-%m-%dT%H:%M:%S.%f%z')
-            fecha = fecha.date() if isinstance(fecha, datetime) else None
-            
+            fecha = registro['fecha'].date() if isinstance(registro['fecha'], datetime) else None
             if fecha and 'datos' in registro:
                 for evaluador_data in registro['datos']:
                     data_list.append({
@@ -214,11 +202,6 @@ def get_rankings_from_db(module, collection, start_date):
                         'evaluador': evaluador_data['evaluador'],
                         'cantidad': int(evaluador_data.get('cantidad', 0))
                     })
-        
-        # Imprimir información de depuración
-        print(f"Módulo: {module}")
-        print(f"Fecha inicio: {start_date}")
-        print(f"Registros encontrados: {len(data_list)}")
         
         return pd.DataFrame(data_list)
     except Exception as e:

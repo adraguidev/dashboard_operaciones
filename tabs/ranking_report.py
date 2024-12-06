@@ -575,11 +575,15 @@ def get_rankings_from_db(module, collection, start_date):
     """Obtener los rankings desde expedientes_db.rankings."""
     try:
         start_datetime = datetime.combine(start_date, datetime.min.time())
+        end_datetime = datetime.combine(datetime.now().date(), datetime.min.time())
         
         # Buscar registros con o sin módulo
         registros = collection.find({
             "$and": [
-                {"fecha": {"$gte": start_datetime}},
+                {"fecha": {
+                    "$gte": start_datetime,
+                    "$lte": end_datetime
+                }},
                 {"$or": [
                     {"modulo": module},
                     {"modulo": {"$exists": False}}
@@ -587,6 +591,11 @@ def get_rankings_from_db(module, collection, start_date):
             ]
         }).sort("fecha", 1)
         
+        # Crear un DataFrame con todas las fechas posibles
+        todas_fechas = pd.date_range(start=start_date, end=end_datetime.date(), freq='D')
+        fechas_df = pd.DataFrame({'fecha': todas_fechas})
+        
+        # Procesar los registros encontrados
         data_list = []
         for registro in registros:
             fecha = registro['fecha']
@@ -602,11 +611,40 @@ def get_rankings_from_db(module, collection, start_date):
                         'cantidad': int(evaluador_data.get('cantidad', 0))
                     })
         
-        print(f"Módulo: {module}")
-        print(f"Fecha inicio: {start_date}")
-        print(f"Registros encontrados: {len(data_list)}")
+        # Crear DataFrame con los datos encontrados
+        if data_list:
+            df = pd.DataFrame(data_list)
+            
+            # Obtener lista única de evaluadores
+            evaluadores = df['evaluador'].unique()
+            
+            # Crear todas las combinaciones posibles de fechas y evaluadores
+            fechas_evaluadores = pd.MultiIndex.from_product(
+                [todas_fechas.date, evaluadores],
+                names=['fecha', 'evaluador']
+            )
+            
+            # Crear DataFrame completo con todas las combinaciones
+            df_completo = pd.DataFrame(index=fechas_evaluadores).reset_index()
+            
+            # Combinar con los datos existentes
+            df_completo = df_completo.merge(
+                df,
+                on=['fecha', 'evaluador'],
+                how='left'
+            )
+            
+            # Llenar valores faltantes con 0
+            df_completo['cantidad'] = df_completo['cantidad'].fillna(0)
+            
+            print(f"Módulo: {module}")
+            print(f"Fecha inicio: {start_date}")
+            print(f"Registros encontrados: {len(df_completo)}")
+            
+            return df_completo
         
-        return pd.DataFrame(data_list)
+        return pd.DataFrame()
+        
     except Exception as e:
         print(f"Error al obtener rankings: {str(e)}")
         return pd.DataFrame()

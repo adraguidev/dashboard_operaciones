@@ -61,7 +61,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     )
                 
                 with col2:
-                    # Rango de fechas (con keys únicos)
+                    # Rango de fechas
                     fecha_inicio = st.date_input(
                         "Fecha Desde", 
                         value=None,
@@ -114,6 +114,10 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     'UltimaEtapa', 'FechaExpendiente', 
                     'FechaEtapaAprobacionMasivaFin', 'Pre_Concluido'
                 ]].copy()
+                
+                # Formatear fechas
+                display_data['FechaExpendiente'] = pd.to_datetime(display_data['FechaExpendiente'], format='%d/%m/%Y').dt.strftime('%d/%m/%Y')
+                display_data['FechaEtapaAprobacionMasivaFin'] = pd.to_datetime(display_data['FechaEtapaAprobacionMasivaFin'], format='%d/%m/%Y').dt.strftime('%d/%m/%Y')
                 
                 # Mostrar tabla
                 st.dataframe(

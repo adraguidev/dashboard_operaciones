@@ -174,7 +174,10 @@ def get_last_date_from_db(module, collection):
             {"modulo": module},
             sort=[("fecha", -1)]
         )
-        return ultimo_registro['fecha'].date() if ultimo_registro else None
+        if ultimo_registro and 'fecha' in ultimo_registro:
+            # Convertir la fecha de MongoDB a datetime
+            return ultimo_registro['fecha'].date() if isinstance(ultimo_registro['fecha'], datetime) else None
+        return None
     except Exception as e:
         print(f"Error al obtener última fecha: {str(e)}")
         return None
@@ -188,16 +191,16 @@ def get_rankings_from_db(module, collection, start_date):
             "fecha": {"$gte": start_date}
         }).sort("fecha", 1)
         
-        # Convertir a DataFrame con el formato necesario
         data_list = []
         for registro in registros:
-            fecha = registro['fecha'].date()
-            for evaluador_data in registro['datos']:
-                data_list.append({
-                    'fecha': fecha,
-                    'evaluador': evaluador_data['evaluador'],
-                    'cantidad': evaluador_data['cantidad']
-                })
+            fecha = registro['fecha'].date() if isinstance(registro['fecha'], datetime) else None
+            if fecha and 'datos' in registro:
+                for evaluador_data in registro['datos']:
+                    data_list.append({
+                        'fecha': fecha,
+                        'evaluador': evaluador_data['evaluador'],
+                        'cantidad': int(evaluador_data.get('cantidad', 0))  # Manejar el $numberInt
+                    })
         
         return pd.DataFrame(data_list)
     except Exception as e:
@@ -213,17 +216,18 @@ def save_rankings_to_db(module, collection, data):
             datos_evaluadores = [
                 {
                     "evaluador": row['EVALASIGN'],
-                    "cantidad": int(row['cantidad'])
+                    "cantidad": int(row['cantidad'])  # Asegurar que sea entero
                 }
                 for _, row in grupo.iterrows()
             ]
             
-            # Insertar documento
-            collection.insert_one({
+            # Insertar documento con el formato correcto
+            documento = {
                 "modulo": module,
-                "fecha": fecha,
+                "fecha": fecha.to_pydatetime(),  # Convertir a datetime para MongoDB
                 "datos": datos_evaluadores
-            })
+            }
+            collection.insert_one(documento)
     except Exception as e:
         raise Exception(f"Error al guardar rankings: {str(e)}")
 

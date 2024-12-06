@@ -14,8 +14,8 @@ def render_evaluator_report_tab(data: pd.DataFrame):
         # Verificar si es módulo SOL de manera más precisa
         is_sol_module = (
             'EstadoTramite' in data.columns and 
-            'ESTADO' not in data.columns and
-            ('EVALASIGN' not in data.columns or data['EVALASIGN'].isna().all())
+            'Pre_Concluido' in data.columns and
+            'FechaEtapaAprobacionMasivaFin' in data.columns
         )
 
         if is_sol_module:
@@ -152,10 +152,9 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 st.info("No se encontraron expedientes con los filtros seleccionados")
 
         else:
-            # Verificar que existen las columnas necesarias para otros módulos
-            required_columns = ['EVALASIGN', 'ESTADO', 'Evaluado']
-            if not all(col in data.columns for col in required_columns):
-                st.error("Estructura de datos no válida para este módulo")
+            # Asegurar que EVALASIGN existe antes de continuar
+            if 'EVALASIGN' not in data.columns:
+                st.error("No se encontró la columna de evaluadores")
                 return
 
             # Código existente para otros módulos

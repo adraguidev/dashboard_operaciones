@@ -91,7 +91,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     "Evaluador": st.column_config.Column(
                         "👨‍💼 Evaluador",
                         width="large",
-                        sticky=True  # Esta es la clave para fijar la columna
+                        frozen=True  # Correcto atributo para fijar la columna
                     ),
                     "Total": st.column_config.NumberColumn(
                         "📊 Total",

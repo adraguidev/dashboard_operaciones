@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+from datetime import datetime
 
-def render_evaluator_report_tab(data: pd.DataFrame):
+def render_evaluator_report_tab(data: pd.DataFrame, module_name: str = None):
     try:
         st.header("👨‍💼 Reporte por Evaluador")
         
@@ -11,19 +12,23 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             st.error("No hay datos disponibles para mostrar")
             return
 
-        # Asegurar que EVALASIGN no tiene valores None
-        data['EVALASIGN'] = data['EVALASIGN'].fillna('')
-        evaluators = sorted(data[data['EVALASIGN'] != '']['EVALASIGN'].unique())
+        # Lógica específica para el módulo SOL
+        if module_name == 'SOL':
+            render_sol_report(data)
+            return
 
-        # Selección de evaluador
-        selected_evaluator = st.selectbox(
-            "Seleccionar Evaluador",
-            options=evaluators,
-            help="Busca y selecciona un evaluador específico"
-        )
+        # Resto del código existente para otros módulos...
+        # [código actual]
 
+    except Exception as e:
+        st.error(f"Error al procesar el reporte: {str(e)}")
+        print(f"Error detallado: {str(e)}")
+
+def render_sol_report(data: pd.DataFrame):
+    """Renderiza el reporte específico para el módulo SOL."""
+    try:
         # Filtros en columnas
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
             # Selector de años
@@ -36,21 +41,12 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             )
 
         with col2:
-            # Filtro por estado de evaluación
-            estado_eval_options = ["Todos", "Pendientes", "Evaluados"]
-            estado_eval = st.radio(
-                "Estado de Evaluación",
-                options=estado_eval_options,
-                horizontal=True
-            )
-
-        with col3:
-            # Filtro por estado del expediente
-            estados_unicos = sorted(data['ESTADO'].dropna().unique())
+            # Filtro por estado del trámite
+            estados_tramite = sorted(data['EstadoTramite'].dropna().unique())
             selected_estados = st.multiselect(
-                "Estado del Expediente",
-                options=estados_unicos,
-                help="Filtra por estados específicos"
+                "Estado del Trámite",
+                options=estados_tramite,
+                help="Filtra por estado del trámite"
             )
 
         # Filtros adicionales expandibles
@@ -65,6 +61,14 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     options=etapas,
                     help="Filtra por última etapa del expediente"
                 )
+                
+                # Filtro por dependencia
+                dependencias = sorted(data['Dependencia'].dropna().unique())
+                selected_dependencias = st.multiselect(
+                    "Dependencia",
+                    options=dependencias,
+                    help="Filtra por dependencia"
+                )
             
             with col2:
                 # Rango de fechas
@@ -72,52 +76,52 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 fecha_fin = st.date_input("Fecha Hasta", value=None)
 
         # Aplicar filtros
-        filtered_data = data[data['EVALASIGN'] == selected_evaluator]
+        filtered_data = data.copy()
         
         if selected_years:
             filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
-        
-        if estado_eval == "Pendientes":
-            filtered_data = filtered_data[filtered_data['Evaluado'] == 'NO']
-        elif estado_eval == "Evaluados":
-            filtered_data = filtered_data[filtered_data['Evaluado'] == 'SI']
             
         if selected_estados:
-            filtered_data = filtered_data[filtered_data['ESTADO'].isin(selected_estados)]
+            filtered_data = filtered_data[filtered_data['EstadoTramite'].isin(selected_estados)]
             
         if selected_etapas:
             filtered_data = filtered_data[filtered_data['UltimaEtapa'].isin(selected_etapas)]
             
+        if selected_dependencias:
+            filtered_data = filtered_data[filtered_data['Dependencia'].isin(selected_dependencias)]
+            
         if fecha_inicio:
+            filtered_data['FechaExpendiente'] = pd.to_datetime(filtered_data['FechaExpendiente'], format='%d/%m/%Y', errors='coerce')
             filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date >= fecha_inicio]
+            
         if fecha_fin:
+            if 'FechaExpendiente' not in filtered_data.columns or not pd.api.types.is_datetime64_any_dtype(filtered_data['FechaExpendiente']):
+                filtered_data['FechaExpendiente'] = pd.to_datetime(filtered_data['FechaExpendiente'], format='%d/%m/%Y', errors='coerce')
             filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date <= fecha_fin]
 
         # Mostrar resumen
         if not filtered_data.empty:
             st.markdown("### 📊 Resumen")
             total = len(filtered_data)
-            pendientes = len(filtered_data[filtered_data['Evaluado'] == 'NO'])
-            evaluados = total - pendientes
+            pre_concluidos = len(filtered_data[filtered_data['Pre_Concluido'] == 'SI'])
+            pendientes = total - pre_concluidos
             
             col1, col2, col3 = st.columns(3)
             col1.metric("Total Expedientes", f"{total:,d}")
-            col2.metric("Pendientes", f"{pendientes:,d}")
-            col3.metric("Evaluados", f"{evaluados:,d}")
+            col2.metric("Pre Concluidos", f"{pre_concluidos:,d}")
+            col3.metric("Pendientes", f"{pendientes:,d}")
 
-        # Mostrar datos filtrados
-        st.markdown("### 📋 Detalle de Expedientes")
-        
-        if not filtered_data.empty:
-            # Preparar datos para mostrar
-            display_data = filtered_data[[
-                'NumeroTramite', 'ESTADO', 'UltimaEtapa', 
-                'FechaExpendiente', 'FechaPre', 'Evaluado'
-            ]].copy()
+            # Mostrar datos filtrados
+            st.markdown("### 📋 Detalle de Expedientes")
             
-            # Formatear fechas
-            display_data['FechaExpendiente'] = display_data['FechaExpendiente'].dt.strftime('%d/%m/%Y')
-            display_data['FechaPre'] = display_data['FechaPre'].dt.strftime('%d/%m/%Y')
+            # Preparar datos para mostrar
+            display_columns = [
+                'NumeroTramite', 'Dependencia', 'UltimaEtapa', 
+                'FechaExpendiente', 'FechaEtapaAprobacionMasivaFin',
+                'EstadoTramite', 'Pre_Concluido'
+            ]
+            
+            display_data = filtered_data[display_columns].copy()
             
             # Mostrar tabla
             st.dataframe(
@@ -125,11 +129,12 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 use_container_width=True,
                 column_config={
                     'NumeroTramite': 'Expediente',
-                    'ESTADO': 'Estado',
+                    'Dependencia': 'Dependencia',
                     'UltimaEtapa': 'Última Etapa',
                     'FechaExpendiente': 'Fecha Ingreso',
-                    'FechaPre': 'Fecha Pre',
-                    'Evaluado': 'Estado Evaluación'
+                    'FechaEtapaAprobacionMasivaFin': 'Fecha Aprobación',
+                    'EstadoTramite': 'Estado Trámite',
+                    'Pre_Concluido': 'Pre Concluido'
                 }
             )
 
@@ -142,14 +147,14 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             st.download_button(
                 label="📥 Descargar Reporte",
                 data=output,
-                file_name=f"reporte_{selected_evaluator.replace(' ', '_')}.xlsx",
+                file_name=f"reporte_sol_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         else:
             st.info("No se encontraron expedientes con los filtros seleccionados")
 
     except Exception as e:
-        st.error(f"Error al procesar el reporte: {str(e)}")
+        st.error(f"Error al procesar el reporte SOL: {str(e)}")
         print(f"Error detallado: {str(e)}")
 
 def get_evaluators_with_pendings(data):

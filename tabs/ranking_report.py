@@ -240,14 +240,26 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 )
             
             with col3:
-                # Obtener valor actual
-                valor_actual = datos_historicos[
-                    (datos_historicos['evaluador'] == evaluador_editar) &
-                    (datos_historicos['fecha'] == fecha_editar)
-                ]['cantidad'].iloc[0] if len(datos_historicos[
-                    (datos_historicos['evaluador'] == evaluador_editar) &
-                    (datos_historicos['fecha'] == fecha_editar)
-                ]) > 0 else 0
+                # Obtener valor actual de manera más robusta
+                try:
+                    # Primero intentamos obtener el valor de la base de datos directamente
+                    doc = rankings_collection.find_one({
+                        "fecha": datetime.combine(fecha_editar, datetime.min.time()),
+                        "modulo": selected_module
+                    })
+                    
+                    if doc and 'datos' in doc:
+                        # Buscar el evaluador en los datos
+                        valor_actual = 0
+                        for dato in doc['datos']:
+                            if dato['evaluador'] == evaluador_editar:
+                                valor_actual = dato['cantidad']
+                                break
+                    else:
+                        valor_actual = 0
+                except Exception as e:
+                    print(f"Error al obtener valor actual: {str(e)}")
+                    valor_actual = 0
                 
                 nuevo_valor = st.number_input(
                     "🔢 Nueva Cantidad",
@@ -271,13 +283,14 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     
                     if documento:
                         # Actualizar el valor específico
-                        datos_actualizados = documento['datos']
+                        datos_actualizados = documento.get('datos', [])
                         evaluador_encontrado = False
                         
                         for dato in datos_actualizados:
                             if dato['evaluador'] == evaluador_editar:
-                                dato['cantidad'] = nuevo_valor
-                                evaluador_encontrado = True
+                                if dato['cantidad'] != nuevo_valor:  # Solo actualizar si el valor es diferente
+                                    dato['cantidad'] = nuevo_valor
+                                    evaluador_encontrado = True
                                 break
                         
                         # Si el evaluador no existe en los datos, lo agregamos
@@ -297,17 +310,14 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                                 "$set": {
                                     "datos": datos_actualizados
                                 }
-                            }
+                            },
+                            upsert=True  # Crear el documento si no existe
                         )
                         
-                        if result.modified_count > 0:
-                            st.success("✅ Registro actualizado correctamente")
-                            # Forzar la recarga de los datos históricos
-                            st.cache_data.clear()
-                            time.sleep(1)  # Pequeña pausa para asegurar que la BD se actualice
-                            st.rerun()  # Recargar la página
-                        else:
-                            st.warning("⚠️ No se detectaron cambios en el registro")
+                        # Forzar la recarga de los datos
+                        st.cache_data.clear()
+                        st.success("✅ Registro actualizado correctamente")
+                        st.rerun()
                     else:
                         # Si no existe el documento, lo creamos
                         nuevo_documento = {

@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
 import os
+import time
 
 @st.cache_data
 def load_consolidated_cached(module_name):
@@ -271,13 +272,23 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     if documento:
                         # Actualizar el valor específico
                         datos_actualizados = documento['datos']
+                        evaluador_encontrado = False
+                        
                         for dato in datos_actualizados:
                             if dato['evaluador'] == evaluador_editar:
                                 dato['cantidad'] = nuevo_valor
+                                evaluador_encontrado = True
                                 break
                         
+                        # Si el evaluador no existe en los datos, lo agregamos
+                        if not evaluador_encontrado:
+                            datos_actualizados.append({
+                                'evaluador': evaluador_editar,
+                                'cantidad': nuevo_valor
+                            })
+                        
                         # Actualizar documento en MongoDB
-                        rankings_collection.update_one(
+                        result = rankings_collection.update_one(
                             {
                                 "fecha": fecha_datetime,
                                 "modulo": selected_module
@@ -289,12 +300,33 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                             }
                         )
                         
-                        st.success("✅ Registro actualizado correctamente")
-                        st.rerun()
+                        if result.modified_count > 0:
+                            st.success("✅ Registro actualizado correctamente")
+                            # Forzar la recarga de los datos históricos
+                            st.cache_data.clear()
+                            time.sleep(1)  # Pequeña pausa para asegurar que la BD se actualice
+                            st.rerun()  # Recargar la página
+                        else:
+                            st.warning("⚠️ No se detectaron cambios en el registro")
                     else:
-                        st.error("❌ No se encontró el registro en la base de datos")
+                        # Si no existe el documento, lo creamos
+                        nuevo_documento = {
+                            "fecha": fecha_datetime,
+                            "modulo": selected_module,
+                            "datos": [{
+                                "evaluador": evaluador_editar,
+                                "cantidad": nuevo_valor
+                            }]
+                        }
+                        rankings_collection.insert_one(nuevo_documento)
+                        st.success("✅ Nuevo registro creado correctamente")
+                        st.cache_data.clear()
+                        time.sleep(1)
+                        st.rerun()
+                        
                 except Exception as e:
                     st.error(f"❌ Error al actualizar el registro: {str(e)}")
+                    print(f"Error detallado: {str(e)}")  # Para debugging
         else:
             st.info("ℹ️ No hay datos históricos disponibles para editar")
 

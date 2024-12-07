@@ -5,13 +5,16 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from file_utils import confirmar_sobrescritura
 
+# Configuración de rutas relativas
+current_dir = os.path.dirname(os.path.abspath(__file__))
+carpeta_descargas = os.path.join(current_dir, "descargas")
+
 # Configuración de los nombres de los consolidados y sus tablas
-carpeta_raiz = "C:/report_download/descargas/"
 consolidados = {
-    "CCM": f"{carpeta_raiz}/CCM/Consolidado_CCM.xlsx",
-    "PRR": f"{carpeta_raiz}/PRR/Consolidado_PRR.xlsx",
-    "CCM-ESP": f"{carpeta_raiz}/CCM-ESP/Consolidado_CCM-ESP.xlsx",
-    "SOL": f"{carpeta_raiz}/SOL/Consolidado_SOL.xlsx"
+    "CCM": os.path.join(carpeta_descargas, "CCM", "Consolidado_CCM.xlsx"),
+    "PRR": os.path.join(carpeta_descargas, "PRR", "Consolidado_PRR.xlsx"),
+    "CCM-ESP": os.path.join(carpeta_descargas, "CCM-ESP", "Consolidado_CCM-ESP.xlsx"),
+    "SOL": os.path.join(carpeta_descargas, "SOL", "Consolidado_SOL.xlsx")
 }
 
 # Columnas que deben estar en formato de fecha

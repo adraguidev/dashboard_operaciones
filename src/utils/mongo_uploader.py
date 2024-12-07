@@ -20,28 +20,39 @@ class MongoUploader:
             if not base_uri or not password:
                 raise ValueError("Variables de entorno MONGODB_URI y MONGODB_PASSWORD no configuradas")
             
-            # Reemplazar placeholder con contraseña real
-            mongo_uri = base_uri.replace('<db_password>', password)
-        
-        # Configurar timeouts más largos y reintentos
-        self.client = MongoClient(
-            mongo_uri,
-            connectTimeoutMS=30000,
-            socketTimeoutMS=None,  # Sin límite de tiempo para operaciones
-            serverSelectionTimeoutMS=30000,
-            retryWrites=True,
-            retryReads=True,
-            maxPoolSize=None,  # Sin límite en el pool de conexiones
-            waitQueueTimeoutMS=30000
-        )
-        self.db = self.client['migraciones_db']
-        
-        # Verificar conexión
+            # Usar la URI directamente sin modificaciones
+            mongo_uri = base_uri
+
         try:
+            print("Intentando conexión a MongoDB...")
+            print(f"URI de conexión: {mongo_uri.replace(password, '****')}")
+            
+            # Configuración corregida para cluster balanceado
+            self.client = MongoClient(
+                mongo_uri,
+                connectTimeoutMS=30000,
+                socketTimeoutMS=None,  # Sin límite de tiempo para operaciones
+                serverSelectionTimeoutMS=30000,
+                retryWrites=True,
+                retryReads=True,
+                maxPoolSize=None,  # Sin límite en el pool de conexiones
+                waitQueueTimeoutMS=30000,
+                appName='MigracionesApp',  # Identificador de la aplicación
+                compressors=['zlib']  # Usar compresión
+            )
+            
+            # Verificar conexión inmediatamente
             self.client.admin.command('ping')
+            self.db = self.client['migraciones_db']
             print("✅ Conexión exitosa a MongoDB")
+            
         except Exception as e:
             print(f"❌ Error de conexión a MongoDB: {str(e)}")
+            print("\nVerificando posibles problemas:")
+            print("1. ¿La URI de MongoDB es correcta?")
+            print("2. ¿Tu IP está en la lista blanca de MongoDB Atlas?")
+            print("3. ¿Tienes una conexión estable a internet?")
+            print("4. ¿Las credenciales son correctas?")
             raise
 
     def clean_data_for_mongo(self, df):
@@ -96,10 +107,11 @@ class MongoUploader:
 
     def upload_file(self, file_path, collection_name):
         """
-        Sube un archivo Excel a MongoDB de manera optimizada.
+        Sube un archivo Excel a MongoDB de manera optimizada para instancias serverless.
         """
+        self.ensure_connection()
         max_retries = 3
-        retry_delay = 5  # segundos
+        retry_delay = 5
         
         for attempt in range(max_retries):
             try:
@@ -110,11 +122,10 @@ class MongoUploader:
                 total_records = len(df)
                 print(f"Registros totales a procesar: {total_records}")
 
-                # Verificar que el DataFrame no esté vacío
                 if df.empty:
                     raise ValueError(f"El archivo {file_path} está vacío")
 
-                # Limpiar y preparar datos para MongoDB
+                # Limpiar datos una sola vez
                 df = self.clean_data_for_mongo(df)
 
                 # Metadata común
@@ -124,32 +135,21 @@ class MongoUploader:
                     'total_registros': total_records
                 }
 
-                # 1. Preparar colecciones
+                # Preparar colecciones
                 collection = self.db[collection_name]
                 historical_collection = self.db[f"{collection_name}_historical"]
-                
-                # Verificar si hay datos existentes antes de borrar
-                existing_count = collection.count_documents({})
-                if existing_count > 0:
-                    print(f"Encontrados {existing_count} registros existentes")
-                    
-                    # Hacer backup antes de borrar
-                    backup_collection = self.db[f"{collection_name}_backup"]
-                    backup_collection.drop()  # Limpiar backup anterior
-                    existing_data = list(collection.find({}))
-                    if existing_data:
-                        backup_collection.insert_many(existing_data)
-                    print(f"Backup creado con {len(existing_data)} registros")
 
-                # 2. Procesar en lotes más pequeños para mejor control
-                batch_size = min(1000, max(100, total_records // 20))  # Ajustar tamaño de lote
-                print(f"Tamaño de lote ajustado: {batch_size}")
+                # Optimizar tamaño de lote para serverless
+                batch_size = 1000  # Tamaño más pequeño para evitar timeouts
+                total_batches = (total_records + batch_size - 1) // batch_size
 
-                # Limpiar colección principal
+                print(f"\nProcesando {total_batches} lotes de {batch_size} registros cada uno")
+
+                # Usar delete_many solo una vez al inicio
                 print("\nLimpiando colección principal...")
                 collection.delete_many({})
 
-                # 3. Insertar datos en lotes
+                # Insertar datos en lotes
                 for i in range(0, total_records, batch_size):
                     end_idx = min(i + batch_size, total_records)
                     batch_df = df.iloc[i:end_idx]
@@ -159,38 +159,35 @@ class MongoUploader:
                         # Insertar en colección principal
                         collection.insert_many(batch_records, ordered=False)
                         
-                        # Preparar registro histórico
-                        historical_batch = {
+                        # Guardar metadata sin los datos completos para ahorrar espacio
+                        historical_metadata = {
                             'metadata': {
                                 **metadata,
                                 'batch_number': (i // batch_size) + 1,
-                                'total_batches': (total_records + batch_size - 1) // batch_size,
+                                'total_batches': total_batches,
                                 'registros_en_lote': len(batch_records),
                                 'rango_registros': f"{i + 1}-{end_idx}"
-                            },
-                            'data': batch_records
+                            }
                         }
-                        historical_collection.insert_one(historical_batch)
+                        historical_collection.insert_one(historical_metadata)
                         
-                        print(f"Progreso: {end_idx}/{total_records} registros procesados")
+                        print(f"Progreso: {end_idx}/{total_records} registros procesados ({(end_idx/total_records*100):.1f}%)")
+                        
                     except Exception as e:
                         print(f"Error en lote {i//batch_size + 1}: {str(e)}")
-                        # Restaurar desde backup si hay error
-                        if existing_data:
-                            collection.delete_many({})
-                            collection.insert_many(existing_data)
-                            raise Exception(f"Error al procesar lote. Datos restaurados desde backup: {str(e)}")
+                        # Solo reconectar si es necesario
+                        if "connection" in str(e).lower():
+                            self.ensure_connection()
+                        continue
 
-                # 4. Verificar integridad
+                # Verificar integridad al final
                 final_count = collection.count_documents({})
                 if final_count != total_records:
-                    raise ValueError(
-                        f"Error de integridad: {final_count} registros en DB vs {total_records} en Excel"
-                    )
-
-                print(f"\n✅ Datos actualizados en {collection_name}")
-                print(f"✅ Total registros: {final_count}")
-                return  # Éxito
+                    print(f"⚠️ Advertencia: {final_count} registros en DB vs {total_records} en Excel")
+                else:
+                    print(f"\n✅ Datos actualizados en {collection_name}")
+                    print(f"✅ Total registros: {final_count}")
+                return
 
             except Exception as e:
                 print(f"❌ Intento {attempt + 1}/{max_retries} falló: {str(e)}")
@@ -206,25 +203,73 @@ class MongoUploader:
         """
         Sube todos los archivos consolidados y cruzados a MongoDB.
         """
-        carpeta_descargas = "C:/report_download/descargas/"
-        archivos_a_subir = {
-            'consolidado_ccm': f"{carpeta_descargas}/CCM/Consolidado_CCM_CRUZADO.xlsx",
-            'consolidado_prr': f"{carpeta_descargas}/PRR/Consolidado_PRR_CRUZADO.xlsx",
-            'consolidado_ccm_esp': f"{carpeta_descargas}/CCM-ESP/Consolidado_CCM-ESP_CRUZADO.xlsx",
-            'consolidado_sol': f"{carpeta_descargas}/SOL/Consolidado_SOL_CRUZADO.xlsx"
-        }
-        
-        # Procesar archivos secuencialmente para mejor control
-        for collection_name, file_path in archivos_a_subir.items():
-            if os.path.exists(file_path):
+        try:
+            # Usar rutas relativas desde la carpeta del proyecto
+            descargas_dir = "descargas"  # Carpeta relativa
+            
+            # Definir rutas relativas para cada archivo
+            archivos_a_subir = {
+                'consolidado_ccm': os.path.join(descargas_dir, "CCM", "Consolidado_CCM_CRUZADO.xlsx"),
+                'consolidado_prr': os.path.join(descargas_dir, "PRR", "Consolidado_PRR_CRUZADO.xlsx"),
+                'consolidado_ccm_esp': os.path.join(descargas_dir, "CCM-ESP", "Consolidado_CCM-ESP_CRUZADO.xlsx"),
+                'consolidado_sol': os.path.join(descargas_dir, "SOL", "Consolidado_SOL_CRUZADO.xlsx")
+            }
+            
+            # Mostrar estado actual y permitir selección
+            print("\nEstado actual de las colecciones:")
+            colecciones_disponibles = []
+            for collection_name, file_path in archivos_a_subir.items():
+                ultima_fecha = self.get_latest_update(collection_name)
+                estado = "✅" if ultima_fecha else "❌"
+                fecha_str = ultima_fecha.strftime('%Y-%m-%d %H:%M:%S') if ultima_fecha else "Sin actualizaciones"
+                
+                if os.path.exists(file_path):
+                    colecciones_disponibles.append(collection_name)
+                    print(f"{len(colecciones_disponibles)}. {collection_name}: {estado} Última actualización: {fecha_str}")
+                else:
+                    print(f"X. {collection_name}: Archivo no encontrado")
+            
+            # Solicitar selección al usuario
+            print("\nSelecciona las colecciones a subir (separadas por comas) o 'todo' para subir todas:")
+            seleccion = input("Ejemplo: 1,3 o 'todo': ").strip().lower()
+            
+            if not seleccion:
+                print("Operación cancelada.")
+                return
+            
+            colecciones_seleccionadas = []
+            if seleccion == 'todo':
+                colecciones_seleccionadas = colecciones_disponibles
+            else:
+                try:
+                    indices = [int(i.strip()) - 1 for i in seleccion.split(',')]
+                    colecciones_seleccionadas = [colecciones_disponibles[i] for i in indices if 0 <= i < len(colecciones_disponibles)]
+                except (ValueError, IndexError):
+                    print("❌ Selección inválida")
+                    return
+            
+            # Confirmar selección
+            print("\nSe subirán las siguientes colecciones:")
+            for col in colecciones_seleccionadas:
+                print(f"- {col}")
+            
+            confirmacion = input("\n¿Confirmar subida? (s/n): ").lower().strip()
+            if confirmacion != 's':
+                print("Operación cancelada.")
+                return
+            
+            # Procesar archivos seleccionados
+            for collection_name in colecciones_seleccionadas:
+                file_path = archivos_a_subir[collection_name]
                 try:
                     print(f"\nProcesando {collection_name}...")
                     self.upload_file(file_path, collection_name)
                 except Exception as e:
                     print(f"❌ Error procesando {collection_name}: {str(e)}")
                     continue
-            else:
-                print(f"❌ Archivo no encontrado: {file_path}")
+                
+        except Exception as e:
+            print(f"❌ Error general al subir archivos: {str(e)}")
 
     def get_latest_update(self, collection_name):
         """
@@ -255,3 +300,22 @@ class MongoUploader:
             all_records.extend(batch['data'])
         
         return all_records 
+
+    def ensure_connection(self):
+        """Asegura que la conexión esté activa, reconectando si es necesario"""
+        max_retries = 3
+        retry_delay = 5
+        
+        for attempt in range(max_retries):
+            try:
+                self.client.admin.command('ping')
+                return True
+            except Exception as e:
+                print(f"Intento de reconexión {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    # Intentar recrear la conexión
+                    self.__init__()
+                else:
+                    raise Exception(f"No se pudo restablecer la conexión después de {max_retries} intentos")

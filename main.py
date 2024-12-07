@@ -6,6 +6,22 @@ from consolidador import ejecutar_consolidacion
 from src.utils.mongo_uploader import MongoUploader
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
+
+# Simplificar la verificación de directorios
+descargas_dir = "descargas"  # Ruta relativa
+
+print(f"Verificando directorio de descargas: {descargas_dir}")
+
+# Verificar que existan las carpetas necesarias
+for carpeta in ['CCM', 'PRR', 'CCM-ESP', 'SOL']:
+    ruta = os.path.join(descargas_dir, carpeta)
+    if not os.path.exists(ruta):
+        print(f"Creando directorio: {ruta}")
+        os.makedirs(ruta, exist_ok=True)
 
 def mostrar_menu():
     print("\n=== MENÚ DE OPCIONES ===")
@@ -16,12 +32,20 @@ def mostrar_menu():
     print("5. Realizar cruces combinados")
     print("6. Ejecutar todos los pasos")
     print("7. Subir datos a MongoDB")
+    print("8. Verificar rutas de archivos")
     print("0. Salir")
     print("Nota: Puedes seleccionar múltiples opciones separadas por comas (ej: 1,3,5)")
 
 def subir_a_mongodb():
     try:
-        # Inicializar uploader (ahora usará automáticamente las variables de entorno)
+        print(f"\nVerificando archivos en: {descargas_dir}")
+        
+        # Verificar que exista el directorio de descargas
+        if not os.path.exists(descargas_dir):
+            print(f"❌ Error: No se encuentra el directorio de descargas en: {descargas_dir}")
+            return
+            
+        # Las variables de entorno ya estarán disponibles automáticamente
         uploader = MongoUploader()
         
         # Mostrar últimas actualizaciones
@@ -68,11 +92,22 @@ def ejecutar_paso(opcion):
     elif opcion == 7:
         print("\n>>> Ejecutando: Subir datos a MongoDB")
         subir_a_mongodb()
+    elif opcion == 8:
+        print("\n>>> Ejecutando: Verificar rutas de archivos")
+        verificar_rutas()
 
 def ejecutar_todos_pasos():
     print("\n=== Ejecutando todos los pasos ===")
     for paso in range(1, 6):
         ejecutar_paso(paso)
+
+def verificar_rutas():
+    print(f"Directorio base: {descargas_dir}")
+    print("\nVerificando archivos:")
+    for carpeta in ['CCM', 'PRR', 'CCM-ESP', 'SOL']:
+        ruta = os.path.join(descargas_dir, carpeta)
+        archivo = os.path.join(ruta, f"Consolidado_{carpeta}_CRUZADO.xlsx")
+        print(f"- {archivo}: {'✅ Existe' if os.path.exists(archivo) else '❌ No existe'}")
 
 def main():
     while True:
@@ -92,7 +127,7 @@ def main():
             opciones = [int(opt.strip()) for opt in seleccion.split(",")]
             
             # Validar que las opciones sean válidas
-            if any(opt < 0 or opt > 7 for opt in opciones):
+            if any(opt < 0 or opt > 8 for opt in opciones):
                 print("\n❌ Error: Algunas opciones no son válidas. Por favor intenta nuevamente.")
                 continue
                 

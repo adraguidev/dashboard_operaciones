@@ -263,7 +263,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                     fecha_datetime = datetime.combine(fecha_editar, datetime.min.time())
                     
                     # Buscar el documento existente
-                    documento = collection.find_one({
+                    documento = rankings_collection.find_one({
                         "fecha": fecha_datetime,
                         "modulo": selected_module
                     })
@@ -277,7 +277,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                                 break
                         
                         # Actualizar documento en MongoDB
-                        collection.update_one(
+                        rankings_collection.update_one(
                             {
                                 "fecha": fecha_datetime,
                                 "modulo": selected_module

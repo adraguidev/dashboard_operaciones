@@ -2,19 +2,29 @@ import pandas as pd
 import os
 import shutil
 from file_utils import confirmar_sobrescritura
+import platform
 
 # Configuración de carpetas y archivos
 current_dir = os.path.dirname(os.path.abspath(__file__))
 descargas_dir = os.path.join(current_dir, "descargas")
 
-input_folders = {
-    "CCM": r"\\172.27.230.89\produccion_evaluadores_sgin\ASIGNACIONES\ASIGNACION CAMPAÑA",
-    "PRR": r"\\172.27.230.55\analistas sgin\ASIGNACIONES - PRR"
-}
+# Rutas de entrada según el sistema operativo
+if platform.system() == 'Darwin':  # Mac OS
+    input_folders = {
+        "CCM": "/Volumes/ASIGNACION CAMPAÑA",
+        "PRR": "/Volumes/ANALISTAS SGIN/ASIGNACIONES - PRR"
+    }
+else:  # Windows
+    input_folders = {
+        "CCM": r"\\172.27.230.89\produccion_evaluadores_sgin\ASIGNACIONES\ASIGNACION CAMPAÑA",
+        "PRR": r"\\172.27.230.55\analistas sgin\ASIGNACIONES - PRR"
+    }
+
 output_files = {
     "CCM": os.path.join(descargas_dir, "CCM", "consolidado_filtrado_ccm.xlsx"),
     "PRR": os.path.join(descargas_dir, "PRR", "consolidado_filtrado_prr.xlsx")
 }
+
 output_paths = {
     "CCM": [os.path.join(descargas_dir, "CCM"), os.path.join(descargas_dir, "CCM-ESP")],
     "PRR": [os.path.join(descargas_dir, "PRR")]

@@ -235,7 +235,8 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             if filtrar:
                 # Aplicar filtros
                 if selected_evaluator == 'TODOS LOS EVALUADORES':
-                    filtered_data = data.copy()
+                    # Filtrar excluyendo registros con EVALASIGN vacío o nulo
+                    filtered_data = data[data['EVALASIGN'].notna() & (data['EVALASIGN'] != '')]
                 else:
                     filtered_data = data[data['EVALASIGN'] == selected_evaluator]
                 

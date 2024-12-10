@@ -20,6 +20,7 @@ from sklearn.linear_model import Ridge
 from statsmodels.nonparametric.smoothers_lowess import lowess
 from prophet import Prophet
 from src.utils.excel_utils import create_excel_download
+from statsmodels.tsa.seasonal import seasonal_decompose
 
 class SPEModule:
     SCOPES = [
@@ -257,45 +258,6 @@ class SPEModule:
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al resetear la última fecha: {str(e)}")
-
-            # Mostrar reporte de fechas futuras
-            fechas_futuras = data[
-                (data[COLUMNAS['FECHA_TRABAJO']].notna()) & 
-                (data[COLUMNAS['FECHA_TRABAJO']].dt.date > fecha_actual.date())
-            ]
-
-            if not fechas_futuras.empty:
-                st.subheader("🚨 Reporte de Fechas Futuras")
-                st.warning("Los siguientes registros tienen fechas posteriores a hoy:")
-                
-                # Preparar datos para mostrar
-                fechas_futuras_display = fechas_futuras[[
-                    COLUMNAS['EXPEDIENTE'],
-                    COLUMNAS['EVALUADOR'],
-                    COLUMNAS['FECHA_TRABAJO']
-                ]].sort_values([COLUMNAS['FECHA_TRABAJO'], COLUMNAS['EVALUADOR']])
-                
-                # Formatear la fecha para mostrar
-                fechas_futuras_display[COLUMNAS['FECHA_TRABAJO']] = fechas_futuras_display[
-                    COLUMNAS['FECHA_TRABAJO']
-                ].dt.strftime('%d/%m/%Y')
-                
-                st.dataframe(fechas_futuras_display, use_container_width=True)
-                
-                # Botón para descargar reporte de fechas futuras
-                excel_data_futuras = create_excel_download(
-                    fechas_futuras_display,
-                    "fechas_futuras.xlsx",
-                    "Fechas_Futuras",
-                    "Reporte de Fechas Futuras"
-                )
-                
-                st.download_button(
-                    label="📥 Descargar Reporte de Fechas Futuras",
-                    data=excel_data_futuras,
-                    file_name="fechas_futuras.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
 
             # Botones de acción para guardar datos
             if not datos_por_guardar.empty:
@@ -1178,153 +1140,200 @@ class SPEModule:
 
     def render_predictive_analysis(self, data):
         """Renderizar análisis predictivo."""
-        st.header("Predicción de Ingresos")
+        st.header("Análisis de Ingresos")
 
-        # Mapeo de columnas
         COLUMNAS = {
-            'EVALUADOR': 'EVALUADOR',
             'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_TRABAJO': 'Fecha_Trabajo'
+            'FECHA_INGRESO': 'FECHA _ INGRESO'
         }
 
-        # Convertir fecha de trabajo a datetime de manera más flexible
         try:
-            data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
-                data[COLUMNAS['FECHA_TRABAJO']], 
-                format='mixed',  # Usar formato mixto para mayor flexibilidad
-                dayfirst=True,   # Indicar que el día va primero
+            # Convertir fecha de ingreso a datetime
+            data[COLUMNAS['FECHA_INGRESO']] = pd.to_datetime(
+                data[COLUMNAS['FECHA_INGRESO']], 
+                format='mixed',
+                dayfirst=True,
                 errors='coerce'
             )
         except Exception as e:
             st.error(f"Error al procesar fechas: {str(e)}")
             return
 
-        # Obtener fecha actual y fecha de inicio
         fecha_actual = pd.Timestamp.now()
-        fecha_inicio = fecha_actual - pd.DateOffset(months=6)
 
-        # Filtrar datos de los últimos 6 meses
-        data_filtrada = data[
-            (data[COLUMNAS['FECHA_TRABAJO']] >= fecha_inicio) &
-            (data[COLUMNAS['FECHA_TRABAJO']] <= fecha_actual)
-        ]
-
-        # Preparar datos para el modelo de pronóstico
-        datos_diarios = data_filtrada.groupby(COLUMNAS['FECHA_TRABAJO']).size().reset_index(name='cantidad')
-        datos_diarios = datos_diarios.sort_values(COLUMNAS['FECHA_TRABAJO'])
-
-        # Crear modelo de pronóstico
-        model = Prophet()
-        datos_diarios = datos_diarios.rename(columns={COLUMNAS['FECHA_TRABAJO']: 'ds', 'cantidad': 'y'})
-        model.fit(datos_diarios)
-
-        # Generar pronóstico para los próximos 30 días
-        future = model.make_future_dataframe(periods=30)
-        forecast = model.predict(future)
-
-        # Mostrar tabla de pronósticos
-        st.subheader("Pronósticos de Ingresos")
-        forecast_table = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(30)
-        forecast_table = forecast_table.rename(columns={'ds': 'Fecha', 'yhat': 'Pronóstico', 'yhat_lower': 'Límite Inferior', 'yhat_upper': 'Límite Superior'})
-        st.dataframe(forecast_table)
-
-        # Agregar botón de descarga formateado
-        excel_data_forecast = create_excel_download(
-            forecast_table,
-            "pronosticos.xlsx",
-            "Pronosticos",
-            "Pronósticos de Ingresos"
-        )
+        # 1. ANÁLISIS DE ÚLTIMOS 30 DÍAS
+        st.subheader("📊 Ingresos Diarios (Últimos 30 días)")
         
-        st.download_button(
-            label="📥 Descargar Pronósticos",
-            data=excel_data_forecast,
-            file_name="pronosticos.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        fecha_30_dias = fecha_actual - pd.Timedelta(days=30)
+        datos_30_dias = data[data[COLUMNAS['FECHA_INGRESO']] >= fecha_30_dias]
+        
+        ingresos_diarios = datos_30_dias.groupby(
+            data[COLUMNAS['FECHA_INGRESO']].dt.date
+        ).size().reset_index(name='cantidad')
+        
+        # Calcular estadísticas
+        promedio_diario = ingresos_diarios['cantidad'].mean()
+        mediana_diaria = ingresos_diarios['cantidad'].median()
+        max_diario = ingresos_diarios['cantidad'].max()
+        tendencia = np.polyfit(range(len(ingresos_diarios)), ingresos_diarios['cantidad'], 1)[0]
 
-        # Gráfico de pronóstico
-        fig_pronostico = go.Figure()
-        fig_pronostico.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat'],
-            mode='lines',
-            name='Pronóstico'
+        # Mostrar métricas clave
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Promedio Diario", f"{promedio_diario:.1f}")
+        with col2:
+            st.metric("Mediana Diaria", f"{mediana_diaria:.1f}")
+        with col3:
+            st.metric("Máximo Diario", f"{max_diario:.0f}")
+        with col4:
+            tendencia_texto = "↗️ Creciente" if tendencia > 0 else "↘️ Decreciente"
+            st.metric("Tendencia", tendencia_texto)
+
+        # Gráfico de ingresos diarios con línea de tendencia
+        fig_diaria = go.Figure()
+        
+        # Datos reales
+        fig_diaria.add_trace(go.Bar(
+            x=ingresos_diarios['FECHA_INGRESO'],
+            y=ingresos_diarios['cantidad'],
+            name='Ingresos Diarios'
         ))
-        fig_pronostico.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat_lower'],
-            mode='lines',
-            name='Límite Inferior',
-            line=dict(dash='dash')
+        
+        # Línea de tendencia
+        z = np.polyfit(range(len(ingresos_diarios)), ingresos_diarios['cantidad'], 1)
+        p = np.poly1d(z)
+        fig_diaria.add_trace(go.Scatter(
+            x=ingresos_diarios['FECHA_INGRESO'],
+            y=p(range(len(ingresos_diarios))),
+            name='Tendencia',
+            line=dict(color='red', dash='dash')
         ))
-        fig_pronostico.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat_upper'],
-            mode='lines',
-            name='Límite Superior',
-            line=dict(dash='dash')
-        ))
-        fig_pronostico.add_trace(go.Scatter(
-            x=datos_diarios['ds'],
-            y=datos_diarios['y'],
-            mode='markers',
-            name='Datos Históricos'
-        ))
-        fig_pronostico.update_layout(
-            title="Pronóstico de Ingresos",
+        
+        fig_diaria.update_layout(
+            title="Ingresos Diarios y Tendencia",
             xaxis_title="Fecha",
             yaxis_title="Cantidad de Expedientes"
         )
-        st.plotly_chart(fig_pronostico, use_container_width=True)
+        st.plotly_chart(fig_diaria, use_container_width=True)
 
-        # Mostrar componentes del pronóstico
-        if 'df_components' in locals():
-            st.subheader("Componentes de la Predicción")
-            st.dataframe(df_components)
-
-            # Agregar botón de descarga formateado
-            excel_data_components = create_excel_download(
-                df_components,
-                "componentes_prediccion.xlsx",
-                "Componentes",
-                "Componentes de la Predicción"
-            )
-            
-            st.download_button(
-                label="📥 Descargar Componentes",
-                data=excel_data_components,
-                file_name="componentes_prediccion.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-    def _show_pending_chart(self, pendientes):
-        """Mostrar grfico de pendientes."""
-        pendientes_por_evaluador = pendientes.groupby('EVALASIGN').size().reset_index(name='Cantidad')
+        # 2. ANÁLISIS SEMANAL DEL ÚLTIMO AÑO
+        st.subheader("📈 Análisis Semanal (Último Año)")
         
-        st.subheader("Distribución de Pendientes por Evaluador")
-        fig = px.bar(
-            pendientes_por_evaluador,
-            x='EVALASIGN',
-            y='Cantidad',
-            title="Pendientes por Evaluador",
-            labels={'EVALASIGN': 'Evaluador', 'Cantidad': 'Número de Expedientes'},
-            text='Cantidad'
-        )
-        fig.update_traces(textposition='outside')
-        st.plotly_chart(fig, use_container_width=True)
+        fecha_anio = fecha_actual - pd.DateOffset(years=1)
+        datos_anio = data[data[COLUMNAS['FECHA_INGRESO']] >= fecha_anio]
+        
+        # Agrupar por semana
+        ingresos_semanales = datos_anio.groupby(
+            [data[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().year,
+             data[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().week]
+        ).agg({
+            COLUMNAS['EXPEDIENTE']: 'count',
+            COLUMNAS['FECHA_INGRESO']: ['min', 'max']
+        }).reset_index()
 
-        # Agregar botón de descarga formateado
-        excel_data_pendientes = create_excel_download(
-            pendientes_por_evaluador,
-            "pendientes_por_evaluador.xlsx",
-            "Pendientes_Evaluador",
-            "Pendientes por Evaluador"
+        # Calcular promedio por d��a hábil para cada semana
+        ingresos_semanales['dias_habiles'] = ingresos_semanales[COLUMNAS['FECHA_INGRESO']]['max'].apply(
+            lambda x: len(pd.bdate_range(
+                ingresos_semanales[COLUMNAS['FECHA_INGRESO']]['min'].iloc[0],
+                x
+            ))
+        )
+        ingresos_semanales['promedio_diario'] = ingresos_semanales[COLUMNAS['EXPEDIENTE']]['count'] / ingresos_semanales['dias_habiles']
+
+        # Mostrar estadísticas semanales
+        promedio_semanal = ingresos_semanales[COLUMNAS['EXPEDIENTE']]['count'].mean()
+        tendencia_semanal = np.polyfit(range(len(ingresos_semanales)), ingresos_semanales[COLUMNAS['EXPEDIENTE']]['count'], 1)[0]
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Promedio Semanal", f"{promedio_semanal:.1f}")
+        with col2:
+            tendencia_texto = "↗️ Creciente" if tendencia_semanal > 0 else "↘️ Decreciente"
+            st.metric("Tendencia Semanal", tendencia_texto)
+
+        # 3. ANÁLISIS MENSUAL COMPARATIVO
+        st.subheader("📊 Comparativa Mensual")
+        
+        # Agrupar por mes
+        ingresos_mensuales = datos_anio.groupby(
+            [data[COLUMNAS['FECHA_INGRESO']].dt.year,
+             data[COLUMNAS['FECHA_INGRESO']].dt.month]
+        ).agg({
+            COLUMNAS['EXPEDIENTE']: 'count',
+            COLUMNAS['FECHA_INGRESO']: ['min', 'max']
+        }).reset_index()
+
+        # Calcular promedio diario para comparación justa
+        ingresos_mensuales['dias_transcurridos'] = ingresos_mensuales[COLUMNAS['FECHA_INGRESO']]['max'].apply(
+            lambda x: len(pd.bdate_range(
+                ingresos_mensuales[COLUMNAS['FECHA_INGRESO']]['min'].iloc[0],
+                x
+            ))
+        )
+        ingresos_mensuales['promedio_diario'] = ingresos_mensuales[COLUMNAS['EXPEDIENTE']]['count'] / ingresos_mensuales['dias_transcurridos']
+        
+        # Proyección del mes actual
+        mes_actual = ingresos_mensuales.iloc[-1]
+        dias_habiles_mes = len(pd.bdate_range(
+            mes_actual[COLUMNAS['FECHA_INGRESO']]['min'],
+            pd.Timestamp(fecha_actual.year, fecha_actual.month + 1, 1) - pd.Timedelta(days=1)
+        ))
+        proyeccion_mes = mes_actual['promedio_diario'] * dias_habiles_mes
+
+        # Mostrar proyección
+        st.info(f"📈 Proyección para el mes actual: {proyeccion_mes:.0f} expedientes")
+        
+        # Análisis de estacionalidad
+        meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+        ingresos_mensuales['mes_nombre'] = ingresos_mensuales[COLUMNAS['FECHA_INGRESO']].dt.month.map(
+            lambda x: meses[x-1]
         )
         
-        st.download_button(
-            label="📥 Descargar Pendientes por Evaluador",
-            data=excel_data_pendientes,
-            file_name="pendientes_por_evaluador.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        # Identificar meses con mayor y menor carga
+        meses_carga = ingresos_mensuales.groupby('mes_nombre')['promedio_diario'].mean().sort_values()
+        st.write("🔍 Análisis de Estacionalidad:")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("Meses con mayor carga:")
+            for mes in meses_carga.tail(3).index:
+                st.write(f"• {mes}")
+        with col2:
+            st.write("Meses con menor carga:")
+            for mes in meses_carga.head(3).index:
+                st.write(f"• {mes}")
+
+        # 4. PREDICCIONES
+        st.subheader("🔮 Predicciones")
+        
+        # Calcular tendencia y estacionalidad
+        decomposition = seasonal_decompose(
+            ingresos_mensuales['promedio_diario'],
+            period=12,
+            extrapolate_trend='freq'
         )
+        
+        # Predicción para próximo mes
+        tendencia_valor = decomposition.trend.iloc[-1]
+        estacionalidad = decomposition.seasonal.iloc[-1]
+        prediccion_proximo_mes = (tendencia_valor + estacionalidad) * dias_habiles_mes
+
+        st.metric(
+            "Predicción próximo mes",
+            f"{prediccion_proximo_mes:.0f}",
+            f"{((prediccion_proximo_mes - proyeccion_mes) / proyeccion_mes * 100):.1f}%"
+        )
+
+        # Recomendaciones basadas en el análisis
+        st.subheader("💡 Recomendaciones")
+        
+        recomendaciones = []
+        if tendencia > 0:
+            recomendaciones.append("• La tendencia creciente sugiere preparar recursos adicionales.")
+        if max_diario > promedio_diario * 1.5:
+            recomendaciones.append("• Hay picos significativos de ingresos. Considerar buffer de capacidad.")
+        if tendencia_semanal < 0 and tendencia > 0:
+            recomendaciones.append("• Tendencia diaria y semanal difieren. Monitorear cambios de patrón.")
+
+        for rec in recomendaciones:
+            st.write(rec)

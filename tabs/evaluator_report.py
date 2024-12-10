@@ -7,11 +7,30 @@ def render_evaluator_report_tab(data: pd.DataFrame):
     try:
         st.header("👨‍💼 Reporte por Evaluador")
         
-        # Validar datos
-        if data is None or data.empty:
+        # Validar datos de manera más eficiente
+        if data is None or len(data) == 0:  # Usar len en lugar de .empty
             st.error("No hay datos disponibles para mostrar")
             return
 
+        # Optimizar la carga inicial de datos
+        data = data.copy()  # Crear una copia única al inicio
+        
+        # Convertir fechas una sola vez al inicio
+        date_columns = ['FechaExpendiente', 'FechaPre', 'FechaEtapaAprobacionMasivaFin']
+        for col in date_columns:
+            if col in data.columns:
+                try:
+                    if data[col].dtype != 'datetime64[ns]':
+                        data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
+                except Exception:
+                    pass
+
+        # Limpiar y preparar la columna EVALASIGN una sola vez
+        if 'EVALASIGN' in data.columns:
+            data['EVALASIGN'] = data['EVALASIGN'].fillna('').astype(str)
+            evaluators = sorted(data[data['EVALASIGN'].str.strip() != '']['EVALASIGN'].unique())
+            evaluators = ['TODOS LOS EVALUADORES'] + evaluators
+        
         # Verificar si es módulo SOL de manera más precisa
         is_sol_module = (
             'EstadoTramite' in data.columns and 
@@ -232,33 +251,49 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             with col1:
                 filtrar = st.button("🔍 Aplicar Filtros", type="primary")
 
-            if filtrar:
-                # Aplicar filtros
-                if selected_evaluator == 'TODOS LOS EVALUADORES':
-                    # Filtrar excluyendo registros con EVALASIGN vacío o nulo
-                    filtered_data = data[data['EVALASIGN'].notna() & (data['EVALASIGN'] != '')]
-                else:
-                    filtered_data = data[data['EVALASIGN'] == selected_evaluator]
+            @st.cache_data  # Cachear los resultados del filtrado
+            def filter_data(df, evaluator, years, estados, etapas, estado_eval, fecha_inicio, fecha_fin):
+                filtered = df.copy()
                 
-                if selected_years:
-                    filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
+                if evaluator == 'TODOS LOS EVALUADORES':
+                    filtered = filtered[filtered['EVALASIGN'].str.strip() != '']
+                else:
+                    filtered = filtered[filtered['EVALASIGN'] == evaluator]
+                
+                if years:
+                    filtered = filtered[filtered['Anio'].isin(years)]
                 
                 if estado_eval == "Pendientes":
-                    filtered_data = filtered_data[filtered_data['Evaluado'] == 'NO']
+                    filtered = filtered[filtered['Evaluado'] == 'NO']
                 elif estado_eval == "Evaluados":
-                    filtered_data = filtered_data[filtered_data['Evaluado'] == 'SI']
+                    filtered = filtered[filtered['Evaluado'] == 'SI']
                 
                 if selected_estados:
-                    filtered_data = filtered_data[filtered_data['ESTADO'].isin(selected_estados)]
+                    filtered = filtered[filtered['ESTADO'].isin(selected_estados)]
                 
                 if selected_etapas:
-                    filtered_data = filtered_data[filtered_data['UltimaEtapa'].isin(selected_etapas)]
+                    filtered = filtered[filtered['UltimaEtapa'].isin(selected_etapas)]
                 
                 if fecha_inicio:
-                    filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date >= fecha_inicio]
+                    filtered = filtered[filtered['FechaExpendiente'].dt.date >= fecha_inicio]
                 if fecha_fin:
-                    filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date <= fecha_fin]
+                    filtered = filtered[filtered['FechaExpendiente'].dt.date <= fecha_fin]
+                
+                return filtered
 
+            # Usar la función cacheada para el filtrado
+            if filtrar:
+                filtered_data = filter_data(
+                    data,
+                    selected_evaluator,
+                    selected_years,
+                    selected_estados,
+                    selected_etapas,
+                    estado_eval,
+                    fecha_inicio,
+                    fecha_fin
+                )
+                
                 # Mostrar resumen solo si hay datos filtrados
                 if not filtered_data.empty:
                     st.markdown("### 📊 Resumen")
@@ -327,7 +362,8 @@ def render_evaluator_report_tab(data: pd.DataFrame):
 
     except Exception as e:
         st.error(f"Error al procesar el reporte: {str(e)}")
-        print(f"Error detallado: {str(e)}")
+        import traceback
+        st.error(f"Error detallado: {traceback.format_exc()}")
 
 def get_evaluators_with_pendings(data):
     """Obtener lista ordenada de evaluadores con expedientes pendientes."""

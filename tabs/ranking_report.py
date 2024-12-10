@@ -641,23 +641,53 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         else:
             st.success("✅ No se encontraron expedientes sin evaluador asignado")
 
-        # Después de la tabla de histórico diario
-        st.dataframe(historico_diario)
-        
-        # Agregar botón de descarga formateado
-        excel_data_historico = create_excel_download(
-            historico_diario,
-            "historico_diario.xlsx",
-            "Historico_Diario",
-            f"Histórico Diario - {selected_module}"
-        )
-        
-        st.download_button(
-            label="📥 Descargar Histórico Diario",
-            data=excel_data_historico,
-            file_name=f"historico_diario_{selected_module.lower()}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        # Crear histórico diario antes de mostrarlo
+        if not datos_historicos.empty:
+            # Agrupar por fecha para obtener totales diarios
+            historico_diario = datos_historicos.groupby('fecha')['cantidad'].sum().reset_index()
+            
+            # Renombrar columnas
+            historico_diario.columns = ['Fecha', 'Total Expedientes']
+            
+            # Ordenar por fecha descendente
+            historico_diario = historico_diario.sort_values('Fecha', ascending=False)
+            
+            # Formatear la fecha
+            historico_diario['Fecha'] = historico_diario['Fecha'].dt.strftime('%d/%m/%Y')
+            
+            # Mostrar el histórico diario
+            st.subheader("📊 Histórico Diario de Expedientes")
+            st.dataframe(
+                historico_diario,
+                use_container_width=True,
+                column_config={
+                    "Fecha": st.column_config.TextColumn(
+                        "Fecha",
+                        width="medium"
+                    ),
+                    "Total Expedientes": st.column_config.NumberColumn(
+                        "Total Expedientes",
+                        format="%d"
+                    )
+                }
+            )
+            
+            # Agregar botón de descarga formateado
+            excel_data_historico = create_excel_download(
+                historico_diario,
+                "historico_diario.xlsx",
+                "Historico_Diario",
+                f"Histórico Diario - {selected_module}"
+            )
+            
+            st.download_button(
+                label="📥 Descargar Histórico Diario",
+                data=excel_data_historico,
+                file_name=f"historico_diario_{selected_module.lower()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.info("No hay datos históricos disponibles para mostrar")
 
     except Exception as e:
         st.error(f"Error al procesar el ranking: {str(e)}")

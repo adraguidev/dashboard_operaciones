@@ -1261,9 +1261,9 @@ class SPEModule:
 
                 # Calcular promedio diario
                 ingresos_mensuales['promedio_diario'] = (
-                    ingresos_mensuales[(self.columnas['EXPEDIENTE'], 'count')] / 
-                    ingresos_mensuales['dias_transcurridos'].clip(lower=1)  # Evitar división por cero
-                )
+                    ingresos_mensuales[(self.columnas['EXPEDIENTE'], 'count')].astype(float) / 
+                    ingresos_mensuales['dias_transcurridos'].clip(lower=1)
+                ).round(2)
 
                 # Proyección del mes actual
                 mes_actual = ingresos_mensuales.iloc[-1]
@@ -1277,23 +1277,24 @@ class SPEModule:
                 
                 # Calcular días hábiles
                 dias_habiles_mes = len(pd.bdate_range(primer_dia_mes, ultimo_dia_mes))
-                proyeccion_mes = mes_actual['promedio_diario'] * dias_habiles_mes
+                proyeccion_mes = float(mes_actual['promedio_diario']) * dias_habiles_mes
 
                 # Mostrar proyección
-                st.info(f"📈 Proyección para el mes actual: {proyeccion_mes:.0f} expedientes")
+                st.info(f"📈 Proyección para el mes actual: {int(proyeccion_mes)} expedientes")
 
                 # Análisis de estacionalidad
                 meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
                 
                 # Crear mapeo de mes a nombre
-                ingresos_mensuales['mes_nombre'] = ingresos_mensuales['mes'].map(
-                    lambda x: meses[int(x)-1] if 1 <= int(x) <= 12 else 'Mes Inválido'
+                ingresos_mensuales['mes_nombre'] = ingresos_mensuales['mes'].astype(int).map(
+                    lambda x: meses[x-1] if 1 <= x <= 12 else 'Mes Inválido'
                 )
 
                 # Análisis de carga por mes
                 meses_carga = (ingresos_mensuales.groupby('mes_nombre')['promedio_diario']
                               .mean()
+                              .round(2)
                               .sort_values())
 
                 # Mostrar análisis de estacionalidad
@@ -1302,11 +1303,12 @@ class SPEModule:
                 with col1:
                     st.write("Meses con mayor carga:")
                     for mes in meses_carga.tail(3).index:
-                        st.write(f"• {mes}")
+                        st.write(f"• {mes} ({meses_carga[mes]:.1f} exp/día)")
                 with col2:
                     st.write("Meses con menor carga:")
                     for mes in meses_carga.head(3).index:
-                        st.write(f"• {mes}")
+                        st.write(f"• {mes} ({meses_carga[mes]:.1f} exp/día)")
+
             else:
                 st.warning("No hay datos suficientes para el análisis mensual")
 

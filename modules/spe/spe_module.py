@@ -116,10 +116,11 @@ class SPEModule:
         fecha_actual = pd.Timestamp.now(tz='America/Lima')
         fecha_ayer = (fecha_actual - pd.Timedelta(days=1)).date()
 
-        # Convertir fecha de trabajo a datetime considerando timezone
+        # Convertir fecha de trabajo a datetime de manera más segura
         try:
+            # Primero limpiar valores no válidos
             data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
-                data[COLUMNAS['FECHA_TRABAJO']], 
+                data[COLUMNAS['FECHA_TRABAJO']].replace(['', 'NaT', 'NaN', 'nat'], pd.NaT), 
                 format='mixed',
                 dayfirst=True,
                 errors='coerce'
@@ -127,6 +128,9 @@ class SPEModule:
         except Exception as e:
             st.error(f"Error al procesar fechas: {str(e)}")
             return
+
+        # Filtrar filas con fechas válidas antes de procesar
+        data = data[data[COLUMNAS['FECHA_TRABAJO']].notna()]
 
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
@@ -167,35 +171,40 @@ class SPEModule:
 
         # Procesar datos nuevos del Google Sheets que aún no están en la BD
         datos_nuevos = data[
-            (data[COLUMNAS['FECHA_TRABAJO']].notna()) &
+            (data[COLUMNAS['FECHA_TRABAJO']].notna()) &  # Asegurar que la fecha es válida
             (data[COLUMNAS['EVALUADOR']].notna()) &
             (data[COLUMNAS['EVALUADOR']] != '')
         ].copy()
 
-        # Agrupar datos nuevos por fecha y evaluador
-        datos_nuevos_agrupados = datos_nuevos.groupby([
-            data[COLUMNAS['FECHA_TRABAJO']].dt.date,
-            COLUMNAS['EVALUADOR']
-        ]).size().reset_index(name='cantidad')
+        # Asegurar que las fechas son datetime antes de agrupar
+        if not datos_nuevos.empty:
+            try:
+                # Agrupar datos nuevos por fecha y evaluador
+                datos_nuevos_agrupados = datos_nuevos.groupby([
+                    datos_nuevos[COLUMNAS['FECHA_TRABAJO']].dt.date,
+                    COLUMNAS['EVALUADOR']
+                ]).size().reset_index(name='cantidad')
 
-        # Agregar datos nuevos al DataFrame histórico
-        for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].dt.date.unique():
-            if fecha not in fechas_guardadas and fecha <= fecha_ayer:
-                fecha_str = fecha.strftime('%d/%m')
-                datos_fecha = datos_nuevos_agrupados[
-                    datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha
-                ]
-                df_pivot = pd.DataFrame({
-                    'EVALUADOR': datos_fecha[COLUMNAS['EVALUADOR']].tolist(),
-                    fecha_str: datos_fecha['cantidad'].tolist()
-                })
-                
-                if df_historico.empty:
-                    df_historico = df_pivot
-                else:
-                    df_historico = df_historico.merge(
-                        df_pivot, on='EVALUADOR', how='outer'
-                    )
+                # Agregar datos nuevos al DataFrame histórico
+                for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].unique():
+                    if fecha not in fechas_guardadas and fecha <= fecha_ayer:
+                        fecha_str = pd.Timestamp(fecha).strftime('%d/%m')
+                        datos_fecha = datos_nuevos_agrupados[
+                            datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']] == fecha
+                        ]
+                        df_pivot = pd.DataFrame({
+                            'EVALUADOR': datos_fecha[COLUMNAS['EVALUADOR']].tolist(),
+                            fecha_str: datos_fecha['cantidad'].tolist()
+                        })
+                        
+                        if df_historico.empty:
+                            df_historico = df_pivot
+                        else:
+                            df_historico = df_historico.merge(
+                                df_pivot, on='EVALUADOR', how='outer'
+                            )
+            except Exception as e:
+                st.error(f"Error al procesar datos nuevos: {str(e)}")
 
         # Mostrar tabla de ranking
         if not df_historico.empty:

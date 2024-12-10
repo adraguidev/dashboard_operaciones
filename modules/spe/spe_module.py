@@ -245,122 +245,93 @@ class SPEModule:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-        # Mostrar reporte de fechas inválidas
-        if not fechas_invalidas.empty:
-            st.subheader("🚨 Reporte de Fechas Inválidas")
-            st.warning("Los siguientes registros tienen fechas mal escritas o en formato incorrecto:")
-            
-            # Preparar datos para mostrar
-            fechas_invalidas_display = fechas_invalidas[[
-                COLUMNAS['EXPEDIENTE'],
-                COLUMNAS['EVALUADOR'],
-                COLUMNAS['FECHA_TRABAJO']
-            ]].sort_values(COLUMNAS['EVALUADOR'])
-            
-            st.dataframe(fechas_invalidas_display, use_container_width=True)
-            
-            # Botón para descargar reporte de fechas inválidas
-            excel_data_invalidas = create_excel_download(
-                fechas_invalidas_display,
-                "fechas_invalidas.xlsx",
-                "Fechas_Invalidas",
-                "Reporte de Fechas Inválidas"
-            )
-            
-            st.download_button(
-                label="📥 Descargar Reporte de Fechas Inválidas",
-                data=excel_data_invalidas,
-                file_name="fechas_invalidas.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-        # Botón de resetear último día (movido arriba)
-        if ultima_fecha_db:
-            if st.button("🔄 Resetear último día", key="resetear_fecha"):
-                try:
-                    collection.delete_many({
-                        "modulo": "SPE",
-                        "fecha": ultima_fecha_db
-                    })
-                    st.success("✅ Última fecha eliminada correctamente")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error al resetear la última fecha: {str(e)}")
-
-        # Mostrar reporte de fechas futuras
-        fechas_futuras = data[
-            (data[COLUMNAS['FECHA_TRABAJO']].notna()) & 
-            (data[COLUMNAS['FECHA_TRABAJO']].dt.date > fecha_actual.date())
-        ]
-
-        if not fechas_futuras.empty:
-            st.subheader("🚨 Reporte de Fechas Futuras")
-            st.warning("Los siguientes registros tienen fechas posteriores a hoy:")
-            
-            # Preparar datos para mostrar
-            fechas_futuras_display = fechas_futuras[[
-                COLUMNAS['EXPEDIENTE'],
-                COLUMNAS['EVALUADOR'],
-                COLUMNAS['FECHA_TRABAJO']
-            ]].sort_values([COLUMNAS['FECHA_TRABAJO'], COLUMNAS['EVALUADOR']])
-            
-            # Formatear la fecha para mostrar
-            fechas_futuras_display[COLUMNAS['FECHA_TRABAJO']] = fechas_futuras_display[
-                COLUMNAS['FECHA_TRABAJO']
-            ].dt.strftime('%d/%m/%Y')
-            
-            st.dataframe(fechas_futuras_display, use_container_width=True)
-            
-            # Botón para descargar reporte de fechas futuras
-            excel_data_futuras = create_excel_download(
-                fechas_futuras_display,
-                "fechas_futuras.xlsx",
-                "Fechas_Futuras",
-                "Reporte de Fechas Futuras"
-            )
-            
-            st.download_button(
-                label="📥 Descargar Reporte de Fechas Futuras",
-                data=excel_data_futuras,
-                file_name="fechas_futuras.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-        # Botones de acción para guardar datos
-        if not datos_por_guardar.empty:
-            # Mostrar fechas disponibles para guardar
-            fechas_disponibles = sorted(
-                datos_por_guardar[COLUMNAS['FECHA_TRABAJO']].dt.date.unique()
-            )
-            
-            if fechas_disponibles:
-                st.warning("⚠️ Hay fechas pendientes por guardar")
-                selected_dates = st.multiselect(
-                    "Seleccionar fechas para guardar",
-                    options=fechas_disponibles,
-                    default=fechas_disponibles,
-                    format_func=lambda x: x.strftime('%d/%m/%Y')
-                )
-                
-                if selected_dates and st.button("💾 Guardar datos seleccionados"):
+            # Botón de resetear último día
+            if ultima_fecha_db:
+                if st.button("🔄 Resetear último día", key="resetear_fecha"):
                     try:
-                        for fecha in selected_dates:
-                            datos_dia = datos_por_guardar[
-                                datos_por_guardar[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha
-                            ]
-                            datos_agrupados = datos_dia.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
-                            
-                            nuevo_registro = {
-                                "fecha": pd.Timestamp(fecha),
-                                "datos": datos_agrupados.to_dict('records'),
-                                "modulo": "SPE"
-                            }
-                            collection.insert_one(nuevo_registro)
-                        
-                        st.success("✅ Datos guardados correctamente")
+                        collection.delete_many({
+                            "modulo": "SPE",
+                            "fecha": ultima_fecha_db
+                        })
+                        st.success("✅ Última fecha eliminada correctamente")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error al guardar los datos: {str(e)}")
+                        st.error(f"Error al resetear la última fecha: {str(e)}")
+
+            # Mostrar reporte de fechas futuras
+            fechas_futuras = data[
+                (data[COLUMNAS['FECHA_TRABAJO']].notna()) & 
+                (data[COLUMNAS['FECHA_TRABAJO']].dt.date > fecha_actual.date())
+            ]
+
+            if not fechas_futuras.empty:
+                st.subheader("🚨 Reporte de Fechas Futuras")
+                st.warning("Los siguientes registros tienen fechas posteriores a hoy:")
+                
+                # Preparar datos para mostrar
+                fechas_futuras_display = fechas_futuras[[
+                    COLUMNAS['EXPEDIENTE'],
+                    COLUMNAS['EVALUADOR'],
+                    COLUMNAS['FECHA_TRABAJO']
+                ]].sort_values([COLUMNAS['FECHA_TRABAJO'], COLUMNAS['EVALUADOR']])
+                
+                # Formatear la fecha para mostrar
+                fechas_futuras_display[COLUMNAS['FECHA_TRABAJO']] = fechas_futuras_display[
+                    COLUMNAS['FECHA_TRABAJO']
+                ].dt.strftime('%d/%m/%Y')
+                
+                st.dataframe(fechas_futuras_display, use_container_width=True)
+                
+                # Botón para descargar reporte de fechas futuras
+                excel_data_futuras = create_excel_download(
+                    fechas_futuras_display,
+                    "fechas_futuras.xlsx",
+                    "Fechas_Futuras",
+                    "Reporte de Fechas Futuras"
+                )
+                
+                st.download_button(
+                    label="📥 Descargar Reporte de Fechas Futuras",
+                    data=excel_data_futuras,
+                    file_name="fechas_futuras.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+            # Botones de acción para guardar datos
+            if not datos_por_guardar.empty:
+                # Mostrar fechas disponibles para guardar
+                fechas_disponibles = sorted(
+                    datos_por_guardar[COLUMNAS['FECHA_TRABAJO']].dt.date.unique()
+                )
+                
+                if fechas_disponibles:
+                    st.warning("⚠️ Hay fechas pendientes por guardar")
+                    selected_dates = st.multiselect(
+                        "Seleccionar fechas para guardar",
+                        options=fechas_disponibles,
+                        default=fechas_disponibles,
+                        format_func=lambda x: x.strftime('%d/%m/%Y')
+                    )
+                    
+                    if selected_dates and st.button("💾 Guardar datos seleccionados"):
+                        try:
+                            for fecha in selected_dates:
+                                datos_dia = datos_por_guardar[
+                                    datos_por_guardar[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha
+                                ]
+                                datos_agrupados = datos_dia.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
+                                
+                                nuevo_registro = {
+                                    "fecha": pd.Timestamp(fecha),
+                                    "datos": datos_agrupados.to_dict('records'),
+                                    "modulo": "SPE"
+                                }
+                                collection.insert_one(nuevo_registro)
+                            
+                            st.success("✅ Datos guardados correctamente")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al guardar los datos: {str(e)}")
 
     def _get_last_date_from_db(self, collection):
         """Obtener la última fecha registrada en la base de datos."""

@@ -159,15 +159,16 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 st.error("No se encontró la columna de evaluadores")
                 return
 
-            # Código existente para otros módulos
+            # Modificación para incluir "TODOS LOS EVALUADORES"
             data['EVALASIGN'] = data['EVALASIGN'].fillna('')
             evaluators = sorted(data[data['EVALASIGN'] != '']['EVALASIGN'].unique())
+            evaluators = ['TODOS LOS EVALUADORES'] + evaluators
             
             # Selección de evaluador
             selected_evaluator = st.selectbox(
                 "Seleccionar Evaluador",
                 options=evaluators,
-                help="Busca y selecciona un evaluador específico"
+                help="Busca y selecciona un evaluador específico o todos los evaluadores"
             )
 
             # Filtros en columnas
@@ -227,7 +228,10 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     )
 
             # Aplicar filtros
-            filtered_data = data[data['EVALASIGN'] == selected_evaluator]
+            if selected_evaluator == 'TODOS LOS EVALUADORES':
+                filtered_data = data.copy()
+            else:
+                filtered_data = data[data['EVALASIGN'] == selected_evaluator]
             
             if selected_years:
                 filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
@@ -264,55 +268,47 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             st.markdown("### 📋 Detalle de Expedientes")
             
             if not filtered_data.empty:
-                # Preparar datos para mostrar
-                display_data = filtered_data[[
-                    'NumeroTramite', 'ESTADO', 'UltimaEtapa', 
-                    'FechaExpendiente', 'FechaPre', 'Evaluado'
-                ]].copy()
+                # Usar todas las columnas disponibles
+                display_data = filtered_data.copy()
                 
-                # Formatear fechas
-                display_data['FechaExpendiente'] = display_data['FechaExpendiente'].dt.strftime('%d/%m/%Y')
-                display_data['FechaPre'] = display_data['FechaPre'].dt.strftime('%d/%m/%Y')
+                # Formatear fechas donde sea necesario
+                date_columns = display_data.select_dtypes(include=['datetime64']).columns
+                for col in date_columns:
+                    display_data[col] = display_data[col].dt.strftime('%d/%m/%Y')
                 
-                # Mostrar tabla
+                # Mostrar tabla con todas las columnas
                 st.dataframe(
                     display_data,
-                    use_container_width=True,
-                    column_config={
-                        'NumeroTramite': 'Expediente',
-                        'ESTADO': 'Estado',
-                        'UltimaEtapa': 'Última Etapa',
-                        'FechaExpendiente': 'Fecha Ingreso',
-                        'FechaPre': 'Fecha Pre',
-                        'Evaluado': 'Estado Evaluación'
-                    }
+                    use_container_width=True
                 )
 
-                # Botón de descarga
+                # Modificar la descarga para incluir todas las columnas
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     display_data.to_excel(writer, index=False, sheet_name='Reporte')
                 output.seek(0)
                 
+                filename_prefix = "reporte_todos" if selected_evaluator == 'TODOS LOS EVALUADORES' else f"reporte_{selected_evaluator.replace(' ', '_')}"
+                
                 st.download_button(
                     label="📥 Descargar Reporte",
                     data=output,
-                    file_name=f"reporte_{selected_evaluator.replace(' ', '_')}.xlsx",
+                    file_name=f"{filename_prefix}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-                # Agregar botón de descarga formateado para el reporte de evaluador
+                # Modificar el reporte formateado para incluir todas las columnas
                 excel_data_evaluador = create_excel_download(
                     display_data,
-                    "reporte_evaluador.xlsx",
+                    f"{filename_prefix}_formateado.xlsx",
                     "Reporte_Evaluador",
-                    f"Reporte de Evaluador - {selected_evaluator}"
+                    f"Reporte de {'Todos los Evaluadores' if selected_evaluator == 'TODOS LOS EVALUADORES' else selected_evaluator}"
                 )
 
                 st.download_button(
-                    label="📥 Descargar Reporte de Evaluador",
+                    label="📥 Descargar Reporte Formateado",
                     data=excel_data_evaluador,
-                    file_name=f"reporte_evaluador_{selected_evaluator.replace(' ', '_')}.xlsx",
+                    file_name=f"{filename_prefix}_formateado.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             else:

@@ -798,6 +798,7 @@ class SPEModule:
             datos_mes = data[
                 (data[COLUMNAS['FECHA_TRABAJO']].dt.month == mes) &
                 (data[COLUMNAS['FECHA_TRABAJO']].dt.year == 2024)
+            ]
             
             dias_trabajados = datos_mes[COLUMNAS['FECHA_TRABAJO']].dt.date.nunique()
             total_trabajado = len(datos_mes)
@@ -1172,7 +1173,7 @@ class SPEModule:
 
                             # 3. Visualización gráfica (si aplica)
                             if len(columnas_filas) == 1 and len(columnas_columnas) == 1:
-                                st.write("Visualización Gráfica")
+                                st.write("Visualización Gr��fica")
                                 pivot_plot = pivot_table.drop('Total', axis=1).drop('Total')
                                 
                                 fig = px.bar(

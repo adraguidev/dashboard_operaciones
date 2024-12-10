@@ -590,40 +590,55 @@ class SPEModule:
 
         # Agregar comparativo anual 2024
         st.subheader("Comparativo Mensual 2024")
-        
+
         # Preparar datos para todos los meses de 2024
         meses_2024 = []
         for mes in range(1, fecha_actual.month + 1):
             fecha_mes = pd.Timestamp(2024, mes, 1)
             stats_mes, nombre_mes = procesar_datos_mes(fecha_mes, data)
             
+            # Calcular métricas de trabajo realizado
+            datos_mes = data[
+                (data[COLUMNAS['FECHA_TRABAJO']].dt.month == mes) &
+                (data[COLUMNAS['FECHA_TRABAJO']].dt.year == 2024)
+            ]
+            
+            dias_trabajados = datos_mes[COLUMNAS['FECHA_TRABAJO']].dt.date.nunique()
+            total_trabajado = len(datos_mes)
+            promedio_diario = total_trabajado / dias_trabajados if dias_trabajados > 0 else 0
+            
             meses_2024.append({
                 'Mes': nombre_mes,
-                'Total_Expedientes': stats_mes['CANT_EXPEDIENTES'].sum(),
-                'Promedio_Diario': stats_mes['PROMEDIO'].mean(),
+                'Expedientes_Trabajados': total_trabajado,
+                'Días_Trabajados': dias_trabajados,
+                'Promedio_Diario': promedio_diario,
                 'Cant_Evaluadores': len(stats_mes),
-                'Expedientes_Por_Evaluador': stats_mes['CANT_EXPEDIENTES'].mean()
+                'Promedio_Por_Evaluador': total_trabajado / len(stats_mes) if len(stats_mes) > 0 else 0
             })
-        
+
         df_comparativo = pd.DataFrame(meses_2024)
-        
+
         # Mostrar tabla comparativa
-        st.dataframe(df_comparativo, use_container_width=True)
-        
-        # Gráfico de tendencia mensual
+        st.dataframe(df_comparativo.style.format({
+            'Promedio_Diario': '{:.1f}',
+            'Promedio_Por_Evaluador': '{:.1f}',
+            'Expedientes_Trabajados': '{:,.0f}'
+        }), use_container_width=True)
+
+        # Gráfico de tendencia mensual con dos ejes
         fig_tendencia_mensual = go.Figure()
-        
-        # Expedientes totales
+
+        # Expedientes trabajados (barras)
         fig_tendencia_mensual.add_trace(go.Bar(
-            name='Total Expedientes',
+            name='Expedientes Trabajados',
             x=df_comparativo['Mes'],
-            y=df_comparativo['Total_Expedientes'],
-            text=df_comparativo['Total_Expedientes'].round(0),
+            y=df_comparativo['Expedientes_Trabajados'],
+            text=df_comparativo['Expedientes_Trabajados'].round(0),
             textposition='outside',
             yaxis='y'
         ))
-        
-        # Promedio diario
+
+        # Promedio diario (línea)
         fig_tendencia_mensual.add_trace(go.Scatter(
             name='Promedio Diario',
             x=df_comparativo['Mes'],
@@ -631,18 +646,55 @@ class SPEModule:
             text=df_comparativo['Promedio_Diario'].round(1),
             textposition='top center',
             mode='lines+markers+text',
-            yaxis='y2'
+            yaxis='y2',
+            line=dict(color='red')
         ))
-        
+
+        # Actualizar diseño
         fig_tendencia_mensual.update_layout(
-            title='Evolución Mensual 2024',
-            yaxis=dict(title='Total Expedientes'),
-            yaxis2=dict(title='Promedio Diario', overlaying='y', side='right'),
+            title='Evolución Mensual del Trabajo Realizado 2024',
+            yaxis=dict(
+                title='Total Expedientes Trabajados',
+                titlefont=dict(color='blue'),
+                tickfont=dict(color='blue')
+            ),
+            yaxis2=dict(
+                title='Promedio Diario',
+                titlefont=dict(color='red'),
+                tickfont=dict(color='red'),
+                overlaying='y',
+                side='right'
+            ),
             barmode='group',
+            showlegend=True,
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
+            )
+        )
+
+        st.plotly_chart(fig_tendencia_mensual, use_container_width=True)
+
+        # Gráfico de evolución del promedio por evaluador
+        fig_promedio_evaluador = go.Figure()
+
+        fig_promedio_evaluador.add_trace(go.Bar(
+            name='Promedio por Evaluador',
+            x=df_comparativo['Mes'],
+            y=df_comparativo['Promedio_Por_Evaluador'],
+            text=df_comparativo['Promedio_Por_Evaluador'].round(1),
+            textposition='outside'
+        ))
+
+        fig_promedio_evaluador.update_layout(
+            title='Evolución del Promedio por Evaluador 2024',
+            yaxis_title='Expedientes por Evaluador',
             showlegend=True
         )
-        
-        st.plotly_chart(fig_tendencia_mensual, use_container_width=True)
+
+        st.plotly_chart(fig_promedio_evaluador, use_container_width=True)
 
         # Botón de descarga con ambos reportes
         output = BytesIO()
@@ -769,7 +821,7 @@ class SPEModule:
             mask_año = fechas.dt.year == año_seleccionado
             df_filtrado = df[mask_año]
             
-            # Obtener meses únicos del año seleccionado
+            # Obtener meses ��nicos del año seleccionado
             meses = sorted(fechas[mask_año].dt.strftime('%m-%B').unique())
             mes_seleccionado = st.selectbox(
                 f'Mes ({columna_fecha})',

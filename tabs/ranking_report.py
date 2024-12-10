@@ -641,6 +641,24 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         else:
             st.success("✅ No se encontraron expedientes sin evaluador asignado")
 
+        # Después de la tabla de histórico diario
+        st.dataframe(historico_diario)
+        
+        # Agregar botón de descarga formateado
+        excel_data_historico = create_excel_download(
+            historico_diario,
+            "historico_diario.xlsx",
+            "Historico_Diario",
+            f"Histórico Diario - {selected_module}"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Histórico Diario",
+            data=excel_data_historico,
+            file_name=f"historico_diario_{selected_module.lower()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
     except Exception as e:
         st.error(f"Error al procesar el ranking: {str(e)}")
         print(f"Error detallado: {str(e)}")

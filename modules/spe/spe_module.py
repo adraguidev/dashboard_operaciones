@@ -20,6 +20,7 @@ from sklearn.linear_model import Ridge
 from statsmodels.nonparametric.smoothers_lowess import lowess
 from prophet import Prophet
 from src.utils.excel_utils import create_excel_download
+from typing import List, Dict
 
 class SPEModule:
     SCOPES = [
@@ -79,6 +80,14 @@ class SPEModule:
         """Inicializar conexión a MongoDB."""
         return pymongo.MongoClient(st.secrets["connections"]["mongodb"]["uri"])
 
+    @st.cache_data(ttl=3600)  # Cache por 1 hora
+    def get_historical_records(self, collection, module: str, fecha_actual: datetime) -> List[Dict]:
+        """Obtiene registros históricos con caché"""
+        return list(collection.find({
+            "modulo": module,
+            "fecha": {"$lt": fecha_actual}
+        }).sort("fecha", -1))
+
     def render_ranking_report(self, data, collection):
         """Renderizar pestaña de ranking de expedientes trabajados."""
         st.header("Ranking de Expedientes Trabajados")
@@ -121,10 +130,7 @@ class SPEModule:
         ].copy()
 
         # Obtener datos históricos de MongoDB
-        registros_historicos = list(collection.find({
-            "modulo": "SPE",
-            "fecha": {"$lt": fecha_actual}
-        }).sort("fecha", -1))
+        registros_historicos = self.get_historical_records(collection, "SPE", fecha_actual)
 
         # Preparar DataFrame histórico
         df_historico = pd.DataFrame()

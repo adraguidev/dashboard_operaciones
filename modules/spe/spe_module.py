@@ -37,8 +37,7 @@ class SPEModule:
         'FECHA_TRABAJO': 'Fecha_Trabajo',
         'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
         'PROCESO': 'PROCESO',
-        'BENEFICIARIO': 'NOMBRES_BENEFICIARIO',
-        'FECHA_INGRESO': 'FECHA_INGRESO'  # Agregado directamente aquí
+        'BENEFICIARIO': 'NOMBRES_BENEFICIARIO'
     }
 
     def __init__(self):
@@ -47,9 +46,13 @@ class SPEModule:
         if 'spe_data' not in st.session_state:
             st.session_state.spe_data = None
         
-        # Crear una copia del diccionario base y agregar FECHA_INGRESO
-        self.COLUMNAS = self.COLUMNAS.copy()
-        self.COLUMNAS['FECHA_INGRESO'] = 'FECHA_INGRESO'
+        # Inicializar columnas en session_state si no existe
+        if 'spe_columnas' not in st.session_state:
+            st.session_state.spe_columnas = self.COLUMNAS.copy()
+            st.session_state.spe_columnas['FECHA_INGRESO'] = 'FECHA_INGRESO'
+        
+        # Usar las columnas desde session_state
+        self.COLUMNAS = st.session_state.spe_columnas
 
     def load_data(self):
         """Cargar datos desde Google Sheets."""

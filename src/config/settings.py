@@ -1,20 +1,15 @@
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List
 import streamlit as st
-from functools import lru_cache
-from typing import Optional
 
 @dataclass
 class ModuleConfig:
-    """Configuración unificada de módulos"""
+    """Configuración para cada módulo del sistema."""
     name: str
-    display_name: str
     icon: str
     folder: str
-    collection: str
     inactive_evaluators: List[str]
-    vulnerabilidad_evaluators: List[str] = field(default_factory=list)
 
 # Módulos disponibles en la aplicación
 MODULES = {
@@ -30,10 +25,8 @@ MODULES = {
 MODULES_CONFIG: Dict[str, ModuleConfig] = {
     'CCM': ModuleConfig(
         name='CCM',
-        display_name='Calidad Migratoria',
-        icon='📋',
+        icon='📊',
         folder='descargas/CCM',
-        collection='consolidado_ccm',
         inactive_evaluators=[
             "Mauricio Romero, Hugo",
             "Ugarte Sánchez, Paulo César",
@@ -45,29 +38,18 @@ MODULES_CONFIG: Dict[str, ModuleConfig] = {
             "Gomez Vera, Marcos Alberto",
             "VULNERABILIDAD",
             "SUSPENDIDA"
-        ],
-        vulnerabilidad_evaluators=[
-            "Quispe Orosco, Karina Wendy",
-            "Miranda Avila, Marco Antonio",
-            "Aponte Sanchez, Paola Lita",
-            "Orcada Herrera, Javier Eduardo",
-            "Gomez Vera, Marcos Alberto"
         ]
     ),
     'PRR': ModuleConfig(
         name='PRR',
-        display_name='Prórroga de Residencia',
         icon='📈',
         folder='descargas/PRR',
-        collection='consolidado_prr',
         inactive_evaluators=[]
     ),
     'CCM-ESP': ModuleConfig(
         name='CCM-ESP',
-        display_name='Calidad Migratoria Especial',
         icon='📉',
         folder='descargas/CCM-ESP',
-        collection='consolidado_ccm_esp',
         inactive_evaluators=[
             "Mauricio Romero, Hugo",
             "Ugarte Sánchez, Paulo César",
@@ -79,37 +61,24 @@ MODULES_CONFIG: Dict[str, ModuleConfig] = {
             "Gomez Vera, Marcos Alberto",
             "VULNERABILIDAD",
             "SUSPENDIDA"
-        ],
-        vulnerabilidad_evaluators=[
-            "Quispe Orosco, Karina Wendy",
-            "Miranda Avila, Marco Antonio",
-            "Aponte Sanchez, Paola Lita",
-            "Orcada Herrera, Javier Eduardo",
-            "Gomez Vera, Marcos Alberto"
         ]
     ),
     'CCM-LEY': ModuleConfig(
         name='CCM-LEY',
-        display_name='Calidad Migratoria Ley',
         icon='📋',
         folder='descargas/CCM-LEY',
-        collection='consolidado_ccm',
         inactive_evaluators=[]
     ),
     'SOL': ModuleConfig(
         name='SOL',
-        display_name='Solicitudes',
         icon='📂',
         folder='descargas/SOL',
-        collection='consolidado_sol',
         inactive_evaluators=[]
     ),
     'SPE': ModuleConfig(
         name='SPE',
-        display_name='Sistema de Permisos Especiales',
         icon='💼',
         folder='descargas/SPE',
-        collection='consolidado_spe',
         inactive_evaluators=[]
     )
 }
@@ -149,29 +118,7 @@ SPE_CONFIG = {
 }
 
 # Configuración de seguridad
-@lru_cache()
-def get_admin_password() -> str:
-    """Obtiene la contraseña de administrador de manera segura"""
-    password = st.secrets.get("admin", {}).get("password") or os.getenv('ADMIN_PASSWORD')
-    if not password:
-        raise ValueError("No se ha configurado la contraseña de administrador")
-    return password
-
-@dataclass
-class MongoDBConfig:
-    """Configuración de MongoDB"""
-    uri: str
-    database: str
-    collections: Dict[str, str]
-    
-    @classmethod
-    def from_env(cls) -> 'MongoDBConfig':
-        """Carga configuración desde variables de entorno"""
-        uri = os.getenv('MONGODB_URI')
-        if not uri:
-            raise ValueError("MONGODB_URI no está configurado")
-        return cls(
-            uri=uri,
-            database=os.getenv('MONGODB_DATABASE', 'migraciones_db'),
-            collections=MONGODB_COLLECTIONS
-        )
+try:
+    ADMIN_PASSWORD = st.secrets["admin"]["password"]
+except:
+    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'default_password')  # Usar variable de entorno o valor por defecto

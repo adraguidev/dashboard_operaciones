@@ -23,6 +23,11 @@ def load_consolidated_cached(module_name):
 
 def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings_collection):
     try:
+        # Deshabilitar la pestaña para CCM-LEY
+        if selected_module == 'CCM-LEY':
+            st.info("⚠️ El módulo de ranking no está disponible para CCM-LEY")
+            return
+            
         st.header("🏆 Ranking de Expedientes Trabajados")
         
         # Verificar que estamos usando la colección correcta

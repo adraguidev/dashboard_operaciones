@@ -677,25 +677,6 @@ class SPEModule:
 
         st.plotly_chart(fig_tendencia_mensual, use_container_width=True)
 
-        # Gráfico de evolución del promedio por evaluador
-        fig_promedio_evaluador = go.Figure()
-
-        fig_promedio_evaluador.add_trace(go.Bar(
-            name='Promedio por Evaluador',
-            x=df_comparativo['Mes'],
-            y=df_comparativo['Promedio_Por_Evaluador'],
-            text=df_comparativo['Promedio_Por_Evaluador'].round(1),
-            textposition='outside'
-        ))
-
-        fig_promedio_evaluador.update_layout(
-            title='Evolución del Promedio por Evaluador 2024',
-            yaxis_title='Expedientes por Evaluador',
-            showlegend=True
-        )
-
-        st.plotly_chart(fig_promedio_evaluador, use_container_width=True)
-
         # Botón de descarga con ambos reportes
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:

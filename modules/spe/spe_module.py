@@ -1322,34 +1322,66 @@ class SPEModule:
         # 4. PREDICCIONES
         st.subheader("🔮 Predicciones")
         
-        # Calcular tendencia y estacionalidad
-        decomposition = seasonal_decompose(
-            ingresos_mensuales['promedio_diario'],
-            period=12,
-            extrapolate_trend='freq'
-        )
-        
-        # Predicción para próximo mes
-        tendencia_valor = decomposition.trend.iloc[-1]
-        estacionalidad = decomposition.seasonal.iloc[-1]
-        prediccion_proximo_mes = (tendencia_valor + estacionalidad) * dias_habiles_mes
+        try:
+            # Verificar si tenemos suficientes datos para análisis estacional
+            if len(ingresos_mensuales) >= 24:
+                # Calcular tendencia y estacionalidad
+                decomposition = seasonal_decompose(
+                    ingresos_mensuales['promedio_diario'],
+                    period=12,
+                    extrapolate_trend='freq'
+                )
+                
+                # Predicción para próximo mes usando descomposición
+                tendencia_valor = decomposition.trend.iloc[-1]
+                estacionalidad = decomposition.seasonal.iloc[-1]
+                prediccion_proximo_mes = (tendencia_valor + estacionalidad) * dias_habiles_mes
+            else:
+                # Usar un método más simple cuando no hay suficientes datos
+                # Calcular tendencia usando los últimos 3 meses
+                ultimos_meses = ingresos_mensuales.tail(3)
+                tendencia = np.polyfit(range(len(ultimos_meses)), 
+                                     ultimos_meses['promedio_diario'], 
+                                     1)[0]
+                
+                ultimo_promedio = ultimos_meses['promedio_diario'].iloc[-1]
+                prediccion_proximo_mes = (ultimo_promedio + tendencia) * dias_habiles_mes
 
-        st.metric(
-            "Predicción próximo mes",
-            f"{prediccion_proximo_mes:.0f}",
-            f"{((prediccion_proximo_mes - proyeccion_mes) / proyeccion_mes * 100):.1f}%"
-        )
+            # Mostrar predicción
+            variacion = ((prediccion_proximo_mes - proyeccion_mes) / proyeccion_mes * 100)
+            st.metric(
+                "Predicción próximo mes",
+                f"{int(prediccion_proximo_mes)} expedientes",
+                f"{variacion:+.1f}% vs. mes actual"
+            )
 
-        # Recomendaciones basadas en el análisis
-        st.subheader("💡 Recomendaciones")
-        
-        recomendaciones = []
-        if tendencia > 0:
-            recomendaciones.append("• La tendencia creciente sugiere preparar recursos adicionales.")
-        if max_diario > promedio_diario * 1.5:
-            recomendaciones.append("• Hay picos significativos de ingresos. Considerar buffer de capacidad.")
-        if tendencia_semanal < 0 and tendencia > 0:
-            recomendaciones.append("• Tendencia diaria y semanal difieren. Monitorear cambios de patrón.")
+            # Recomendaciones basadas en el análisis
+            st.subheader("💡 Recomendaciones")
+            
+            recomendaciones = []
+            
+            # Análisis de tendencia
+            if tendencia > 0:
+                recomendaciones.append("• La tendencia es creciente. Se recomienda preparar recursos adicionales.")
+            else:
+                recomendaciones.append("• La tendencia es decreciente. Se puede optimizar la asignación de recursos.")
 
-        for rec in recomendaciones:
-            st.write(rec)
+            # Análisis de variabilidad
+            if max_diario > promedio_diario * 1.5:
+                recomendaciones.append("• Se detectan picos significativos de ingresos. Se recomienda mantener un buffer de capacidad.")
+
+            # Análisis de patrones
+            if tendencia_semanal < 0 and tendencia > 0:
+                recomendaciones.append("• Las tendencias diaria y semanal difieren. Se sugiere monitorear cambios de patrón.")
+
+            # Análisis de capacidad
+            capacidad_requerida = int(prediccion_proximo_mes / dias_habiles_mes)
+            recomendaciones.append(f"• Capacidad diaria recomendada: {capacidad_requerida} expedientes/día")
+
+            # Mostrar recomendaciones
+            for rec in recomendaciones:
+                st.write(rec)
+
+        except Exception as e:
+            st.error(f"Error en las predicciones: {str(e)}")
+            st.warning("No hay suficientes datos para realizar predicciones confiables.")

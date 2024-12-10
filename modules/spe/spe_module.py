@@ -166,6 +166,21 @@ class SPEModule:
             df_historico = df_historico.sort_values('Total', ascending=False)
             st.dataframe(df_historico)
 
+            # Agregar botón de descarga formateado
+            excel_data_ranking = create_excel_download(
+                df_historico,
+                "ranking_expedientes.xlsx",
+                "Ranking_Expedientes",
+                "Ranking de Expedientes Trabajados"
+            )
+            
+            st.download_button(
+                label="📥 Descargar Ranking",
+                data=excel_data_ranking,
+                file_name="ranking_expedientes.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
         # Botones de acción
         col1, col2 = st.columns(2)
 
@@ -280,18 +295,18 @@ class SPEModule:
             height=400
         )
 
-        # Agregar botón de descarga después de la tabla de evaluadores
-        excel_data = create_excel_download(
+        # Agregar botón de descarga formateado
+        excel_data_evaluador = create_excel_download(
             pivot_table,
-            "pendientes_por_evaluador.xlsx",
+            "pendientes_evaluador.xlsx",
             "Pendientes_Evaluador",
-            "Reporte de Expedientes Pendientes por Evaluador"
+            "Pendientes por Evaluador"
         )
         
         st.download_button(
-            label="📥 Descargar Tabla de Evaluadores",
-            data=excel_data,
-            file_name="pendientes_por_evaluador.xlsx",
+            label="📥 Descargar Pendientes por Evaluador",
+            data=excel_data_evaluador,
+            file_name="pendientes_evaluador.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
@@ -333,18 +348,18 @@ class SPEModule:
             height=400
         )
 
-        # Agregar botón de descarga después de la tabla de estados
+        # Agregar botón de descarga formateado
         excel_data_estado = create_excel_download(
             pivot_table_estado,
-            "pendientes_por_estado.xlsx",
+            "pendientes_estado.xlsx",
             "Pendientes_Estado",
-            "Reporte de Expedientes Pendientes por Estado"
+            "Pendientes por Estado"
         )
         
         st.download_button(
-            label="📥 Descargar Tabla de Estados",
+            label="📥 Descargar Pendientes por Estado",
             data=excel_data_estado,
-            file_name="pendientes_por_estado.xlsx",
+            file_name="pendientes_estado.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
@@ -456,7 +471,7 @@ class SPEModule:
             height=400
         )
 
-        # Agregar botón de descarga después de la tabla del mes anterior
+        # Agregar botón de descarga formateado
         excel_data_anterior = create_excel_download(
             stats_mes_anterior,
             f"trabajados_{nombre_mes_anterior}.xlsx",
@@ -515,7 +530,7 @@ class SPEModule:
             height=400
         )
 
-        # Agregar botón de descarga después de la tabla del mes actual
+        # Agregar botón de descarga formateado
         excel_data_actual = create_excel_download(
             stats_mes_actual,
             f"trabajados_{nombre_mes_actual}.xlsx",
@@ -688,6 +703,21 @@ class SPEModule:
             'Expedientes_Trabajados': '{:,.0f}'
         }), use_container_width=True)
 
+        # Agregar botón de descarga formateado
+        excel_data_comparativo = create_excel_download(
+            df_comparativo,
+            "comparativo_mensual_2024.xlsx",
+            "Comparativo_Mensual_2024",
+            "Comparativo Mensual 2024"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Comparativo Mensual 2024",
+            data=excel_data_comparativo,
+            file_name="comparativo_mensual_2024.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
         # Gráfico de tendencia mensual con dos ejes
         fig_tendencia_mensual = go.Figure()
 
@@ -779,13 +809,219 @@ class SPEModule:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-    def _show_pending_summary(self, pendientes):
-        """Mostrar resumen de pendientes."""
-        pendientes_por_evaluador = pendientes.groupby('EVALASIGN').size().reset_index(name='Cantidad')
-        pendientes_por_evaluador = pendientes_por_evaluador.sort_values(by='Cantidad', ascending=False)
+    def render_dynamic_analysis(self, data):
+        """Renderizar análisis dinámico."""
+        st.header("Análisis Dinámico")
 
-        st.subheader("Cantidad de Pendientes por Evaluador")
-        st.dataframe(pendientes_por_evaluador, use_container_width=True)
+        # Mapeo de columnas
+        COLUMNAS = {
+            'EVALUADOR': 'EVALUADOR',
+            'EXPEDIENTE': 'EXPEDIENTE',
+            'FECHA_TRABAJO': 'Fecha_Trabajo'
+        }
+
+        # Convertir fecha de trabajo a datetime de manera más flexible
+        try:
+            data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
+                data[COLUMNAS['FECHA_TRABAJO']], 
+                format='mixed',  # Usar formato mixto para mayor flexibilidad
+                dayfirst=True,   # Indicar que el día va primero
+                errors='coerce'
+            )
+        except Exception as e:
+            st.error(f"Error al procesar fechas: {str(e)}")
+            return
+
+        # Obtener fecha actual y fecha de inicio
+        fecha_actual = pd.Timestamp.now()
+        fecha_inicio = fecha_actual - pd.DateOffset(months=6)
+
+        # Filtrar datos de los últimos 6 meses
+        data_filtrada = data[
+            (data[COLUMNAS['FECHA_TRABAJO']] >= fecha_inicio) &
+            (data[COLUMNAS['FECHA_TRABAJO']] <= fecha_actual)
+        ]
+
+        # Calcular tiempos promedio por evaluador
+        tiempo_promedio_real = data_filtrada.groupby(COLUMNAS['EVALUADOR']).agg({
+            COLUMNAS['EXPEDIENTE']: 'count',
+            COLUMNAS['FECHA_TRABAJO']: lambda x: x.dt.date.nunique()
+        }).reset_index()
+
+        tiempo_promedio_real['TIEMPO_PROMEDIO'] = (
+            tiempo_promedio_real[COLUMNAS['EXPEDIENTE']] / tiempo_promedio_real[COLUMNAS['FECHA_TRABAJO']]
+        ).round(1)
+
+        tiempo_promedio_real = tiempo_promedio_real.sort_values('TIEMPO_PROMEDIO', ascending=False)
+
+        # Mostrar tabla de tiempos promedio
+        st.subheader("Tiempos Promedio por Evaluador")
+        st.dataframe(tiempo_promedio_real)
+
+        # Agregar botón de descarga formateado
+        excel_data_tiempos = create_excel_download(
+            tiempo_promedio_real,
+            "tiempos_promedio.xlsx",
+            "Tiempos_Promedio",
+            f"Tiempos Promedio por Evaluador"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Tiempos Promedio",
+            data=excel_data_tiempos,
+            file_name="tiempos_promedio.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # Gráfico de distribución diaria
+        datos_diarios = data_filtrada.groupby(COLUMNAS['FECHA_TRABAJO']).size().reset_index(name='cantidad')
+
+        fig_distribucion_diaria = px.line(
+            datos_diarios,
+            x=COLUMNAS['FECHA_TRABAJO'],
+            y='cantidad',
+            title="Distribución Diaria de Expedientes",
+            labels={'cantidad': 'Expedientes Trabajados'}
+        )
+        fig_distribucion_diaria.update_traces(mode='markers+lines')
+        st.plotly_chart(fig_distribucion_diaria, use_container_width=True)
+
+        # Agregar botón de descarga formateado
+        excel_data_diarios = create_excel_download(
+            datos_diarios,
+            "distribucion_diaria.xlsx",
+            "Distribucion_Diaria",
+            "Distribución Diaria de Expedientes"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Distribución Diaria",
+            data=excel_data_diarios,
+            file_name="distribucion_diaria.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    def render_predictive_analysis(self, data):
+        """Renderizar análisis predictivo."""
+        st.header("Predicción de Ingresos")
+
+        # Mapeo de columnas
+        COLUMNAS = {
+            'EVALUADOR': 'EVALUADOR',
+            'EXPEDIENTE': 'EXPEDIENTE',
+            'FECHA_TRABAJO': 'Fecha_Trabajo'
+        }
+
+        # Convertir fecha de trabajo a datetime de manera más flexible
+        try:
+            data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
+                data[COLUMNAS['FECHA_TRABAJO']], 
+                format='mixed',  # Usar formato mixto para mayor flexibilidad
+                dayfirst=True,   # Indicar que el día va primero
+                errors='coerce'
+            )
+        except Exception as e:
+            st.error(f"Error al procesar fechas: {str(e)}")
+            return
+
+        # Obtener fecha actual y fecha de inicio
+        fecha_actual = pd.Timestamp.now()
+        fecha_inicio = fecha_actual - pd.DateOffset(months=6)
+
+        # Filtrar datos de los últimos 6 meses
+        data_filtrada = data[
+            (data[COLUMNAS['FECHA_TRABAJO']] >= fecha_inicio) &
+            (data[COLUMNAS['FECHA_TRABAJO']] <= fecha_actual)
+        ]
+
+        # Preparar datos para el modelo de pronóstico
+        datos_diarios = data_filtrada.groupby(COLUMNAS['FECHA_TRABAJO']).size().reset_index(name='cantidad')
+        datos_diarios = datos_diarios.sort_values(COLUMNAS['FECHA_TRABAJO'])
+
+        # Crear modelo de pronóstico
+        model = Prophet()
+        datos_diarios = datos_diarios.rename(columns={COLUMNAS['FECHA_TRABAJO']: 'ds', 'cantidad': 'y'})
+        model.fit(datos_diarios)
+
+        # Generar pronóstico para los próximos 30 días
+        future = model.make_future_dataframe(periods=30)
+        forecast = model.predict(future)
+
+        # Mostrar tabla de pronósticos
+        st.subheader("Pronósticos de Ingresos")
+        forecast_table = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(30)
+        forecast_table = forecast_table.rename(columns={'ds': 'Fecha', 'yhat': 'Pronóstico', 'yhat_lower': 'Límite Inferior', 'yhat_upper': 'Límite Superior'})
+        st.dataframe(forecast_table)
+
+        # Agregar botón de descarga formateado
+        excel_data_forecast = create_excel_download(
+            forecast_table,
+            "pronosticos.xlsx",
+            "Pronosticos",
+            "Pronósticos de Ingresos"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Pronósticos",
+            data=excel_data_forecast,
+            file_name="pronosticos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # Gráfico de pronóstico
+        fig_pronostico = go.Figure()
+        fig_pronostico.add_trace(go.Scatter(
+            x=forecast['ds'],
+            y=forecast['yhat'],
+            mode='lines',
+            name='Pronóstico'
+        ))
+        fig_pronostico.add_trace(go.Scatter(
+            x=forecast['ds'],
+            y=forecast['yhat_lower'],
+            mode='lines',
+            name='Límite Inferior',
+            line=dict(dash='dash')
+        ))
+        fig_pronostico.add_trace(go.Scatter(
+            x=forecast['ds'],
+            y=forecast['yhat_upper'],
+            mode='lines',
+            name='Límite Superior',
+            line=dict(dash='dash')
+        ))
+        fig_pronostico.add_trace(go.Scatter(
+            x=datos_diarios['ds'],
+            y=datos_diarios['y'],
+            mode='markers',
+            name='Datos Históricos'
+        ))
+        fig_pronostico.update_layout(
+            title="Pronóstico de Ingresos",
+            xaxis_title="Fecha",
+            yaxis_title="Cantidad de Expedientes"
+        )
+        st.plotly_chart(fig_pronostico, use_container_width=True)
+
+        # Mostrar componentes del pronóstico
+        if 'df_components' in locals():
+            st.subheader("Componentes de la Predicción")
+            st.dataframe(df_components)
+
+            # Agregar botón de descarga formateado
+            excel_data_components = create_excel_download(
+                df_components,
+                "componentes_prediccion.xlsx",
+                "Componentes",
+                "Componentes de la Predicción"
+            )
+            
+            st.download_button(
+                label="📥 Descargar Componentes",
+                data=excel_data_components,
+                file_name="componentes_prediccion.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
     def _show_pending_chart(self, pendientes):
         """Mostrar grfico de pendientes."""
@@ -803,398 +1039,17 @@ class SPEModule:
         fig.update_traces(textposition='outside')
         st.plotly_chart(fig, use_container_width=True)
 
-    def _offer_pending_download(self, pendientes):
-        """Ofrecer descarga de reporte de pendientes."""
-        pendientes_por_evaluador = pendientes.groupby('EVALASIGN').size().reset_index(name='Cantidad')
-        
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            pendientes_por_evaluador.to_excel(writer, index=False, sheet_name='Pendientes')
-            pendientes[['NumeroTramite', 'EVALASIGN', 'ETAPA_EVALUACION']].to_excel(
-                writer, 
-                index=False, 
-                sheet_name='Detalle_Pendientes'
-            )
-        output.seek(0)
-
-        st.download_button(
-            label="Descargar Reporte de Pendientes",
-            data=output,
-            file_name="Pendientes_SPE.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ) 
-
-    def _migrate_evaluador_field(self, collection):
-        """Migrar registros antiguos para usar 'EVALUADOR' en mayúsculas."""
-        try:
-            # Buscar registros que usan 'evaluador' en minúsculas
-            registros_antiguos = collection.find({
-                "modulo": "SPE",
-                "datos": {"$elemMatch": {"evaluador": {"$exists": True}}}
-            })
-            
-            for registro in registros_antiguos:
-                datos_actualizados = []
-                for dato in registro['datos']:
-                    if 'evaluador' in dato:
-                        dato['EVALUADOR'] = dato.pop('evaluador')
-                    datos_actualizados.append(dato)
-                
-                collection.update_one(
-                    {"_id": registro["_id"]},
-                    {"$set": {"datos": datos_actualizados}}
-                )
-                
-        except Exception as e:
-            st.error(f"Error al migrar datos: {str(e)}") 
-
-    def crear_filtro_fecha_jerarquico(self, df, columna_fecha):
-        """Crear filtro jerárquico para fechas (Año > Mes > Día)."""
-        fechas = pd.to_datetime(df[columna_fecha])
-        
-        # Obtener años únicos
-        años = sorted(fechas.dt.year.unique())
-        año_seleccionado = st.selectbox(
-            f'Año ({columna_fecha})',
-            options=['Todos'] + años,
-            key=f'año_{columna_fecha}'
-        )
-        
-        if año_seleccionado != 'Todos':
-            # Filtrar por año
-            mask_año = fechas.dt.year == año_seleccionado
-            df_filtrado = df[mask_año]
-            
-            # Obtener meses únicos del año seleccionado
-            meses = sorted(fechas[mask_año].dt.strftime('%m-%B').unique())
-            mes_seleccionado = st.selectbox(
-                f'Mes ({columna_fecha})',
-                options=['Todos'] + meses,
-                key=f'mes_{columna_fecha}'
-            )
-            
-            if mes_seleccionado != 'Todos':
-                # Filtrar por mes
-                mes_num = mes_seleccionado.split('-')[0]
-                mask_mes = fechas[mask_año].dt.strftime('%m') == mes_num
-                df_filtrado = df_filtrado[mask_mes]
-                
-                # Obtener días únicos del mes seleccionado
-                dias = sorted(fechas[mask_año & mask_mes].dt.strftime('%d').unique())
-                dia_seleccionado = st.selectbox(
-                    f'Día ({columna_fecha})',
-                    options=['Todos'] + dias,
-                    key=f'dia_{columna_fecha}'
-                )
-                
-                if dia_seleccionado != 'Todos':
-                    # Filtrar por día
-                    mask_dia = fechas[mask_año & mask_mes].dt.strftime('%d') == dia_seleccionado
-                    df_filtrado = df_filtrado[mask_dia]
-        else:
-            df_filtrado = df
-        
-        return df_filtrado
-
-    def render_dynamic_analysis(self, data):
-        """Renderizar análisis dinámico tipo tabla dinámica."""
-        try:
-            st.header("👨‍💼 Análisis Dinámico")
-            
-            if data is None or data.empty:
-                st.error("No hay datos disponibles para mostrar")
-                return
-
-            # Mapeo correcto de columnas del Google Sheet
-            COLUMNAS = {
-                'EXPEDIENTE': 'EXPEDIENTE',
-                'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
-                'PROCESO': 'PROCESO',
-                'FECHA_INGRESO': 'FECHA _ INGRESO',
-                'EVALUADOR': 'EVALUADOR',
-                'ETAPA': 'ETAPA_EVALUACIÓN',
-                'ESTADO': 'ESTADO',
-                'OBSERVACION': 'OBSERVACIÓN',
-                'FECHA_TRABAJO': 'Fecha_Trabajo'
-            }
-
-            # Filtros en columnas
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                # Selector de evaluadores
-                evaluadores = sorted(data[data[COLUMNAS['EVALUADOR']] != ''][COLUMNAS['EVALUADOR']].unique())
-                selected_evaluador = st.selectbox(
-                    "Seleccionar Evaluador",
-                    options=evaluadores,
-                    help="Busca y selecciona un evaluador específico"
-                )
-
-            with col2:
-                # Filtro por proceso
-                procesos = sorted(data[COLUMNAS['PROCESO']].dropna().unique())
-                selected_procesos = st.multiselect(
-                    "Proceso",
-                    options=procesos,
-                    help="Filtra por tipo de proceso"
-                )
-
-            with col3:
-                # Filtro por estado
-                estados = sorted(data[COLUMNAS['ESTADO']].dropna().unique())
-                selected_estados = st.multiselect(
-                    "Estado del Expediente",
-                    options=estados,
-                    help="Filtra por estados específicos"
-                )
-
-            # Filtros adicionales expandibles
-            with st.expander("📌 Filtros Adicionales"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    # Filtro por etapa
-                    etapas = sorted(data[COLUMNAS['ETAPA']].dropna().unique())
-                    selected_etapas = st.multiselect(
-                        "Etapa de Evaluación",
-                        options=etapas,
-                        help="Filtra por etapa de evaluación"
-                    )
-                    
-                with col2:
-                    # Rango de fechas de trabajo
-                    fecha_inicio = st.date_input(
-                        "Fecha de Trabajo Desde", 
-                        value=None,
-                        key="fecha_inicio"
-                    )
-                    fecha_fin = st.date_input(
-                        "Fecha de Trabajo Hasta", 
-                        value=None,
-                        key="fecha_fin"
-                    )
-
-            # Aplicar filtros
-            filtered_data = data[data[COLUMNAS['EVALUADOR']] == selected_evaluador]
-            
-            if selected_procesos:
-                filtered_data = filtered_data[filtered_data[COLUMNAS['PROCESO']].isin(selected_procesos)]
-            
-            if selected_estados:
-                filtered_data = filtered_data[filtered_data[COLUMNAS['ESTADO']].isin(selected_estados)]
-            
-            if selected_etapas:
-                filtered_data = filtered_data[filtered_data[COLUMNAS['ETAPA']].isin(selected_etapas)]
-
-            # Convertir y filtrar fechas
-            filtered_data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
-                filtered_data[COLUMNAS['FECHA_TRABAJO']], 
-                format='mixed',
-                dayfirst=True,
-                errors='coerce'
-            )
-            
-            if fecha_inicio:
-                filtered_data = filtered_data[filtered_data[COLUMNAS['FECHA_TRABAJO']].dt.date >= fecha_inicio]
-            if fecha_fin:
-                filtered_data = filtered_data[filtered_data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_fin]
-
-            # Mostrar resumen
-            if not filtered_data.empty:
-                st.markdown("### 📊 Resumen")
-                
-                # Calcular métricas
-                total = len(filtered_data)
-                expedientes_mes_actual = len(filtered_data[
-                    filtered_data[COLUMNAS['FECHA_TRABAJO']].dt.month == datetime.now().month
-                ])
-                promedio_diario = filtered_data.groupby(
-                    filtered_data[COLUMNAS['FECHA_TRABAJO']].dt.date
-                ).size().mean()
-                
-                # Mostrar métricas
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Expedientes", f"{total:,d}")
-                col2.metric("Expedientes Mes Actual", f"{expedientes_mes_actual:,d}")
-                col3.metric("Promedio Diario", f"{promedio_diario:.1f}")
-
-                # Mostrar datos filtrados
-                st.markdown("### 📋 Detalle de Expedientes")
-                
-                # Preparar datos para mostrar
-                display_data = filtered_data[[
-                    COLUMNAS['EXPEDIENTE'],
-                    COLUMNAS['PROCESO'],
-                    COLUMNAS['FECHA_INGRESO'],
-                    COLUMNAS['ESTADO'],
-                    COLUMNAS['ETAPA'],
-                    COLUMNAS['FECHA_TRABAJO'],
-                    COLUMNAS['OBSERVACION']
-                ]].copy()
-                
-                # Formatear fechas
-                for col in [COLUMNAS['FECHA_INGRESO'], COLUMNAS['FECHA_TRABAJO']]:
-                    display_data[col] = pd.to_datetime(display_data[col], format='mixed', dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y')
-                
-                # Mostrar tabla
-                st.dataframe(
-                    display_data,
-                    use_container_width=True,
-                    column_config={
-                        COLUMNAS['EXPEDIENTE']: 'Expediente',
-                        COLUMNAS['PROCESO']: 'Proceso',
-                        COLUMNAS['FECHA_INGRESO']: 'Fecha de Ingreso',
-                        COLUMNAS['ESTADO']: 'Estado',
-                        COLUMNAS['ETAPA']: 'Etapa',
-                        COLUMNAS['FECHA_TRABAJO']: 'Fecha de Trabajo',
-                        COLUMNAS['OBSERVACION']: 'Observación'
-                    }
-                )
-
-                # Agregar botón de descarga formateado
-                excel_data = create_excel_download(
-                    display_data,
-                    "analisis_dinamico.xlsx",
-                    "Analisis_Dinamico",
-                    f"Análisis Dinámico - {selected_evaluador}"
-                )
-                
-                st.download_button(
-                    label="📥 Descargar Análisis Dinámico",
-                    data=excel_data,
-                    file_name=f"analisis_dinamico_{selected_evaluador.replace(' ', '_')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            else:
-                st.info("No se encontraron expedientes con los filtros seleccionados")
-
-        except Exception as e:
-            st.error(f"Error al procesar el análisis: {str(e)}")
-            print(f"Error detallado: {str(e)}")
-
-    def render_predictive_analysis(self, data):
-        """Renderizar análisis predictivo de ingresos usando ML y análisis estadístico avanzado."""
-        st.header("Análisis Predictivo de Ingresos 2024")
-
-        # Preparación inicial de datos
-        data['FECHA _ INGRESO'] = pd.to_datetime(data['FECHA _ INGRESO'], format='%d/%m/%Y', errors='coerce')
-        data = data.dropna(subset=['FECHA _ INGRESO'])
-        data = data[data['FECHA _ INGRESO'].dt.year == 2024]
-
-        # 1. Análisis Diario
-        st.subheader("Evolución Diaria")
-        ingresos_diarios = data.groupby('FECHA _ INGRESO').size().reset_index(name='cantidad')
-        
-        # Aplicar LOESS para suavizado
-        x_diario = (ingresos_diarios['FECHA _ INGRESO'] - ingresos_diarios['FECHA _ INGRESO'].min()).dt.days
-        tendencia_diaria = lowess(
-            ingresos_diarios['cantidad'],
-            x_diario,
-            frac=0.3,
-            it=3,
-            return_sorted=False
-        )
-
-        fig_diario = go.Figure()
-        fig_diario.add_trace(go.Scatter(
-            x=ingresos_diarios['FECHA _ INGRESO'],
-            y=ingresos_diarios['cantidad'],
-            mode='markers+lines',
-            name='Ingresos Diarios'
-        ))
-        fig_diario.add_trace(go.Scatter(
-            x=ingresos_diarios['FECHA _ INGRESO'],
-            y=tendencia_diaria,
-            mode='lines',
-            name='Tendencia'
-        ))
-        st.plotly_chart(fig_diario)
-
-        # 2. Análisis con Prophet
-        st.subheader("Predicción con Prophet")
-        df_prophet = pd.DataFrame({
-            'ds': ingresos_diarios['FECHA _ INGRESO'],
-            'y': ingresos_diarios['cantidad']
-        })
-
-        model = Prophet(
-            changepoint_prior_scale=0.5,
-            yearly_seasonality=False,
-            weekly_seasonality=True,
-            daily_seasonality=False
-        )
-        model.fit(df_prophet)
-
-        future = model.make_future_dataframe(periods=30)
-        forecast = model.predict(future)
-
-        fig_prophet = go.Figure()
-        fig_prophet.add_trace(go.Scatter(
-            x=df_prophet['ds'],
-            y=df_prophet['y'],
-            mode='markers',
-            name='Datos Históricos'
-        ))
-        fig_prophet.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat'],
-            mode='lines',
-            name='Predicción'
-        ))
-        fig_prophet.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat_upper'],
-            fill=None,
-            mode='lines',
-            line=dict(color='rgba(0,0,0,0)'),
-            name='Intervalo Superior'
-        ))
-        fig_prophet.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat_lower'],
-            fill='tonexty',
-            mode='lines',
-            line=dict(color='rgba(0,0,0,0)'),
-            name='Intervalo Inferior'
-        ))
-        st.plotly_chart(fig_prophet)
-
-        # 3. Análisis de Componentes
-        st.subheader("Análisis de Componentes")
-        fig_components = model.plot_components(forecast)
-        st.pyplot(fig_components)
-
-        # 4. Métricas y Estadísticas
-        st.subheader("Métricas Clave")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            promedio = ingresos_diarios['cantidad'].mean()
-            st.metric("Promedio Diario", f"{promedio:.1f}")
-        
-        with col2:
-            tendencia = (ingresos_diarios['cantidad'].tail(7).mean() / 
-                        ingresos_diarios['cantidad'].head(7).mean() - 1) * 100
-            st.metric("Tendencia", f"{tendencia:.1f}%")
-        
-        with col3:
-            volatilidad = ingresos_diarios['cantidad'].std() / promedio * 100
-            st.metric("Volatilidad", f"{volatilidad:.1f}%")
-
-        # Después de mostrar la tabla comparativa
-        st.dataframe(df_comparativo)
-        
         # Agregar botón de descarga formateado
-        excel_data = create_excel_download(
-            df_comparativo,
-            "analisis_predictivo.xlsx",
-            "Analisis_Predictivo",
-            "Análisis Predictivo de Ingresos 2024"
+        excel_data_pendientes = create_excel_download(
+            pendientes_por_evaluador,
+            "pendientes_por_evaluador.xlsx",
+            "Pendientes_Evaluador",
+            "Pendientes por Evaluador"
         )
         
         st.download_button(
-            label="📥 Descargar Análisis Predictivo",
-            data=excel_data,
-            file_name="analisis_predictivo_2024.xlsx",
+            label="📥 Descargar Pendientes por Evaluador",
+            data=excel_data_pendientes,
+            file_name="pendientes_por_evaluador.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )

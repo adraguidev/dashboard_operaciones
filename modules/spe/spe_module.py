@@ -990,7 +990,7 @@ class SPEModule:
                         default=[]
                     )
 
-            # Bot��n para aplicar filtros
+            # Botón para aplicar filtros
             col1, col2 = st.columns([1, 11])
             with col1:
                 filtrar = st.button("🔍 Filtrar", key="apply_filters", type="primary")
@@ -1250,59 +1250,71 @@ class SPEModule:
                 self.columnas['FECHA_INGRESO']: ['min', 'max']
             }).reset_index()
 
-            # Calcular días transcurridos
-            ingresos_mensuales['dias_transcurridos'] = ingresos_mensuales[
-                (self.columnas['FECHA_INGRESO'], 'max')
-            ].apply(lambda x: len(pd.bdate_range(
-                ingresos_mensuales[(self.columnas['FECHA_INGRESO'], 'min')].iloc[0],
-                x
-            )))
+            if not ingresos_mensuales.empty:
+                # Calcular días transcurridos
+                ingresos_mensuales['dias_transcurridos'] = ingresos_mensuales.apply(
+                    lambda row: len(pd.bdate_range(
+                        row[(self.columnas['FECHA_INGRESO'], 'min')],
+                        row[(self.columnas['FECHA_INGRESO'], 'max')]
+                    )), axis=1
+                )
 
-            # Calcular promedio diario
-            ingresos_mensuales['promedio_diario'] = (
-                ingresos_mensuales[(self.columnas['EXPEDIENTE'], 'count')] / 
-                ingresos_mensuales['dias_transcurridos']
-            )
+                # Calcular promedio diario
+                ingresos_mensuales['promedio_diario'] = (
+                    ingresos_mensuales[(self.columnas['EXPEDIENTE'], 'count')] / 
+                    ingresos_mensuales['dias_transcurridos'].clip(lower=1)  # Evitar división por cero
+                )
 
-            # Proyección del mes actual
-            mes_actual = ingresos_mensuales.iloc[-1]
-            fecha_inicio_mes = mes_actual[(self.columnas['FECHA_INGRESO'], 'min')]
-            fecha_fin_mes = pd.Timestamp(fecha_actual.year, fecha_actual.month + 1, 1) - pd.Timedelta(days=1)
-            
-            dias_habiles_mes = len(pd.bdate_range(fecha_inicio_mes, fecha_fin_mes))
-            proyeccion_mes = mes_actual['promedio_diario'] * dias_habiles_mes
+                # Proyección del mes actual
+                mes_actual = ingresos_mensuales.iloc[-1]
+                
+                # Obtener primer y último día del mes actual
+                primer_dia_mes = pd.Timestamp(fecha_actual.year, fecha_actual.month, 1)
+                if fecha_actual.month == 12:
+                    ultimo_dia_mes = pd.Timestamp(fecha_actual.year + 1, 1, 1) - pd.Timedelta(days=1)
+                else:
+                    ultimo_dia_mes = pd.Timestamp(fecha_actual.year, fecha_actual.month + 1, 1) - pd.Timedelta(days=1)
+                
+                # Calcular días hábiles
+                dias_habiles_mes = len(pd.bdate_range(primer_dia_mes, ultimo_dia_mes))
+                proyeccion_mes = mes_actual['promedio_diario'] * dias_habiles_mes
 
-            # Mostrar proyección
-            st.info(f"📈 Proyección para el mes actual: {proyeccion_mes:.0f} expedientes")
+                # Mostrar proyección
+                st.info(f"📈 Proyección para el mes actual: {proyeccion_mes:.0f} expedientes")
 
-            # Análisis de estacionalidad
-            meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
-                    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-            
-            # Crear mapeo de mes a nombre
-            ingresos_mensuales['mes_nombre'] = ingresos_mensuales['mes'].map(
-                lambda x: meses[x-1]
-            )
+                # Análisis de estacionalidad
+                meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+                
+                # Crear mapeo de mes a nombre
+                ingresos_mensuales['mes_nombre'] = ingresos_mensuales['mes'].map(
+                    lambda x: meses[int(x)-1] if 1 <= int(x) <= 12 else 'Mes Inválido'
+                )
 
-            # Análisis de carga por mes
-            meses_carga = (ingresos_mensuales.groupby('mes_nombre')['promedio_diario']
-                          .mean()
-                          .sort_values())
+                # Análisis de carga por mes
+                meses_carga = (ingresos_mensuales.groupby('mes_nombre')['promedio_diario']
+                              .mean()
+                              .sort_values())
 
-            # Mostrar análisis de estacionalidad
-            st.write("🔍 Análisis de Estacionalidad:")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write("Meses con mayor carga:")
-                for mes in meses_carga.tail(3).index:
-                    st.write(f"• {mes}")
-            with col2:
-                st.write("Meses con menor carga:")
-                for mes in meses_carga.head(3).index:
-                    st.write(f"• {mes}")
+                # Mostrar análisis de estacionalidad
+                st.write("🔍 Análisis de Estacionalidad:")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("Meses con mayor carga:")
+                    for mes in meses_carga.tail(3).index:
+                        st.write(f"• {mes}")
+                with col2:
+                    st.write("Meses con menor carga:")
+                    for mes in meses_carga.head(3).index:
+                        st.write(f"• {mes}")
+            else:
+                st.warning("No hay datos suficientes para el análisis mensual")
 
         except Exception as e:
             st.error(f"Error en el análisis mensual: {str(e)}")
+            st.error("Detalles del error para depuración:")
+            st.write(f"Año: {fecha_actual.year}")
+            st.write(f"Mes: {fecha_actual.month}")
             return
 
         # 4. PREDICCIONES

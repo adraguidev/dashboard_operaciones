@@ -135,6 +135,14 @@ class SPEModule:
         if ultima_fecha:
             st.info(f"📅 Último registro guardado: {ultima_fecha.strftime('%d/%m/%Y')}")
 
+        # Preparar datos para guardar
+        datos_nuevos = data[
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer) &
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.date > (ultima_fecha or datetime.min.date())) &
+            (data[COLUMNAS['EVALUADOR']].notna()) &
+            (data[COLUMNAS['EVALUADOR']] != '')
+        ].copy()
+
         # Obtener datos históricos de MongoDB
         registros_historicos = list(collection.find({
             "modulo": "SPE",
@@ -165,38 +173,6 @@ class SPEModule:
                             df_pivot, on='EVALUADOR', how='outer'
                         )
 
-        # Procesar datos nuevos del Google Sheets que aún no están en la BD
-        datos_nuevos = data[
-            (data[COLUMNAS['FECHA_TRABAJO']].notna()) &
-            (data[COLUMNAS['EVALUADOR']].notna()) &
-            (data[COLUMNAS['EVALUADOR']] != '')
-        ].copy()
-
-        # Agrupar datos nuevos por fecha y evaluador
-        datos_nuevos_agrupados = datos_nuevos.groupby([
-            data[COLUMNAS['FECHA_TRABAJO']].dt.date,
-            COLUMNAS['EVALUADOR']
-        ]).size().reset_index(name='cantidad')
-
-        # Agregar datos nuevos al DataFrame histórico
-        for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].dt.date.unique():
-            if fecha not in fechas_guardadas and fecha <= fecha_ayer:
-                fecha_str = fecha.strftime('%d/%m')
-                datos_fecha = datos_nuevos_agrupados[
-                    datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha
-                ]
-                df_pivot = pd.DataFrame({
-                    'EVALUADOR': datos_fecha[COLUMNAS['EVALUADOR']].tolist(),
-                    fecha_str: datos_fecha['cantidad'].tolist()
-                })
-                
-                if df_historico.empty:
-                    df_historico = df_pivot
-                else:
-                    df_historico = df_historico.merge(
-                        df_pivot, on='EVALUADOR', how='outer'
-                    )
-
         # Mostrar tabla de ranking
         if not df_historico.empty:
             df_historico = df_historico.fillna(0)
@@ -211,18 +187,6 @@ class SPEModule:
             df_historico = df_historico[cols_ordenadas]
             df_historico['Total'] = df_historico.iloc[:, 1:].sum(axis=1)
             df_historico = df_historico.sort_values('Total', ascending=False)
-            
-            # Mostrar datos pendientes de guardar
-            fechas_pendientes = sorted(set(
-                fecha for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].dt.date.unique()
-                if fecha not in fechas_guardadas and fecha <= fecha_ayer
-            ))
-            
-            if fechas_pendientes:
-                st.warning("⚠️ Hay datos pendientes por guardar de las siguientes fechas:")
-                for fecha in fechas_pendientes:
-                    st.write(f"- {fecha.strftime('%d/%m/%Y')}")
-
             st.dataframe(df_historico)
 
             # Agregar botón de descarga formateado

@@ -86,15 +86,15 @@ class SPEModule:
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
-        # Usar timezone de Peru para las fechas
+        # Usar timezone de Peru para las fechas y especificar dayfirst=True
         fecha_actual = pd.Timestamp.now(tz='America/Lima').date()
         fecha_ayer = fecha_actual - timedelta(days=1)
 
-        # Convertir fecha de trabajo a datetime considerando timezone
+        # Convertir fecha de trabajo a datetime considerando formato dd/mm/yyyy
         data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
             data[COLUMNAS['FECHA_TRABAJO']], 
-            format='%d/%m/%Y',
-            dayfirst=True,
+            format='%d/%m/%Y',  # Cambiado a formato dd/mm/yyyy
+            dayfirst=True,      # Importante: indica que el día va primero
             errors='coerce'
         ).dt.tz_localize('America/Lima')
 
@@ -364,7 +364,8 @@ class SPEModule:
         # Convertir fecha de trabajo a datetime considerando formato dd/mm/yyyy
         data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
             data[COLUMNAS['FECHA_TRABAJO']], 
-            format='%d/%m/%Y',
+            format='%d/%m/%Y',  # Cambiado a formato dd/mm/yyyy
+            dayfirst=True,      # Importante: indica que el día va primero
             errors='coerce'
         )
 
@@ -601,8 +602,8 @@ class SPEModule:
         for col in COLUMNAS_FECHA:
             data[COLUMNAS_DISPONIBLES[col]] = pd.to_datetime(
                 data[COLUMNAS_DISPONIBLES[col]], 
-                format='%d/%m/%Y',
-                dayfirst=True,
+                format='%d/%m/%Y',  # Cambiado a formato dd/mm/yyyy
+                dayfirst=True,      # Importante: indica que el día va primero
                 errors='coerce'
             )
 
@@ -681,9 +682,14 @@ class SPEModule:
         """Análisis predictivo simplificado usando regresión lineal"""
         st.header("Predicción de Ingresos")
         
-        # Preparar datos históricos
+        # Preparar datos históricos con formato de fecha correcto
         ingresos_diarios = data.groupby('FECHA _ INGRESO').size().reset_index(name='cantidad')
-        ingresos_diarios['FECHA _ INGRESO'] = pd.to_datetime(ingresos_diarios['FECHA _ INGRESO'])
+        ingresos_diarios['FECHA _ INGRESO'] = pd.to_datetime(
+            ingresos_diarios['FECHA _ INGRESO'],
+            format='%d/%m/%Y',  # Cambiado a formato dd/mm/yyyy
+            dayfirst=True,      # Importante: indica que el día va primero
+            errors='coerce'
+        )
         
         # Crear modelo de regresión lineal
         X = np.arange(len(ingresos_diarios)).reshape(-1, 1)

@@ -46,13 +46,14 @@ class SPEModule:
         if 'spe_data' not in st.session_state:
             st.session_state.spe_data = None
         
-        # Inicializar columnas en session_state si no existe
-        if 'spe_columnas' not in st.session_state:
-            st.session_state.spe_columnas = self.COLUMNAS.copy()
-            st.session_state.spe_columnas['FECHA_INGRESO'] = 'FECHA_INGRESO'
-        
-        # Usar las columnas desde session_state
-        self.COLUMNAS = st.session_state.spe_columnas
+        # Crear una nueva instancia del diccionario de columnas para cada objeto
+        self._columnas = self.COLUMNAS.copy()
+        self._columnas['FECHA_INGRESO'] = 'FECHA_INGRESO'
+
+    @property
+    def columnas(self):
+        """Getter para el diccionario de columnas."""
+        return self._columnas
 
     def load_data(self):
         """Cargar datos desde Google Sheets."""
@@ -126,7 +127,7 @@ class SPEModule:
         """Renderizar pestaña de ranking de expedientes trabajados."""
         st.header("Ranking de Expedientes Trabajados")
 
-        COLUMNAS = self.COLUMNAS
+        COLUMNAS = self.columnas
 
         # Usar timezone de Peru para las fechas
         fecha_actual = pd.Timestamp.now(tz='America/Lima')
@@ -328,7 +329,7 @@ class SPEModule:
         """Renderizar reporte de pendientes."""
         st.header("Reporte de Pendientes")
 
-        COLUMNAS = self.COLUMNAS
+        COLUMNAS = self.columnas
 
         # Limpiar datos innecesarios
         data = data.drop(['Column 12', 'Column 13', 'Column 14', 'Column 15', 'Column 16', 'Column 17'], axis=1)
@@ -471,7 +472,7 @@ class SPEModule:
         """Renderizar reporte de expedientes trabajados."""
         st.header("Reporte de Expedientes Trabajados")
 
-        COLUMNAS = self.COLUMNAS
+        COLUMNAS = self.columnas
 
         # Mapeo de meses a español
         MESES = {
@@ -877,7 +878,7 @@ class SPEModule:
         """Renderizar análisis dinámico."""
         st.header("Análisis Dinámico")
 
-        COLUMNAS = self.COLUMNAS
+        COLUMNAS = self.columnas
 
         # Crear contenedor para filtros
         st.subheader("Filtros Dinámicos")
@@ -1126,8 +1127,8 @@ class SPEModule:
             data_copy = data.copy()
             
             # Convertir fecha de ingreso a datetime usando la referencia de clase
-            data_copy[self.COLUMNAS['FECHA_INGRESO']] = pd.to_datetime(
-                data_copy[self.COLUMNAS['FECHA_INGRESO']], 
+            data_copy[self.columnas['FECHA_INGRESO']] = pd.to_datetime(
+                data_copy[self.columnas['FECHA_INGRESO']], 
                 format='mixed',
                 dayfirst=True,
                 errors='coerce'
@@ -1146,10 +1147,10 @@ class SPEModule:
         st.subheader("📊 Ingresos Diarios (Últimos 30 días)")
         
         fecha_30_dias = fecha_actual - pd.Timedelta(days=30)
-        datos_30_dias = data[data[self.COLUMNAS['FECHA_INGRESO']] >= fecha_30_dias]
+        datos_30_dias = data[data[self.columnas['FECHA_INGRESO']] >= fecha_30_dias]
         
         ingresos_diarios = datos_30_dias.groupby(
-            data[self.COLUMNAS['FECHA_INGRESO']].dt.date
+            data[self.columnas['FECHA_INGRESO']].dt.date
         ).size().reset_index(name='cantidad')
         
         # Calcular estadísticas
@@ -1201,29 +1202,29 @@ class SPEModule:
         st.subheader("📈 Análisis Semanal (Último Año)")
         
         fecha_anio = fecha_actual - pd.DateOffset(years=1)
-        datos_anio = data[data[self.COLUMNAS['FECHA_INGRESO']] >= fecha_anio]
+        datos_anio = data[data[self.columnas['FECHA_INGRESO']] >= fecha_anio]
         
         # Agrupar por semana
         ingresos_semanales = datos_anio.groupby(
-            [data[self.COLUMNAS['FECHA_INGRESO']].dt.isocalendar().year,
-             data[self.COLUMNAS['FECHA_INGRESO']].dt.isocalendar().week]
+            [data[self.columnas['FECHA_INGRESO']].dt.isocalendar().year,
+             data[self.columnas['FECHA_INGRESO']].dt.isocalendar().week]
         ).agg({
-            self.COLUMNAS['EXPEDIENTE']: 'count',
-            self.COLUMNAS['FECHA_INGRESO']: ['min', 'max']
+            self.columnas['EXPEDIENTE']: 'count',
+            self.columnas['FECHA_INGRESO']: ['min', 'max']
         }).reset_index()
 
         # Calcular promedio por día hábil para cada semana
-        ingresos_semanales['dias_habiles'] = ingresos_semanales[self.COLUMNAS['FECHA_INGRESO']]['max'].apply(
+        ingresos_semanales['dias_habiles'] = ingresos_semanales[self.columnas['FECHA_INGRESO']]['max'].apply(
             lambda x: len(pd.bdate_range(
-                ingresos_semanales[self.COLUMNAS['FECHA_INGRESO']]['min'].iloc[0],
+                ingresos_semanales[self.columnas['FECHA_INGRESO']]['min'].iloc[0],
                 x
             ))
         )
-        ingresos_semanales['promedio_diario'] = ingresos_semanales[self.COLUMNAS['EXPEDIENTE']]['count'] / ingresos_semanales['dias_habiles']
+        ingresos_semanales['promedio_diario'] = ingresos_semanales[self.columnas['EXPEDIENTE']]['count'] / ingresos_semanales['dias_habiles']
 
         # Mostrar estadísticas semanales
-        promedio_semanal = ingresos_semanales[self.COLUMNAS['EXPEDIENTE']]['count'].mean()
-        tendencia_semanal = np.polyfit(range(len(ingresos_semanales)), ingresos_semanales[self.COLUMNAS['EXPEDIENTE']]['count'], 1)[0]
+        promedio_semanal = ingresos_semanales[self.columnas['EXPEDIENTE']]['count'].mean()
+        tendencia_semanal = np.polyfit(range(len(ingresos_semanales)), ingresos_semanales[self.columnas['EXPEDIENTE']]['count'], 1)[0]
         
         col1, col2 = st.columns(2)
         with col1:
@@ -1237,26 +1238,26 @@ class SPEModule:
         
         # Agrupar por mes
         ingresos_mensuales = datos_anio.groupby(
-            [data[self.COLUMNAS['FECHA_INGRESO']].dt.year,
-             data[self.COLUMNAS['FECHA_INGRESO']].dt.month]
+            [data[self.columnas['FECHA_INGRESO']].dt.year,
+             data[self.columnas['FECHA_INGRESO']].dt.month]
         ).agg({
-            self.COLUMNAS['EXPEDIENTE']: 'count',
-            self.COLUMNAS['FECHA_INGRESO']: ['min', 'max']
+            self.columnas['EXPEDIENTE']: 'count',
+            self.columnas['FECHA_INGRESO']: ['min', 'max']
         }).reset_index()
 
         # Calcular promedio diario para comparación justa
-        ingresos_mensuales['dias_transcurridos'] = ingresos_mensuales[self.COLUMNAS['FECHA_INGRESO']]['max'].apply(
+        ingresos_mensuales['dias_transcurridos'] = ingresos_mensuales[self.columnas['FECHA_INGRESO']]['max'].apply(
             lambda x: len(pd.bdate_range(
-                ingresos_mensuales[self.COLUMNAS['FECHA_INGRESO']]['min'].iloc[0],
+                ingresos_mensuales[self.columnas['FECHA_INGRESO']]['min'].iloc[0],
                 x
             ))
         )
-        ingresos_mensuales['promedio_diario'] = ingresos_mensuales[self.COLUMNAS['EXPEDIENTE']]['count'] / ingresos_mensuales['dias_transcurridos']
+        ingresos_mensuales['promedio_diario'] = ingresos_mensuales[self.columnas['EXPEDIENTE']]['count'] / ingresos_mensuales['dias_transcurridos']
         
         # Proyección del mes actual
         mes_actual = ingresos_mensuales.iloc[-1]
         dias_habiles_mes = len(pd.bdate_range(
-            mes_actual[self.COLUMNAS['FECHA_INGRESO']]['min'],
+            mes_actual[self.columnas['FECHA_INGRESO']]['min'],
             pd.Timestamp(fecha_actual.year, fecha_actual.month + 1, 1) - pd.Timedelta(days=1)
         ))
         proyeccion_mes = mes_actual['promedio_diario'] * dias_habiles_mes
@@ -1267,7 +1268,7 @@ class SPEModule:
         # Análisis de estacionalidad
         meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-        ingresos_mensuales['mes_nombre'] = ingresos_mensuales[self.COLUMNAS['FECHA_INGRESO']].dt.month.map(
+        ingresos_mensuales['mes_nombre'] = ingresos_mensuales[self.columnas['FECHA_INGRESO']].dt.month.map(
             lambda x: meses[x-1]
         )
         

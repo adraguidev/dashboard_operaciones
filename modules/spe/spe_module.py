@@ -507,6 +507,10 @@ class SPEModule:
         
         col1, col2, col3 = st.columns(3)
         
+        # Calcular días transcurridos primero
+        fecha_actual_sin_hora = fecha_actual.date()
+        dias_transcurridos = (fecha_actual_sin_hora - fecha_actual.replace(day=1).date()).days + 1
+
         # Variación en promedio diario
         variacion_promedio = ((promedio_diario_actual / promedio_diario_anterior) - 1) * 100
         with col1:
@@ -517,7 +521,7 @@ class SPEModule:
                 help="Comparación del promedio diario actual vs mes anterior"
             )
 
-        # Eficiencia por evaluador (reemplazando el indicador anterior)
+        # Eficiencia por evaluador
         with col2:
             promedio_evaluadores_anterior = stats_mes_anterior['PROMEDIO'].mean()
             promedio_evaluadores_actual = stats_mes_actual['PROMEDIO'].mean()

@@ -837,159 +837,168 @@ class SPEModule:
 
     def render_dynamic_analysis(self, data):
         """Renderizar análisis dinámico tipo tabla dinámica."""
-        st.header("Análisis Dinámico")
-
-        # Eliminar columnas que empiezan con "Column"
-        data = data[[col for col in data.columns if not col.startswith('Column')]]
-
-        # Definir las columnas disponibles para análisis
-        COLUMNAS_DISPONIBLES = {
-            'EVALUADOR': 'EVALUADOR',
-            'EXPEDIENTE': 'EXPEDIENTE',
-            'ETAPA': 'ETAPA_EVALUACIÓN',
-            'ESTADO': 'ESTADO',
-            'PROCESO': 'PROCESO',
-            'FECHA_INGRESO': 'FECHA _ INGRESO',
-            'FECHA_TRABAJO': 'Fecha_Trabajo'
-        }
-
-        # Convertir columnas de fecha a datetime
-        COLUMNAS_FECHA = ['FECHA_INGRESO', 'FECHA_TRABAJO']
-        for col in COLUMNAS_FECHA:
-            try:
-                data[COLUMNAS_DISPONIBLES[col]] = pd.to_datetime(
-                    data[COLUMNAS_DISPONIBLES[col]], 
-                    format='mixed',
-                    dayfirst=True,
-                    errors='coerce'
-                )
-            except Exception as e:
-                st.error(f"Error al procesar fechas para columna {col}: {str(e)}")
+        try:
+            st.header("👨‍💼 Análisis Dinámico")
+            
+            if data is None or data.empty:
+                st.error("No hay datos disponibles para mostrar")
                 return
 
-        # Mostrar gráficos de análisis
-        st.subheader("Análisis General")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Gráfico de expedientes por evaluador
-            expedientes_por_evaluador = data.groupby(COLUMNAS_DISPONIBLES['EVALUADOR']).size().reset_index(name='cantidad')
-            fig_evaluador = px.bar(
-                expedientes_por_evaluador,
-                x=COLUMNAS_DISPONIBLES['EVALUADOR'],
-                y='cantidad',
-                title='Expedientes por Evaluador',
-                text_auto=True
-            )
-            fig_evaluador.update_traces(textposition='outside')
-            st.plotly_chart(fig_evaluador, use_container_width=True)
+            # Mapeo de columnas
+            COLUMNAS = {
+                'EVALUADOR': 'EVALUADOR',
+                'EXPEDIENTE': 'EXPEDIENTE',
+                'ETAPA': 'ETAPA_EVALUACIÓN',
+                'ESTADO': 'ESTADO',
+                'FECHA_INGRESO': 'FECHA _ INGRESO',
+                'FECHA_TRABAJO': 'Fecha_Trabajo'
+            }
 
-        with col2:
-            # Gráfico de expedientes por estado
-            expedientes_por_estado = data.groupby(COLUMNAS_DISPONIBLES['ESTADO']).size().reset_index(name='cantidad')
-            fig_estado = px.pie(
-                expedientes_por_estado,
-                values='cantidad',
-                names=COLUMNAS_DISPONIBLES['ESTADO'],
-                title='Distribución por Estado'
-            )
-            st.plotly_chart(fig_estado, use_container_width=True)
-
-        # Gráfico de tendencia temporal
-        expedientes_por_fecha = data.groupby(COLUMNAS_DISPONIBLES['FECHA_INGRESO']).size().reset_index(name='cantidad')
-        expedientes_por_fecha = expedientes_por_fecha.sort_values(COLUMNAS_DISPONIBLES['FECHA_INGRESO'])
-        
-        fig_tendencia = px.line(
-            expedientes_por_fecha,
-            x=COLUMNAS_DISPONIBLES['FECHA_INGRESO'],
-            y='cantidad',
-            title='Tendencia de Expedientes a lo largo del tiempo'
-        )
-        st.plotly_chart(fig_tendencia, use_container_width=True)
-
-        # Gráfico de proceso
-        expedientes_por_proceso = data.groupby(COLUMNAS_DISPONIBLES['PROCESO']).size().reset_index(name='cantidad')
-        fig_proceso = px.bar(
-            expedientes_por_proceso,
-            x=COLUMNAS_DISPONIBLES['PROCESO'],
-            y='cantidad',
-            title='Expedientes por Proceso',
-            text_auto=True
-        )
-        fig_proceso.update_traces(textposition='outside')
-        st.plotly_chart(fig_proceso, use_container_width=True)
-
-        # Crear columnas adicionales para fechas (para la tabla dinámica)
-        for col in COLUMNAS_FECHA:
-            fecha_col = COLUMNAS_DISPONIBLES[col]
-            data[f'{col}_AÑO'] = data[fecha_col].dt.year
-            data[f'{col}_MES'] = data[fecha_col].dt.strftime('%B-%Y')
-            data[f'{col}_DIA'] = data[fecha_col].dt.strftime('%d-%B-%Y')
-
-        # Configuración de AgGrid
-        gb = GridOptionsBuilder.from_dataframe(data)
-
-        # Configurar columnas principales
-        for col in COLUMNAS_DISPONIBLES.values():
-            gb.configure_column(col, filter=True, sorteable=True)
-
-        # Configurar columnas de fecha con filtros especiales
-        for col in COLUMNAS_FECHA:
-            # Ocultar columna original de fecha
-            gb.configure_column(COLUMNAS_DISPONIBLES[col], hide=True)
+            # Filtros en columnas
+            col1, col2, col3 = st.columns(3)
             
-            # Configurar columnas de fecha desglosadas
-            gb.configure_column(
-                f'{col}_AÑO',
-                header_name=f'Año ({col})',
-                filter='agNumberColumnFilter',
-                sorteable=True
-            )
-            gb.configure_column(
-                f'{col}_MES',
-                header_name=f'Mes ({col})',
-                filter='agTextColumnFilter',
-                sorteable=True
-            )
-            gb.configure_column(
-                f'{col}_DIA',
-                header_name=f'Día ({col})',
-                filter='agTextColumnFilter',
-                sorteable=True
-            )
+            with col1:
+                # Selector de evaluadores
+                evaluadores = sorted(data[data[COLUMNAS['EVALUADOR']] != ''][COLUMNAS['EVALUADOR']].unique())
+                selected_evaluador = st.selectbox(
+                    "Seleccionar Evaluador",
+                    options=evaluadores,
+                    help="Busca y selecciona un evaluador específico"
+                )
 
-        # Configuraciones adicionales del grid
-        gb.configure_default_column(
-            groupable=True,
-            value=True,
-            enableRowGroup=True,
-            enablePivot=True,
-            enableValue=True
-        )
-        gb.configure_side_bar()
-        gb.configure_selection(selection_mode='multiple', use_checkbox=True)
-        gb.configure_grid_options(
-            domLayout='normal',
-            enableRangeSelection=True,
-            enableCharts=True
-        )
+            with col2:
+                # Selector de años
+                available_years = sorted(data['Anio'].unique(), reverse=True)
+                selected_years = st.multiselect(
+                    "Seleccionar Año(s)",
+                    options=available_years,
+                    default=[max(available_years)],
+                    help="Selecciona uno o varios años"
+                )
 
-        grid_options = gb.build()
+            with col3:
+                # Filtro por estado
+                estados = sorted(data[COLUMNAS['ESTADO']].dropna().unique())
+                selected_estados = st.multiselect(
+                    "Estado del Expediente",
+                    options=estados,
+                    help="Filtra por estados específicos"
+                )
 
-        # Mostrar grid interactivo
-        st.subheader("Filtrado y Análisis Avanzado")
-        AgGrid(
-            data,
-            grid_options,
-            enable_enterprise_modules=True,
-            update_mode='MODEL_CHANGED',
-            data_return_mode='FILTERED_AND_SORTED',
-            fit_columns_on_grid_load=False,
-            theme='streamlit',
-            height=500,
-            allow_unsafe_jscode=True
-        )
+            # Filtros adicionales expandibles
+            with st.expander("📌 Filtros Adicionales"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Filtro por etapa
+                    etapas = sorted(data[COLUMNAS['ETAPA']].dropna().unique())
+                    selected_etapas = st.multiselect(
+                        "Etapa",
+                        options=etapas,
+                        help="Filtra por etapa del expediente"
+                    )
+                    
+                with col2:
+                    # Rango de fechas
+                    fecha_inicio = st.date_input(
+                        "Fecha Desde", 
+                        value=None,
+                        key="fecha_inicio"
+                    )
+                    fecha_fin = st.date_input(
+                        "Fecha Hasta", 
+                        value=None,
+                        key="fecha_fin"
+                    )
+
+            # Aplicar filtros
+            filtered_data = data[data[COLUMNAS['EVALUADOR']] == selected_evaluador]
+            
+            if selected_years:
+                filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
+            
+            if selected_estados:
+                filtered_data = filtered_data[filtered_data[COLUMNAS['ESTADO']].isin(selected_estados)]
+            
+            if selected_etapas:
+                filtered_data = filtered_data[filtered_data[COLUMNAS['ETAPA']].isin(selected_etapas)]
+
+            # Convertir y filtrar fechas
+            filtered_data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
+                filtered_data[COLUMNAS['FECHA_TRABAJO']], 
+                format='mixed',
+                dayfirst=True,
+                errors='coerce'
+            )
+            
+            if fecha_inicio:
+                filtered_data = filtered_data[filtered_data[COLUMNAS['FECHA_TRABAJO']].dt.date >= fecha_inicio]
+            if fecha_fin:
+                filtered_data = filtered_data[filtered_data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_fin]
+
+            # Mostrar resumen
+            if not filtered_data.empty:
+                st.markdown("### 📊 Resumen")
+                
+                # Calcular métricas
+                total = len(filtered_data)
+                expedientes_mes_actual = len(filtered_data[
+                    filtered_data[COLUMNAS['FECHA_TRABAJO']].dt.month == datetime.now().month
+                ])
+                promedio_diario = filtered_data.groupby(
+                    filtered_data[COLUMNAS['FECHA_TRABAJO']].dt.date
+                ).size().mean()
+                
+                # Mostrar métricas
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Expedientes", f"{total:,d}")
+                col2.metric("Expedientes Mes Actual", f"{expedientes_mes_actual:,d}")
+                col3.metric("Promedio Diario", f"{promedio_diario:.1f}")
+
+                # Mostrar datos filtrados
+                st.markdown("### 📋 Detalle de Expedientes")
+                
+                # Preparar datos para mostrar
+                display_data = filtered_data[[
+                    COLUMNAS['EXPEDIENTE'],
+                    COLUMNAS['ESTADO'],
+                    COLUMNAS['ETAPA'],
+                    COLUMNAS['FECHA_TRABAJO']
+                ]].copy()
+                
+                # Formatear fechas
+                display_data[COLUMNAS['FECHA_TRABAJO']] = display_data[COLUMNAS['FECHA_TRABAJO']].dt.strftime('%d/%m/%Y')
+                
+                # Mostrar tabla
+                st.dataframe(
+                    display_data,
+                    use_container_width=True,
+                    column_config={
+                        COLUMNAS['EXPEDIENTE']: 'Expediente',
+                        COLUMNAS['ESTADO']: 'Estado',
+                        COLUMNAS['ETAPA']: 'Etapa',
+                        COLUMNAS['FECHA_TRABAJO']: 'Fecha de Trabajo'
+                    }
+                )
+
+                # Botón de descarga
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    display_data.to_excel(writer, index=False, sheet_name='Reporte')
+                output.seek(0)
+                
+                st.download_button(
+                    label="📥 Descargar Reporte",
+                    data=output,
+                    file_name=f"reporte_dinamico_{selected_evaluador.replace(' ', '_')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.info("No se encontraron expedientes con los filtros seleccionados")
+
+        except Exception as e:
+            st.error(f"Error al procesar el análisis: {str(e)}")
+            print(f"Error detallado: {str(e)}")
 
     def render_predictive_analysis(self, data):
         """Renderizar análisis predictivo de ingresos usando ML y análisis estadístico avanzado."""

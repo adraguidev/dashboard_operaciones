@@ -429,7 +429,6 @@ class SPEModule:
             (data[COLUMNAS['FECHA_TRABAJO']].dt.year == mes_anterior.year)
         ].groupby(COLUMNAS['FECHA_TRABAJO']).size().reset_index(name='cantidad')
 
-        # Calcular promedio diario mes anterior
         promedio_diario_anterior = datos_diarios_anterior['cantidad'].mean()
 
         fig_tendencia_anterior = px.line(
@@ -439,7 +438,16 @@ class SPEModule:
             title=f'Tendencia Diaria - {nombre_mes_anterior} {mes_anterior.year}',
             labels={'cantidad': 'Expedientes Trabajados'}
         )
-        # Agregar línea de promedio
+        # Agregar puntos y valores
+        fig_tendencia_anterior.add_trace(go.Scatter(
+            x=datos_diarios_anterior[COLUMNAS['FECHA_TRABAJO']],
+            y=datos_diarios_anterior['cantidad'],
+            mode='markers+text',
+            text=datos_diarios_anterior['cantidad'],
+            textposition='top center',
+            name='Valores Diarios',
+            showlegend=False
+        ))
         fig_tendencia_anterior.add_hline(
             y=promedio_diario_anterior,
             line_dash="dash",
@@ -464,10 +472,9 @@ class SPEModule:
         datos_diarios_actual = data[
             (data[COLUMNAS['FECHA_TRABAJO']].dt.month == fecha_actual.month) &
             (data[COLUMNAS['FECHA_TRABAJO']].dt.year == fecha_actual.year) &
-            (data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_actual_sin_hora)  # Solo hasta la fecha actual
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_actual_sin_hora)
         ].groupby(COLUMNAS['FECHA_TRABAJO']).size().reset_index(name='cantidad')
 
-        # Calcular promedio diario mes actual
         promedio_diario_actual = datos_diarios_actual['cantidad'].mean()
 
         fig_tendencia_actual = px.line(
@@ -477,7 +484,16 @@ class SPEModule:
             title=f'Tendencia Diaria - {nombre_mes_actual} {fecha_actual.year}',
             labels={'cantidad': 'Expedientes Trabajados'}
         )
-        # Agregar línea de promedio
+        # Agregar puntos y valores
+        fig_tendencia_actual.add_trace(go.Scatter(
+            x=datos_diarios_actual[COLUMNAS['FECHA_TRABAJO']],
+            y=datos_diarios_actual['cantidad'],
+            mode='markers+text',
+            text=datos_diarios_actual['cantidad'],
+            textposition='top center',
+            name='Valores Diarios',
+            showlegend=False
+        ))
         fig_tendencia_actual.add_hline(
             y=promedio_diario_actual,
             line_dash="dash",
@@ -501,28 +517,32 @@ class SPEModule:
                 help="Comparación del promedio diario actual vs mes anterior"
             )
 
-        # Eficiencia por evaluador
+        # Eficiencia por evaluador (días trabajados hasta la fecha)
         with col2:
             dias_habiles_anterior = stats_mes_anterior['DIAS_TRABAJADOS'].mean()
-            dias_habiles_actual = stats_mes_actual['DIAS_TRABAJADOS'].mean()
+            dias_transcurridos = (fecha_actual_sin_hora - fecha_actual.replace(day=1).date()).days + 1
+            dias_habiles_actual = min(dias_transcurridos, stats_mes_actual['DIAS_TRABAJADOS'].mean())
             eficiencia_dias = (dias_habiles_actual / dias_habiles_anterior) * 100
             st.metric(
-                "Eficiencia en Días Trabajados",
-                f"{dias_habiles_actual:.1f} días",
-                f"{eficiencia_dias:+.1f}%",
-                help="Comparación de días trabajados actual vs mes anterior"
+                "Días Trabajados",
+                f"{dias_habiles_actual:.1f} de {dias_transcurridos}",
+                help="Días trabajados en el mes actual"
             )
 
-        # Productividad general
+        # Productividad proporcional
         with col3:
-            prod_anterior = stats_mes_anterior['CANT_EXPEDIENTES'].sum()
+            # Calcular productividad proporcional
+            dias_mes_anterior = pd.Timestamp(mes_anterior.year, mes_anterior.month, 1).days_in_month
+            prod_diaria_anterior = stats_mes_anterior['CANT_EXPEDIENTES'].sum() / dias_mes_anterior
+            prod_esperada_actual = prod_diaria_anterior * dias_transcurridos
             prod_actual = stats_mes_actual['CANT_EXPEDIENTES'].sum()
-            var_productividad = ((prod_actual / prod_anterior) - 1) * 100
+            cumplimiento = (prod_actual / prod_esperada_actual) * 100
+            
             st.metric(
-                "Variación en Productividad",
-                f"{prod_actual:,.0f}",
-                f"{var_productividad:+.1f}%",
-                help="Comparación de la cantidad total de expedientes vs mes anterior"
+                "Cumplimiento vs Mes Anterior",
+                f"{prod_actual:,.0f} / {prod_esperada_actual:,.0f}",
+                f"{cumplimiento-100:+.1f}%",
+                help=f"Comparación proporcional considerando {dias_transcurridos} días transcurridos"
             )
 
         # Gráfico de distribución por evaluador

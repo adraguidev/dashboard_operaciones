@@ -206,65 +206,84 @@ class SPEModule:
             except Exception as e:
                 st.error(f"Error al procesar datos nuevos: {str(e)}")
 
-        # Mostrar tabla de ranking
-        if not df_historico.empty:
-            df_historico = df_historico.fillna(0)
-            
-            # Ordenar columnas cronológicamente
-            cols_fecha = [col for col in df_historico.columns if col != 'EVALUADOR']
-            cols_ordenadas = ['EVALUADOR'] + sorted(
-                cols_fecha,
-                key=lambda x: pd.to_datetime(x + f"/{datetime.now().year}", format='%d/%m/%Y')
-            )
-            
-            df_historico = df_historico[cols_ordenadas]
-            df_historico['Total'] = df_historico.iloc[:, 1:].sum(axis=1)
-            df_historico = df_historico.sort_values('Total', ascending=False)
-            
-            # Identificar columnas con datos no guardados
-            columnas_no_guardadas = [
-                col for col in cols_fecha 
-                if pd.to_datetime(col + f"/{datetime.now().year}", format='%d/%m/%Y').date() not in fechas_guardadas
-            ]
-            
-            # Mostrar datos pendientes de guardar
+        # Identificar columnas con datos no guardados
+        columnas_no_guardadas = []
+        for col in cols_fecha:
+            try:
+                # Intentar convertir la fecha agregando el año actual
+                fecha_col = pd.to_datetime(
+                    col + f"/{datetime.now().year}", 
+                    format="%d/%m/%Y",
+                    errors='coerce'
+                )
+                if fecha_col is not pd.NaT and fecha_col.date() not in fechas_guardadas:
+                    columnas_no_guardadas.append(col)
+            except Exception:
+                # Si hay error en el formato, intentar otros formatos comunes
+                try:
+                    # Limpiar el string de fecha
+                    fecha_str = col.strip().replace('_x', '')
+                    fecha_col = pd.to_datetime(
+                        fecha_str + f"/{datetime.now().year}",
+                        format="%d/%m/%Y",
+                        errors='coerce'
+                    )
+                    if fecha_col is not pd.NaT and fecha_col.date() not in fechas_guardadas:
+                        columnas_no_guardadas.append(col)
+                except Exception as e:
+                    st.error(f"Error al procesar la fecha {col}: {str(e)}")
+                    continue
+
+        # Mostrar datos pendientes de guardar
+        fechas_pendientes = []
+        try:
             fechas_pendientes = sorted(set(
-                fecha for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].dt.date.unique()
+                fecha for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].unique()
                 if fecha not in fechas_guardadas and fecha <= fecha_ayer
             ))
-            
-            if fechas_pendientes:
-                st.warning("⚠️ Hay datos pendientes por guardar de las siguientes fechas:")
-                for fecha in fechas_pendientes:
-                    st.write(f"- {fecha.strftime('%d/%m/%Y')}")
-                st.write("Las columnas resaltadas en amarillo contienen datos no guardados.")
+        except Exception as e:
+            st.error(f"Error al procesar fechas pendientes: {str(e)}")
 
-            # Aplicar estilo al DataFrame para resaltar columnas no guardadas
-            def highlight_cols(col):
-                if col in columnas_no_guardadas:
-                    return ['background-color: #ffeb3b'] * len(df_historico)
-                return [''] * len(df_historico)
-            
+        if fechas_pendientes:
+            st.warning("⚠️ Hay datos pendientes por guardar de las siguientes fechas:")
+            for fecha in fechas_pendientes:
+                try:
+                    st.write(f"- {fecha.strftime('%d/%m/%Y')}")
+                except Exception as e:
+                    st.error(f"Error al mostrar fecha pendiente: {str(e)}")
+            st.write("Las columnas resaltadas en amarillo contienen datos no guardados.")
+
+        # Aplicar estilo al DataFrame para resaltar columnas no guardadas
+        def highlight_cols(col):
+            if col in columnas_no_guardadas:
+                return ['background-color: #ffeb3b'] * len(df_historico)
+            return [''] * len(df_historico)
+        
+        try:
             # Mostrar DataFrame con estilo
             st.dataframe(
                 df_historico.style.apply(highlight_cols, subset=columnas_no_guardadas),
                 use_container_width=True
             )
+        except Exception as e:
+            st.error(f"Error al mostrar tabla con estilos: {str(e)}")
+            # Mostrar DataFrame sin estilos como fallback
+            st.dataframe(df_historico, use_container_width=True)
 
-            # Agregar botón de descarga formateado
-            excel_data_ranking = create_excel_download(
-                df_historico,
-                "ranking_expedientes.xlsx",
-                "Ranking_Expedientes",
-                "Ranking de Expedientes Trabajados"
-            )
-            
-            st.download_button(
-                label="📥 Descargar Ranking",
-                data=excel_data_ranking,
-                file_name="ranking_expedientes.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        # Agregar botón de descarga formateado
+        excel_data_ranking = create_excel_download(
+            df_historico,
+            "ranking_expedientes.xlsx",
+            "Ranking_Expedientes",
+            "Ranking de Expedientes Trabajados"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Ranking",
+            data=excel_data_ranking,
+            file_name="ranking_expedientes.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
         # Botones de acción
         col1, col2 = st.columns(2)
@@ -565,7 +584,7 @@ class SPEModule:
         )
         
         st.download_button(
-            label=f"📥 Descargar Tabla {nombre_mes_anterior}",
+            label=f"���� Descargar Tabla {nombre_mes_anterior}",
             data=excel_data_anterior,
             file_name=f"trabajados_{nombre_mes_anterior}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

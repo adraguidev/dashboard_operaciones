@@ -169,6 +169,21 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 }
             )
 
+            # Agregar botón de descarga formateado para la matriz de ranking
+            excel_data_ranking = create_excel_download(
+                matriz_ranking,
+                "matriz_ranking.xlsx",
+                "Matriz_Ranking",
+                f"Matriz de Ranking - {selected_module}"
+            )
+
+            st.download_button(
+                label="📥 Descargar Matriz de Ranking",
+                data=excel_data_ranking,
+                file_name=f"matriz_ranking_{selected_module.lower()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
         # Opciones para guardar/resetear datos
         st.markdown("---")
         col1, col2 = st.columns(2)
@@ -609,14 +624,20 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                 hide_index=True
             )
             
-            # Botón para descargar inconsistencias
-            if st.download_button(
+            # Agregar botón de descarga formateado para inconsistencias
+            excel_data_inconsistencias = create_excel_download(
+                expedientes_sin_evaluador,
+                "inconsistencias.xlsx",
+                "Inconsistencias",
+                f"Expedientes Sin Evaluador - {selected_module}"
+            )
+            
+            st.download_button(
                 label="📥 Descargar Expedientes Sin Evaluador",
-                data=expedientes_sin_evaluador.to_csv(index=False),
-                file_name='expedientes_sin_evaluador.csv',
-                mime='text/csv'
-            ):
-                st.success("✅ Archivo de inconsistencias descargado exitosamente")
+                data=excel_data_inconsistencias,
+                file_name=f"inconsistencias_{selected_module.lower()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
         else:
             st.success("✅ No se encontraron expedientes sin evaluador asignado")
 

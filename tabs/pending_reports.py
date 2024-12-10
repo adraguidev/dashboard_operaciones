@@ -241,6 +241,21 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
                 }
             )
 
+            # Agregar botón de descarga formateado para la tabla resumen
+            excel_data_resumen = create_excel_download(
+                summary_table,
+                "resumen_general.xlsx",
+                "Resumen_General",
+                f"Resumen General por Año - {selected_module}"
+            )
+
+            st.download_button(
+                label="📥 Descargar Resumen General",
+                data=excel_data_resumen,
+                file_name=f"resumen_general_{selected_module.lower()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
         except Exception as e:
             st.error(f"Error al generar la tabla resumen: {str(e)}")
             print(f"Error detallado en tabla resumen: {str(e)}")

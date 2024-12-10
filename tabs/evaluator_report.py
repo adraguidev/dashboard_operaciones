@@ -300,6 +300,21 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     file_name=f"reporte_{selected_evaluator.replace(' ', '_')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
+
+                # Agregar botón de descarga formateado para el reporte de evaluador
+                excel_data_evaluador = create_excel_download(
+                    display_data,
+                    "reporte_evaluador.xlsx",
+                    "Reporte_Evaluador",
+                    f"Reporte de Evaluador - {selected_evaluator}"
+                )
+
+                st.download_button(
+                    label="📥 Descargar Reporte de Evaluador",
+                    data=excel_data_evaluador,
+                    file_name=f"reporte_evaluador_{selected_evaluator.replace(' ', '_')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
             else:
                 st.info("No se encontraron expedientes con los filtros seleccionados")
 

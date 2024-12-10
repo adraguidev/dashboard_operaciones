@@ -29,7 +29,7 @@ class SPEModule:
     ]
 
     # Definir el mapeo de columnas como constante de clase
-    COLUMNAS_BASE = {
+    COLUMNAS = {
         'EVALUADOR': 'EVALUADOR',
         'EXPEDIENTE': 'EXPEDIENTE',
         'ETAPA': 'ETAPA_EVALUACIÓN',
@@ -37,7 +37,8 @@ class SPEModule:
         'FECHA_TRABAJO': 'Fecha_Trabajo',
         'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
         'PROCESO': 'PROCESO',
-        'BENEFICIARIO': 'NOMBRES_BENEFICIARIO'
+        'BENEFICIARIO': 'NOMBRES_BENEFICIARIO',
+        'FECHA_INGRESO': 'FECHA_INGRESO'  # Agregado directamente aquí
     }
 
     def __init__(self):
@@ -47,7 +48,7 @@ class SPEModule:
             st.session_state.spe_data = None
         
         # Crear una copia del diccionario base y agregar FECHA_INGRESO
-        self.COLUMNAS = self.COLUMNAS_BASE.copy()
+        self.COLUMNAS = self.COLUMNAS.copy()
         self.COLUMNAS['FECHA_INGRESO'] = 'FECHA_INGRESO'
 
     def load_data(self):

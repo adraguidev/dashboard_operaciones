@@ -99,17 +99,25 @@ class SPEModule:
                 format='mixed',
                 dayfirst=True,
                 errors='coerce'
-            ).dt.tz_localize('America/Lima')
+            )
         except Exception as e:
             st.error(f"Error al procesar fechas: {str(e)}")
             return
 
-        # Filtrar datos del día actual
-        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual.date()]
-
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
         ultima_fecha = ultima_fecha_db.date() if ultima_fecha_db else None
+
+        if ultima_fecha:
+            st.info(f"📅 Último registro guardado: {ultima_fecha.strftime('%d/%m/%Y')}")
+
+        # Preparar datos para guardar
+        datos_nuevos = data[
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer) &
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.date > (ultima_fecha or datetime.min.date())) &
+            (data[COLUMNAS['EVALUADOR']].notna()) &
+            (data[COLUMNAS['EVALUADOR']] != '')
+        ].copy()
 
         # Obtener datos históricos de MongoDB
         registros_historicos = list(collection.find({
@@ -141,24 +149,6 @@ class SPEModule:
                             df_pivot, on='EVALUADOR', how='outer'
                         )
 
-        # Procesar datos del día anterior si no están guardados
-        datos_ayer = None
-        if fecha_ayer not in fechas_guardadas:
-            datos_dia_anterior = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha_ayer]
-            if not datos_dia_anterior.empty:
-                datos_ayer = datos_dia_anterior.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
-                fecha_str = fecha_ayer.strftime('%d/%m')
-                df_pivot = pd.DataFrame({
-                    'EVALUADOR': datos_ayer['EVALUADOR'].tolist(),
-                    fecha_str: datos_ayer['cantidad'].tolist()
-                })
-                if df_historico.empty:
-                    df_historico = df_pivot
-                else:
-                    df_historico = df_historico.merge(
-                        df_pivot, on='EVALUADOR', how='outer'
-                    )
-
         # Mostrar tabla de ranking
         if not df_historico.empty:
             df_historico = df_historico.fillna(0)
@@ -175,35 +165,12 @@ class SPEModule:
             df_historico = df_historico.sort_values('Total', ascending=False)
             st.dataframe(df_historico)
 
-        # Mostrar información y botones
-        if ultima_fecha_db:
-            st.info(f"Última fecha registrada en BD: {ultima_fecha.strftime('%d/%m/%Y')}")
-        else:
-            st.warning("No hay registros en la base de datos")
-
         # Botones de acción
         col1, col2 = st.columns(2)
 
         with col1:
-            if datos_ayer is not None and (ultima_fecha is None or ultima_fecha < fecha_ayer):
-                if st.button("💾 Guardar producción", key="guardar_produccion"):
-                    try:
-                        nuevo_registro = {
-                            "fecha": pd.Timestamp(fecha_ayer, tz='America/Lima'),
-                            "datos": datos_ayer.to_dict('records'),
-                            "modulo": "SPE"
-                        }
-                        collection.insert_one(nuevo_registro)
-                        st.success(f"✅ Producción guardada exitosamente para la fecha: {fecha_ayer.strftime('%d/%m/%Y')}")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al guardar los datos: {str(e)}")
-            elif datos_ayer is not None:
-                st.warning(f"Ya existe un registro para el {ultima_fecha.strftime('%d/%m/%Y')}. Use el botón de resetear si necesita modificar.")
-
-        with col2:
             if ultima_fecha_db:
-                if st.button("🔄 Resetear última fecha", key="resetear_fecha"):
+                if st.button("🔄 Resetear último día", key="resetear_fecha"):
                     try:
                         collection.delete_many({
                             "modulo": "SPE",
@@ -213,6 +180,42 @@ class SPEModule:
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al resetear la última fecha: {str(e)}")
+
+        with col2:
+            if not datos_nuevos.empty:
+                # Mostrar fechas disponibles para guardar
+                fechas_disponibles = sorted(
+                    datos_nuevos[COLUMNAS['FECHA_TRABAJO']].dt.date.unique()
+                )
+                
+                if fechas_disponibles:
+                    st.warning("⚠️ Hay fechas pendientes por guardar")
+                    selected_dates = st.multiselect(
+                        "Seleccionar fechas para guardar",
+                        options=fechas_disponibles,
+                        default=fechas_disponibles,
+                        format_func=lambda x: x.strftime('%d/%m/%Y')
+                    )
+                    
+                    if selected_dates and st.button("💾 Guardar datos seleccionados"):
+                        try:
+                            for fecha in selected_dates:
+                                datos_dia = datos_nuevos[
+                                    datos_nuevos[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha
+                                ]
+                                datos_agrupados = datos_dia.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
+                                
+                                nuevo_registro = {
+                                    "fecha": pd.Timestamp(fecha),
+                                    "datos": datos_agrupados.to_dict('records'),
+                                    "modulo": "SPE"
+                                }
+                                collection.insert_one(nuevo_registro)
+                            
+                            st.success("✅ Datos guardados correctamente")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al guardar los datos: {str(e)}")
 
     def _get_last_date_from_db(self, collection):
         """Obtener la última fecha registrada en la base de datos."""

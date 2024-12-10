@@ -821,7 +821,7 @@ class SPEModule:
             mask_año = fechas.dt.year == año_seleccionado
             df_filtrado = df[mask_año]
             
-            # Obtener meses ��nicos del año seleccionado
+            # Obtener meses únicos del año seleccionado
             meses = sorted(fechas[mask_año].dt.strftime('%m-%B').unique())
             mes_seleccionado = st.selectbox(
                 f'Mes ({columna_fecha})',

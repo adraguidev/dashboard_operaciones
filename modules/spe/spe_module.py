@@ -89,16 +89,15 @@ class SPEModule:
         }
 
         # Usar timezone de Peru para las fechas
-        fecha_actual = pd.Timestamp.now(tz='America/Lima').date()
-        fecha_ayer = fecha_actual - timedelta(days=1)
+        fecha_actual = pd.Timestamp.now(tz='America/Lima')
+        fecha_ayer = (fecha_actual - pd.Timedelta(days=1)).date()
 
-        # Convertir fecha de trabajo a datetime de manera más flexible
+        # Convertir fecha de trabajo a datetime considerando timezone
         try:
-            # Primero intentar con el formato específico
             data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
                 data[COLUMNAS['FECHA_TRABAJO']], 
-                format='mixed',  # Usar formato mixto para mayor flexibilidad
-                dayfirst=True,   # Indicar que el día va primero
+                format='mixed',
+                dayfirst=True,
                 errors='coerce'
             ).dt.tz_localize('America/Lima')
         except Exception as e:
@@ -106,22 +105,22 @@ class SPEModule:
             return
 
         # Filtrar datos del día actual
-        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual]
+        data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual.date()]
 
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
         ultima_fecha = ultima_fecha_db.date() if ultima_fecha_db else None
 
-        # Obtener datos históricos de MongoDB considerando timezone
+        # Obtener datos históricos de MongoDB
         registros_historicos = list(collection.find({
             "modulo": "SPE",
-            "fecha": {"$lt": pd.Timestamp(fecha_actual, tz='America/Lima')}
+            "fecha": {"$lt": fecha_actual}
         }).sort("fecha", -1))
-        
+
         # Preparar DataFrame histórico
         df_historico = pd.DataFrame()
         fechas_guardadas = set()
-        
+
         # Procesar registros históricos
         if registros_historicos:
             for registro in registros_historicos:
@@ -190,7 +189,7 @@ class SPEModule:
                 if st.button("💾 Guardar producción", key="guardar_produccion"):
                     try:
                         nuevo_registro = {
-                            "fecha": pd.Timestamp(fecha_ayer),
+                            "fecha": pd.Timestamp(fecha_ayer, tz='America/Lima'),
                             "datos": datos_ayer.to_dict('records'),
                             "modulo": "SPE"
                         }

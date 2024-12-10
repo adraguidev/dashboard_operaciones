@@ -990,7 +990,7 @@ class SPEModule:
                         default=[]
                     )
 
-            # Botón para aplicar filtros
+            # Bot��n para aplicar filtros
             col1, col2 = st.columns([1, 11])
             with col1:
                 filtrar = st.button("🔍 Filtrar", key="apply_filters", type="primary")
@@ -1207,7 +1207,7 @@ class SPEModule:
         # Agrupar por semana
         ingresos_semanales = datos_anio.groupby(
             [data[self.columnas['FECHA_INGRESO']].dt.isocalendar().year,
-             data[self.columnas['FECHA_INGRESO']].dt.isocalendar().week]
+            data[self.columnas['FECHA_INGRESO']].dt.isocalendar().week]
         ).agg({
             self.columnas['EXPEDIENTE']: 'count',
             self.columnas['FECHA_INGRESO']: ['min', 'max']
@@ -1236,54 +1236,74 @@ class SPEModule:
         # 3. ANÁLISIS MENSUAL COMPARATIVO
         st.subheader("📊 Comparativa Mensual")
         
-        # Agrupar por mes
-        ingresos_mensuales = datos_anio.groupby(
-            [data[self.columnas['FECHA_INGRESO']].dt.year,
-             data[self.columnas['FECHA_INGRESO']].dt.month]
-        ).agg({
-            self.columnas['EXPEDIENTE']: 'count',
-            self.columnas['FECHA_INGRESO']: ['min', 'max']
-        }).reset_index()
+        try:
+            # Crear un nuevo DataFrame para el análisis mensual
+            df_mensual = datos_anio.copy()
+            
+            # Extraer año y mes una sola vez
+            df_mensual['año'] = df_mensual[self.columnas['FECHA_INGRESO']].dt.year
+            df_mensual['mes'] = df_mensual[self.columnas['FECHA_INGRESO']].dt.month
+            
+            # Agrupar por mes usando las columnas creadas
+            ingresos_mensuales = df_mensual.groupby(['año', 'mes']).agg({
+                self.columnas['EXPEDIENTE']: 'count',
+                self.columnas['FECHA_INGRESO']: ['min', 'max']
+            }).reset_index()
 
-        # Calcular promedio diario para comparación justa
-        ingresos_mensuales['dias_transcurridos'] = ingresos_mensuales[self.columnas['FECHA_INGRESO']]['max'].apply(
-            lambda x: len(pd.bdate_range(
-                ingresos_mensuales[self.columnas['FECHA_INGRESO']]['min'].iloc[0],
+            # Calcular días transcurridos
+            ingresos_mensuales['dias_transcurridos'] = ingresos_mensuales[
+                (self.columnas['FECHA_INGRESO'], 'max')
+            ].apply(lambda x: len(pd.bdate_range(
+                ingresos_mensuales[(self.columnas['FECHA_INGRESO'], 'min')].iloc[0],
                 x
-            ))
-        )
-        ingresos_mensuales['promedio_diario'] = ingresos_mensuales[self.columnas['EXPEDIENTE']]['count'] / ingresos_mensuales['dias_transcurridos']
-        
-        # Proyección del mes actual
-        mes_actual = ingresos_mensuales.iloc[-1]
-        dias_habiles_mes = len(pd.bdate_range(
-            mes_actual[self.columnas['FECHA_INGRESO']]['min'],
-            pd.Timestamp(fecha_actual.year, fecha_actual.month + 1, 1) - pd.Timedelta(days=1)
-        ))
-        proyeccion_mes = mes_actual['promedio_diario'] * dias_habiles_mes
+            )))
 
-        # Mostrar proyección
-        st.info(f"📈 Proyección para el mes actual: {proyeccion_mes:.0f} expedientes")
-        
-        # Análisis de estacionalidad
-        meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
-                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-        ingresos_mensuales['mes_nombre'] = ingresos_mensuales[self.columnas['FECHA_INGRESO']].dt.month.map(
-            lambda x: meses[x-1]
-        )
-        
-        # Identificar meses con mayor y menor carga
-        meses_carga = ingresos_mensuales.groupby('mes_nombre')['promedio_diario'].mean().sort_values()
-        st.write("🔍 Análisis de Estacionalidad:")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("Meses con mayor carga:")
-            for mes in meses_carga.tail(3).index:
-                st.write(f"• {mes}")
-        with col2:
-            st.write("Meses con menor carga:")
-            for mes in meses_carga.head(3).index:
-                st.write(f"• {mes}")
+            # Calcular promedio diario
+            ingresos_mensuales['promedio_diario'] = (
+                ingresos_mensuales[(self.columnas['EXPEDIENTE'], 'count')] / 
+                ingresos_mensuales['dias_transcurridos']
+            )
+
+            # Proyección del mes actual
+            mes_actual = ingresos_mensuales.iloc[-1]
+            fecha_inicio_mes = mes_actual[(self.columnas['FECHA_INGRESO'], 'min')]
+            fecha_fin_mes = pd.Timestamp(fecha_actual.year, fecha_actual.month + 1, 1) - pd.Timedelta(days=1)
+            
+            dias_habiles_mes = len(pd.bdate_range(fecha_inicio_mes, fecha_fin_mes))
+            proyeccion_mes = mes_actual['promedio_diario'] * dias_habiles_mes
+
+            # Mostrar proyección
+            st.info(f"📈 Proyección para el mes actual: {proyeccion_mes:.0f} expedientes")
+
+            # Análisis de estacionalidad
+            meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+            
+            # Crear mapeo de mes a nombre
+            ingresos_mensuales['mes_nombre'] = ingresos_mensuales['mes'].map(
+                lambda x: meses[x-1]
+            )
+
+            # Análisis de carga por mes
+            meses_carga = (ingresos_mensuales.groupby('mes_nombre')['promedio_diario']
+                          .mean()
+                          .sort_values())
+
+            # Mostrar análisis de estacionalidad
+            st.write("🔍 Análisis de Estacionalidad:")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("Meses con mayor carga:")
+                for mes in meses_carga.tail(3).index:
+                    st.write(f"• {mes}")
+            with col2:
+                st.write("Meses con menor carga:")
+                for mes in meses_carga.head(3).index:
+                    st.write(f"• {mes}")
+
+        except Exception as e:
+            st.error(f"Error en el análisis mensual: {str(e)}")
+            return
 
         # 4. PREDICCIONES
         st.subheader("🔮 Predicciones")

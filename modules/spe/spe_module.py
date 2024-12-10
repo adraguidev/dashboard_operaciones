@@ -815,79 +815,145 @@ class SPEModule:
 
         # Mapeo de columnas disponibles para filtrar
         COLUMNAS_FILTRO = {
-            'EVALUADOR': 'EVALUADOR',
             'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_TRABAJO': 'Fecha_Trabajo',
+            'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
+            'PROCESO': 'PROCESO',
+            'FECHA_INGRESO': 'FECHA _ INGRESO',
+            'EVALUADOR': 'EVALUADOR',
             'ETAPA': 'ETAPA_EVALUACIÓN',
             'ESTADO': 'ESTADO',
-            'TIPO_EXPEDIENTE': 'TIPO_EXPEDIENTE',
-            'ORIGEN': 'ORIGEN',
-            'RESULTADO': 'RESULTADO'
+            'FECHA_TRABAJO': 'Fecha_Trabajo',
+            'BENEFICIARIO': 'NOMBRES_BENEFICIARIO'
         }
+
+        # Convertir fechas a datetime
+        for fecha_col in ['FECHA_ASIGNACION', 'FECHA_INGRESO', 'FECHA_TRABAJO']:
+            try:
+                data[COLUMNAS_FILTRO[fecha_col]] = pd.to_datetime(
+                    data[COLUMNAS_FILTRO[fecha_col]], 
+                    format='mixed',
+                    dayfirst=True,
+                    errors='coerce'
+                )
+            except Exception as e:
+                st.error(f"Error al procesar fechas de {fecha_col}: {str(e)}")
 
         # Crear contenedor para filtros
         st.subheader("Filtros Dinámicos")
         filtro_container = st.container()
 
         with filtro_container:
+            # Selección de dimensiones para la tabla dinámica
             col1, col2 = st.columns(2)
-            
             with col1:
-                # Selección de columnas para filas
                 columnas_filas = st.multiselect(
-                    "Seleccionar columnas para filas",
-                    options=list(COLUMNAS_FILTRO.keys()),
+                    "Dimensiones para filas",
+                    options=['EVALUADOR', 'PROCESO', 'ETAPA', 'ESTADO'],
                     default=['EVALUADOR']
                 )
-
             with col2:
-                # Selección de columnas para columnas
                 columnas_columnas = st.multiselect(
-                    "Seleccionar columnas para columnas",
-                    options=list(COLUMNAS_FILTRO.keys()),
+                    "Dimensiones para columnas",
+                    options=['PROCESO', 'ETAPA', 'ESTADO'],
                     default=['ESTADO']
                 )
 
-            # Contenedor para filtros adicionales
-            st.subheader("Filtros Adicionales")
-            filtros_adicionales = {}
+            # Filtros de fecha
+            st.subheader("Filtros de Fecha")
+            fecha_cols = st.columns(3)
             
-            for columna in COLUMNAS_FILTRO.keys():
-                if columna not in columnas_filas + columnas_columnas:
-                    valores_unicos = data[COLUMNAS_FILTRO[columna]].dropna().unique()
-                    filtros_adicionales[columna] = st.multiselect(
-                        f"Filtrar por {columna}",
-                        options=valores_unicos,
-                        default=[]
-                    )
-
-            # Rango de fechas
-            col1, col2 = st.columns(2)
-            with col1:
-                fecha_inicio = st.date_input(
-                    "Fecha inicial",
-                    value=data[COLUMNAS_FILTRO['FECHA_TRABAJO']].min()
+            # Filtro Fecha Asignación
+            with fecha_cols[0]:
+                st.write("Fecha Asignación")
+                fecha_asig_inicio = st.date_input(
+                    "Desde (Asignación)",
+                    value=data[COLUMNAS_FILTRO['FECHA_ASIGNACION']].min(),
+                    key="fecha_asig_inicio"
                 )
-            with col2:
-                fecha_fin = st.date_input(
-                    "Fecha final",
-                    value=data[COLUMNAS_FILTRO['FECHA_TRABAJO']].max()
+                fecha_asig_fin = st.date_input(
+                    "Hasta (Asignación)",
+                    value=data[COLUMNAS_FILTRO['FECHA_ASIGNACION']].max(),
+                    key="fecha_asig_fin"
+                )
+
+            # Filtro Fecha Ingreso
+            with fecha_cols[1]:
+                st.write("Fecha Ingreso")
+                fecha_ing_inicio = st.date_input(
+                    "Desde (Ingreso)",
+                    value=data[COLUMNAS_FILTRO['FECHA_INGRESO']].min(),
+                    key="fecha_ing_inicio"
+                )
+                fecha_ing_fin = st.date_input(
+                    "Hasta (Ingreso)",
+                    value=data[COLUMNAS_FILTRO['FECHA_INGRESO']].max(),
+                    key="fecha_ing_fin"
+                )
+
+            # Filtro Fecha Trabajo
+            with fecha_cols[2]:
+                st.write("Fecha Trabajo")
+                fecha_trab_inicio = st.date_input(
+                    "Desde (Trabajo)",
+                    value=data[COLUMNAS_FILTRO['FECHA_TRABAJO']].min(),
+                    key="fecha_trab_inicio"
+                )
+                fecha_trab_fin = st.date_input(
+                    "Hasta (Trabajo)",
+                    value=data[COLUMNAS_FILTRO['FECHA_TRABAJO']].max(),
+                    key="fecha_trab_fin"
+                )
+
+            # Filtros adicionales
+            st.subheader("Filtros Adicionales")
+            filtros_cols = st.columns(3)
+            
+            # Filtro de Proceso
+            with filtros_cols[0]:
+                procesos = sorted(data[COLUMNAS_FILTRO['PROCESO']].dropna().unique())
+                procesos_seleccionados = st.multiselect(
+                    "Proceso",
+                    options=procesos,
+                    default=[]
+                )
+
+            # Filtro de Etapa
+            with filtros_cols[1]:
+                etapas = sorted(data[COLUMNAS_FILTRO['ETAPA']].dropna().unique())
+                etapas_seleccionadas = st.multiselect(
+                    "Etapa",
+                    options=etapas,
+                    default=[]
+                )
+
+            # Filtro de Estado
+            with filtros_cols[2]:
+                estados = sorted(data[COLUMNAS_FILTRO['ESTADO']].dropna().unique())
+                estados_seleccionados = st.multiselect(
+                    "Estado",
+                    options=estados,
+                    default=[]
                 )
 
         # Botón para aplicar filtros
         if st.button("Aplicar Filtros"):
             # Aplicar filtros de fecha
             data_filtrada = data[
-                (data[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date >= fecha_inicio) &
-                (data[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date <= fecha_fin)
+                (data[COLUMNAS_FILTRO['FECHA_ASIGNACION']].dt.date >= fecha_asig_inicio) &
+                (data[COLUMNAS_FILTRO['FECHA_ASIGNACION']].dt.date <= fecha_asig_fin) &
+                (data[COLUMNAS_FILTRO['FECHA_INGRESO']].dt.date >= fecha_ing_inicio) &
+                (data[COLUMNAS_FILTRO['FECHA_INGRESO']].dt.date <= fecha_ing_fin) &
+                (data[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date >= fecha_trab_inicio) &
+                (data[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date <= fecha_trab_fin)
             ]
 
             # Aplicar filtros adicionales
-            for columna, valores in filtros_adicionales.items():
-                if valores:
-                    data_filtrada = data_filtrada[
-                        data_filtrada[COLUMNAS_FILTRO[columna]].isin(valores)
-                    ]
+            if procesos_seleccionados:
+                data_filtrada = data_filtrada[data_filtrada[COLUMNAS_FILTRO['PROCESO']].isin(procesos_seleccionados)]
+            if etapas_seleccionadas:
+                data_filtrada = data_filtrada[data_filtrada[COLUMNAS_FILTRO['ETAPA']].isin(etapas_seleccionadas)]
+            if estados_seleccionados:
+                data_filtrada = data_filtrada[data_filtrada[COLUMNAS_FILTRO['ESTADO']].isin(estados_seleccionados)]
 
             # Crear tabla dinámica
             if columnas_filas and columnas_columnas:
@@ -897,15 +963,19 @@ class SPEModule:
                         values=COLUMNAS_FILTRO['EXPEDIENTE'],
                         index=[COLUMNAS_FILTRO[col] for col in columnas_filas],
                         columns=[COLUMNAS_FILTRO[col] for col in columnas_columnas],
-                        aggfunc='count',
+                        aggfunc='nunique',  # Cambio a nunique para contar expedientes únicos
                         fill_value=0,
                         margins=True,
                         margins_name='Total'
                     )
 
-                    st.subheader("Tabla Dinámica")
+                    # Mostrar resultados
+                    st.subheader("Resultados del Análisis")
+                    
+                    # 1. Tabla Dinámica
+                    st.write("Tabla Dinámica")
                     st.dataframe(pivot_table, use_container_width=True)
-
+                    
                     # Botón para descargar tabla dinámica
                     excel_data_pivot = create_excel_download(
                         pivot_table,
@@ -913,7 +983,6 @@ class SPEModule:
                         "Tabla_Dinamica",
                         "Análisis Dinámico"
                     )
-                    
                     st.download_button(
                         label="📥 Descargar Tabla Dinámica",
                         data=excel_data_pivot,
@@ -921,14 +990,13 @@ class SPEModule:
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
 
-                    # Mostrar detalle de expedientes
-                    st.subheader("Detalle de Expedientes")
-                    columnas_mostrar = list(set(
-                        [COLUMNAS_FILTRO[col] for col in columnas_filas + columnas_columnas] +
-                        [COLUMNAS_FILTRO['EXPEDIENTE'], COLUMNAS_FILTRO['FECHA_TRABAJO']]
-                    ))
-                    
-                    detalle_expedientes = data_filtrada[columnas_mostrar].sort_values(
+                    # 2. Detalle de Expedientes
+                    st.write("Detalle de Expedientes")
+                    columnas_detalle = [
+                        'EXPEDIENTE', 'FECHA_ASIGNACION', 'PROCESO', 'FECHA_INGRESO',
+                        'EVALUADOR', 'ETAPA', 'ESTADO', 'FECHA_TRABAJO', 'BENEFICIARIO'
+                    ]
+                    detalle_expedientes = data_filtrada[[COLUMNAS_FILTRO[col] for col in columnas_detalle]].sort_values(
                         COLUMNAS_FILTRO['FECHA_TRABAJO']
                     )
                     st.dataframe(detalle_expedientes, use_container_width=True)
@@ -940,7 +1008,6 @@ class SPEModule:
                         "Detalle_Expedientes",
                         "Detalle de Expedientes Filtrados"
                     )
-                    
                     st.download_button(
                         label="📥 Descargar Detalle de Expedientes",
                         data=excel_data_detalle,
@@ -948,14 +1015,11 @@ class SPEModule:
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
 
-                    # Visualización gráfica
+                    # 3. Visualización gráfica (si aplica)
                     if len(columnas_filas) == 1 and len(columnas_columnas) == 1:
-                        st.subheader("Visualización Gráfica")
-                        
-                        # Preparar datos para el gráfico
+                        st.write("Visualización Gráfica")
                         pivot_plot = pivot_table.drop('Total', axis=1).drop('Total')
                         
-                        # Crear gráfico de barras
                         fig = px.bar(
                             pivot_plot.reset_index().melt(
                                 id_vars=pivot_plot.index.name,
@@ -974,9 +1038,6 @@ class SPEModule:
                     st.error(f"Error al crear la tabla dinámica: {str(e)}")
             else:
                 st.warning("Por favor seleccione al menos una columna para filas y columnas")
-
-        # Continuar con el resto del análisis dinámico original...
-        # (mantener el código existente para tiempos promedio y distribución diaria)
 
     def render_predictive_analysis(self, data):
         """Renderizar análisis predictivo."""

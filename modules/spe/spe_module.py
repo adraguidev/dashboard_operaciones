@@ -805,7 +805,7 @@ class SPEModule:
             line=dict(color='red')
         ))
 
-        # Actualizar diseño
+        # Actualizar dise��o
         fig_tendencia_mensual.update_layout(
             title='Evolución Mensual del Trabajo Realizado 2024',
             yaxis=dict(
@@ -1142,19 +1142,27 @@ class SPEModule:
         """Renderizar análisis predictivo."""
         st.header("Análisis de Ingresos")
 
+        # Mapeo de columnas con el nombre exacto
         COLUMNAS = {
             'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_INGRESO': 'FECHA _ INGRESO'
+            'FECHA_INGRESO': 'FECHA _ INGRESO'  # Nombre exacto con espacios
         }
 
         try:
+            # Crear una copia del DataFrame para no modificar el original
+            data_copy = data.copy()
+            
             # Convertir fecha de ingreso a datetime
-            data[COLUMNAS['FECHA_INGRESO']] = pd.to_datetime(
-                data[COLUMNAS['FECHA_INGRESO']], 
+            data_copy[COLUMNAS['FECHA_INGRESO']] = pd.to_datetime(
+                data_copy[COLUMNAS['FECHA_INGRESO']], 
                 format='mixed',
                 dayfirst=True,
                 errors='coerce'
             )
+            
+            # Usar data_copy en lugar de data para el resto del análisis
+            data = data_copy
+
         except Exception as e:
             st.error(f"Error al procesar fechas: {str(e)}")
             return
@@ -1231,7 +1239,7 @@ class SPEModule:
             COLUMNAS['FECHA_INGRESO']: ['min', 'max']
         }).reset_index()
 
-        # Calcular promedio por d��a hábil para cada semana
+        # Calcular promedio por día hábil para cada semana
         ingresos_semanales['dias_habiles'] = ingresos_semanales[COLUMNAS['FECHA_INGRESO']]['max'].apply(
             lambda x: len(pd.bdate_range(
                 ingresos_semanales[COLUMNAS['FECHA_INGRESO']]['min'].iloc[0],

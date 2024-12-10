@@ -86,17 +86,22 @@ class SPEModule:
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
-        # Usar timezone de Peru para las fechas y especificar dayfirst=True
+        # Usar timezone de Peru para las fechas
         fecha_actual = pd.Timestamp.now(tz='America/Lima').date()
         fecha_ayer = fecha_actual - timedelta(days=1)
 
-        # Convertir fecha de trabajo a datetime considerando formato dd/mm/yyyy
-        data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
-            data[COLUMNAS['FECHA_TRABAJO']], 
-            format='%d/%m/%Y',  # Cambiado a formato dd/mm/yyyy
-            dayfirst=True,      # Importante: indica que el día va primero
-            errors='coerce'
-        ).dt.tz_localize('America/Lima')
+        # Convertir fecha de trabajo a datetime de manera más flexible
+        try:
+            # Primero intentar con el formato específico
+            data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
+                data[COLUMNAS['FECHA_TRABAJO']], 
+                format='mixed',  # Usar formato mixto para mayor flexibilidad
+                dayfirst=True,   # Indicar que el día va primero
+                errors='coerce'
+            ).dt.tz_localize('America/Lima')
+        except Exception as e:
+            st.error(f"Error al procesar fechas: {str(e)}")
+            return
 
         # Filtrar datos del día actual
         data = data[data[COLUMNAS['FECHA_TRABAJO']].dt.date < fecha_actual]
@@ -361,13 +366,17 @@ class SPEModule:
             9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
         }
 
-        # Convertir fecha de trabajo a datetime considerando formato dd/mm/yyyy
-        data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
-            data[COLUMNAS['FECHA_TRABAJO']], 
-            format='%d/%m/%Y',  # Cambiado a formato dd/mm/yyyy
-            dayfirst=True,      # Importante: indica que el día va primero
-            errors='coerce'
-        )
+        # Convertir fecha de trabajo a datetime de manera más flexible
+        try:
+            data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
+                data[COLUMNAS['FECHA_TRABAJO']], 
+                format='mixed',  # Usar formato mixto para mayor flexibilidad
+                dayfirst=True,   # Indicar que el día va primero
+                errors='coerce'
+            )
+        except Exception as e:
+            st.error(f"Error al procesar fechas: {str(e)}")
+            return
 
         # Obtener mes anterior y mes actual
         fecha_actual = pd.Timestamp.now()
@@ -600,12 +609,16 @@ class SPEModule:
         # Convertir columnas de fecha a datetime
         COLUMNAS_FECHA = ['FECHA_INGRESO', 'FECHA_TRABAJO']
         for col in COLUMNAS_FECHA:
-            data[COLUMNAS_DISPONIBLES[col]] = pd.to_datetime(
-                data[COLUMNAS_DISPONIBLES[col]], 
-                format='%d/%m/%Y',  # Cambiado a formato dd/mm/yyyy
-                dayfirst=True,      # Importante: indica que el día va primero
-                errors='coerce'
-            )
+            try:
+                data[COLUMNAS_DISPONIBLES[col]] = pd.to_datetime(
+                    data[COLUMNAS_DISPONIBLES[col]], 
+                    format='mixed',  # Usar formato mixto para mayor flexibilidad
+                    dayfirst=True,   # Indicar que el día va primero
+                    errors='coerce'
+                )
+            except Exception as e:
+                st.error(f"Error al procesar fechas para columna {col}: {str(e)}")
+                return
 
         # Crear columnas adicionales para fechas
         for col in COLUMNAS_FECHA:
@@ -682,14 +695,26 @@ class SPEModule:
         """Análisis predictivo simplificado usando regresión lineal"""
         st.header("Predicción de Ingresos")
         
-        # Preparar datos históricos con formato de fecha correcto
-        ingresos_diarios = data.groupby('FECHA _ INGRESO').size().reset_index(name='cantidad')
-        ingresos_diarios['FECHA _ INGRESO'] = pd.to_datetime(
-            ingresos_diarios['FECHA _ INGRESO'],
-            format='%d/%m/%Y',  # Cambiado a formato dd/mm/yyyy
-            dayfirst=True,      # Importante: indica que el día va primero
-            errors='coerce'
-        )
+        # Preparar datos históricos con formato de fecha más flexible
+        try:
+            ingresos_diarios = data.groupby('FECHA _ INGRESO').size().reset_index(name='cantidad')
+            ingresos_diarios['FECHA _ INGRESO'] = pd.to_datetime(
+                ingresos_diarios['FECHA _ INGRESO'],
+                format='mixed',  # Usar formato mixto para mayor flexibilidad
+                dayfirst=True,   # Indicar que el día va primero
+                errors='coerce'
+            )
+            
+            # Eliminar filas con fechas inválidas
+            ingresos_diarios = ingresos_diarios.dropna(subset=['FECHA _ INGRESO'])
+            
+            if ingresos_diarios.empty:
+                st.error("No hay datos válidos para realizar la predicción")
+                return
+            
+        except Exception as e:
+            st.error(f"Error al procesar fechas: {str(e)}")
+            return
         
         # Crear modelo de regresión lineal
         X = np.arange(len(ingresos_diarios)).reshape(-1, 1)

@@ -169,6 +169,21 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         st.subheader(f"Matriz de Cierre de Expedientes ({selected_range})")
         st.dataframe(cierre_matrix)
 
+        # Agregar botón de descarga formateado para la matriz de cierre
+        excel_data_matriz = create_excel_download(
+            cierre_matrix,
+            "matriz_cierre.xlsx",
+            "Matriz_Cierre",
+            f"Matriz de Cierre de Expedientes - {selected_range}"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Matriz de Cierre",
+            data=excel_data_matriz,
+            file_name=f"matriz_cierre_{selected_range.lower().replace(' ', '_')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
         # Mostrar tabla de tiempos promedio real por evaluador (tiempo entre fechas)
         st.subheader(f"Tiempos Promedio de Cierre por Evaluador ({selected_range})")
         tiempo_promedio_real = cierre_data_range.groupby('EVALASIGN')['TiempoCierre'].agg(

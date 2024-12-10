@@ -319,7 +319,7 @@ class SPEModule:
             'EXPEDIENTE': 'EXPEDIENTE',
             'ETAPA': 'ETAPA_EVALUACIÓN',
             'ESTADO': 'ESTADO',
-            'FECHA_INGRESO': 'FECHA_INGRESO',
+            'FECHA_INGRESO': FECHA_INGRESO,
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
@@ -880,7 +880,7 @@ class SPEModule:
             'EXPEDIENTE': 'EXPEDIENTE',
             'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
             'PROCESO': 'PROCESO',
-            'FECHA_INGRESO': 'FECHA_INGRESO',
+            'FECHA_INGRESO': FECHA_INGRESO,
             'EVALUADOR': 'EVALUADOR',
             'ETAPA': 'ETAPA_EVALUACIÓN',
             'ESTADO': 'ESTADO',
@@ -1145,7 +1145,7 @@ class SPEModule:
         # Mapeo de columnas con el nombre exacto
         COLUMNAS = {
             'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_INGRESO': 'FECHA_INGRESO'  # Nombre exacto con espacios
+            'FECHA_INGRESO': FECHA_INGRESO  # Sin comillas
         }
 
         try:

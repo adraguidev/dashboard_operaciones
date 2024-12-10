@@ -429,12 +429,22 @@ class SPEModule:
             (data[COLUMNAS['FECHA_TRABAJO']].dt.year == mes_anterior.year)
         ].groupby(COLUMNAS['FECHA_TRABAJO']).size().reset_index(name='cantidad')
 
+        # Calcular promedio diario mes anterior
+        promedio_diario_anterior = datos_diarios_anterior['cantidad'].mean()
+
         fig_tendencia_anterior = px.line(
             datos_diarios_anterior,
             x=COLUMNAS['FECHA_TRABAJO'],
             y='cantidad',
             title=f'Tendencia Diaria - {nombre_mes_anterior} {mes_anterior.year}',
             labels={'cantidad': 'Expedientes Trabajados'}
+        )
+        # Agregar línea de promedio
+        fig_tendencia_anterior.add_hline(
+            y=promedio_diario_anterior,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"Promedio: {promedio_diario_anterior:.1f}"
         )
         st.plotly_chart(fig_tendencia_anterior, use_container_width=True)
 
@@ -450,10 +460,15 @@ class SPEModule:
         )
 
         # Gráfico de tendencia diaria mes actual
+        fecha_actual_sin_hora = fecha_actual.date()
         datos_diarios_actual = data[
             (data[COLUMNAS['FECHA_TRABAJO']].dt.month == fecha_actual.month) &
-            (data[COLUMNAS['FECHA_TRABAJO']].dt.year == fecha_actual.year)
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.year == fecha_actual.year) &
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_actual_sin_hora)  # Solo hasta la fecha actual
         ].groupby(COLUMNAS['FECHA_TRABAJO']).size().reset_index(name='cantidad')
+
+        # Calcular promedio diario mes actual
+        promedio_diario_actual = datos_diarios_actual['cantidad'].mean()
 
         fig_tendencia_actual = px.line(
             datos_diarios_actual,
@@ -462,7 +477,53 @@ class SPEModule:
             title=f'Tendencia Diaria - {nombre_mes_actual} {fecha_actual.year}',
             labels={'cantidad': 'Expedientes Trabajados'}
         )
+        # Agregar línea de promedio
+        fig_tendencia_actual.add_hline(
+            y=promedio_diario_actual,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"Promedio: {promedio_diario_actual:.1f}"
+        )
         st.plotly_chart(fig_tendencia_actual, use_container_width=True)
+
+        # Análisis comparativo de rendimiento
+        st.subheader("Análisis Comparativo de Rendimiento")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        # Variación en promedio diario
+        variacion_promedio = ((promedio_diario_actual / promedio_diario_anterior) - 1) * 100
+        with col1:
+            st.metric(
+                "Variación Promedio Diario",
+                f"{promedio_diario_actual:.1f}",
+                f"{variacion_promedio:+.1f}%",
+                help="Comparación del promedio diario actual vs mes anterior"
+            )
+
+        # Eficiencia por evaluador
+        with col2:
+            dias_habiles_anterior = stats_mes_anterior['DIAS_TRABAJADOS'].mean()
+            dias_habiles_actual = stats_mes_actual['DIAS_TRABAJADOS'].mean()
+            eficiencia_dias = (dias_habiles_actual / dias_habiles_anterior) * 100
+            st.metric(
+                "Eficiencia en Días Trabajados",
+                f"{dias_habiles_actual:.1f} días",
+                f"{eficiencia_dias:+.1f}%",
+                help="Comparación de días trabajados actual vs mes anterior"
+            )
+
+        # Productividad general
+        with col3:
+            prod_anterior = stats_mes_anterior['CANT_EXPEDIENTES'].sum()
+            prod_actual = stats_mes_actual['CANT_EXPEDIENTES'].sum()
+            var_productividad = ((prod_actual / prod_anterior) - 1) * 100
+            st.metric(
+                "Variación en Productividad",
+                f"{prod_actual:,.0f}",
+                f"{var_productividad:+.1f}%",
+                help="Comparación de la cantidad total de expedientes vs mes anterior"
+            )
 
         # Gráfico de distribución por evaluador
         fig_distribucion = px.pie(
@@ -473,41 +534,35 @@ class SPEModule:
         )
         st.plotly_chart(fig_distribucion, use_container_width=True)
 
-        # Gráfico de promedio diario
-        fig_promedio = px.bar(
-            stats_mes_actual.sort_values('PROMEDIO', ascending=False),
-            x='EVALUADOR',
-            y='PROMEDIO',
-            title=f'Promedio Diario por Evaluador - {nombre_mes_actual}',
-            text='PROMEDIO'
-        )
-        fig_promedio.update_traces(textposition='outside')
-        st.plotly_chart(fig_promedio, use_container_width=True)
-
-        # Comparativa entre meses
-        st.subheader("Comparativa entre Meses")
-        
-        # Preparar datos para comparativa
-        comparativa = pd.merge(
-            stats_mes_anterior[['EVALUADOR', 'CANT_EXPEDIENTES']].rename(columns={'CANT_EXPEDIENTES': nombre_mes_anterior}),
-            stats_mes_actual[['EVALUADOR', 'CANT_EXPEDIENTES']].rename(columns={'CANT_EXPEDIENTES': nombre_mes_actual}),
+        # Gráfico de promedio diario con comparativa
+        comparativa_promedio = pd.merge(
+            stats_mes_anterior[['EVALUADOR', 'PROMEDIO']].rename(columns={'PROMEDIO': f'Promedio {nombre_mes_anterior}'}),
+            stats_mes_actual[['EVALUADOR', 'PROMEDIO']].rename(columns={'PROMEDIO': f'Promedio {nombre_mes_actual}'}),
             on='EVALUADOR',
             how='outer'
         ).fillna(0)
+
+        fig_promedio = go.Figure()
+        fig_promedio.add_trace(go.Bar(
+            name=nombre_mes_anterior,
+            x=comparativa_promedio['EVALUADOR'],
+            y=comparativa_promedio[f'Promedio {nombre_mes_anterior}'],
+            text=comparativa_promedio[f'Promedio {nombre_mes_anterior}'].round(1)
+        ))
+        fig_promedio.add_trace(go.Bar(
+            name=nombre_mes_actual,
+            x=comparativa_promedio['EVALUADOR'],
+            y=comparativa_promedio[f'Promedio {nombre_mes_actual}'],
+            text=comparativa_promedio[f'Promedio {nombre_mes_actual}'].round(1)
+        ))
         
-        # Gráfico de comparativa
-        fig_comparativa = go.Figure(data=[
-            go.Bar(name=nombre_mes_anterior, x=comparativa['EVALUADOR'], y=comparativa[nombre_mes_anterior], text=comparativa[nombre_mes_anterior].astype(int)),
-            go.Bar(name=nombre_mes_actual, x=comparativa['EVALUADOR'], y=comparativa[nombre_mes_actual], text=comparativa[nombre_mes_actual].astype(int))
-        ])
-        
-        fig_comparativa.update_layout(
-            title=f"Comparativa {nombre_mes_anterior} vs {nombre_mes_actual}",
+        fig_promedio.update_layout(
+            title=f'Comparativa de Promedio Diario por Evaluador',
             barmode='group',
-            yaxis_title="Cantidad de Expedientes"
+            yaxis_title="Promedio de Expedientes por Día"
         )
-        fig_comparativa.update_traces(textposition='outside')
-        st.plotly_chart(fig_comparativa, use_container_width=True)
+        fig_promedio.update_traces(textposition='outside')
+        st.plotly_chart(fig_promedio, use_container_width=True)
 
         # Botón de descarga con ambos reportes
         output = BytesIO()

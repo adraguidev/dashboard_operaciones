@@ -28,6 +28,19 @@ class SPEModule:
         'https://www.googleapis.com/auth/drive'
     ]
 
+    # Definir el mapeo de columnas como constante de clase
+    COLUMNAS = {
+        'EVALUADOR': 'EVALUADOR',
+        'EXPEDIENTE': 'EXPEDIENTE',
+        'ETAPA': 'ETAPA_EVALUACIÓN',
+        'ESTADO': 'ESTADO',
+        'FECHA_TRABAJO': 'Fecha_Trabajo',
+        'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
+        'PROCESO': 'PROCESO',
+        'FECHA_INGRESO': 'FECHA_INGRESO',
+        'BENEFICIARIO': 'NOMBRES_BENEFICIARIO'
+    }
+
     def __init__(self):
         """Inicializar módulo SPE."""
         self.credentials = get_google_credentials()
@@ -107,11 +120,7 @@ class SPEModule:
         """Renderizar pestaña de ranking de expedientes trabajados."""
         st.header("Ranking de Expedientes Trabajados")
 
-        COLUMNAS = {
-            'EVALUADOR': 'EVALUADOR',
-            'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_TRABAJO': 'Fecha_Trabajo'
-        }
+        COLUMNAS = self.COLUMNAS
 
         # Usar timezone de Peru para las fechas
         fecha_actual = pd.Timestamp.now(tz='America/Lima')
@@ -313,14 +322,7 @@ class SPEModule:
         """Renderizar reporte de pendientes."""
         st.header("Reporte de Pendientes")
 
-        # Mapeo de nombres de columnas
-        COLUMNAS = {
-            'EVALUADOR': 'EVALUADOR',
-            'EXPEDIENTE': 'EXPEDIENTE',
-            'ETAPA': 'ETAPA_EVALUACIÓN',
-            'ESTADO': 'ESTADO',
-            'FECHA_TRABAJO': 'Fecha_Trabajo'
-        }
+        COLUMNAS = self.COLUMNAS
 
         # Limpiar datos innecesarios
         data = data.drop(['Column 12', 'Column 13', 'Column 14', 'Column 15', 'Column 16', 'Column 17'], axis=1)
@@ -463,12 +465,7 @@ class SPEModule:
         """Renderizar reporte de expedientes trabajados."""
         st.header("Reporte de Expedientes Trabajados")
 
-        # Mapeo de columnas
-        COLUMNAS = {
-            'EVALUADOR': 'EVALUADOR',
-            'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_TRABAJO': 'Fecha_Trabajo'
-        }
+        COLUMNAS = self.COLUMNAS
 
         # Mapeo de meses a español
         MESES = {
@@ -874,30 +871,7 @@ class SPEModule:
         """Renderizar análisis dinámico."""
         st.header("Análisis Dinámico")
 
-        # Mapeo de columnas disponibles para filtrar
-        COLUMNAS_FILTRO = {
-            'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
-            'PROCESO': 'PROCESO',
-            'FECHA_INGRESO': 'FECHA_INGRESO',
-            'EVALUADOR': 'EVALUADOR',
-            'ETAPA': 'ETAPA_EVALUACIÓN',
-            'ESTADO': 'ESTADO',
-            'FECHA_TRABAJO': 'Fecha_Trabajo',
-            'BENEFICIARIO': 'NOMBRES_BENEFICIARIO'
-        }
-
-        # Convertir fechas a datetime
-        for fecha_col in ['FECHA_ASIGNACION', 'FECHA_INGRESO', 'FECHA_TRABAJO']:
-            try:
-                data[COLUMNAS_FILTRO[fecha_col]] = pd.to_datetime(
-                    data[COLUMNAS_FILTRO[fecha_col]], 
-                    format='mixed',
-                    dayfirst=True,
-                    errors='coerce'
-                )
-            except Exception as e:
-                st.error(f"Error al procesar fechas de {fecha_col}: {str(e)}")
+        COLUMNAS = self.COLUMNAS
 
         # Crear contenedor para filtros
         st.subheader("Filtros Dinámicos")
@@ -974,7 +948,7 @@ class SPEModule:
                 
                 # Filtro de Evaluador (Nuevo)
                 with filtros_cols[0]:
-                    evaluadores = sorted(data[COLUMNAS_FILTRO['EVALUADOR']].dropna().unique())
+                    evaluadores = sorted(data[COLUMNAS['EVALUADOR']].dropna().unique())
                     evaluadores = ['TODOS LOS EVALUADORES'] + evaluadores  # Agregar opción TODOS
                     evaluadores_seleccionados = st.multiselect(
                         "Evaluador",
@@ -984,7 +958,7 @@ class SPEModule:
 
                 # Filtro de Proceso
                 with filtros_cols[1]:
-                    procesos = sorted(data[COLUMNAS_FILTRO['PROCESO']].dropna().unique())
+                    procesos = sorted(data[COLUMNAS['PROCESO']].dropna().unique())
                     procesos_seleccionados = st.multiselect(
                         "Proceso",
                         options=procesos,
@@ -993,7 +967,7 @@ class SPEModule:
 
                 # Filtro de Etapa
                 with filtros_cols[2]:
-                    etapas = sorted(data[COLUMNAS_FILTRO['ETAPA']].dropna().unique())
+                    etapas = sorted(data[COLUMNAS['ETAPA']].dropna().unique())
                     etapas_seleccionadas = st.multiselect(
                         "Etapa",
                         options=etapas,
@@ -1002,7 +976,7 @@ class SPEModule:
 
                 # Filtro de Estado
                 with filtros_cols[3]:
-                    estados = sorted(data[COLUMNAS_FILTRO['ESTADO']].dropna().unique())
+                    estados = sorted(data[COLUMNAS['ESTADO']].dropna().unique())
                     estados_seleccionados = st.multiselect(
                         "Estado",
                         options=estados,
@@ -1027,40 +1001,40 @@ class SPEModule:
                     
                     if fecha_asig_inicio and fecha_asig_fin:
                         data_filtrada = data_filtrada[
-                            (data_filtrada[COLUMNAS_FILTRO['FECHA_ASIGNACION']].dt.date >= fecha_asig_inicio) &
-                            (data_filtrada[COLUMNAS_FILTRO['FECHA_ASIGNACION']].dt.date <= fecha_asig_fin)
+                            (data_filtrada[COLUMNAS['FECHA_ASIGNACION']].dt.date >= fecha_asig_inicio) &
+                            (data_filtrada[COLUMNAS['FECHA_ASIGNACION']].dt.date <= fecha_asig_fin)
                         ]
                     
                     if fecha_ing_inicio and fecha_ing_fin:
                         data_filtrada = data_filtrada[
-                            (data_filtrada[COLUMNAS_FILTRO['FECHA_INGRESO']].dt.date >= fecha_ing_inicio) &
-                            (data_filtrada[COLUMNAS_FILTRO['FECHA_INGRESO']].dt.date <= fecha_ing_fin)
+                            (data_filtrada[COLUMNAS['FECHA_INGRESO']].dt.date >= fecha_ing_inicio) &
+                            (data_filtrada[COLUMNAS['FECHA_INGRESO']].dt.date <= fecha_ing_fin)
                         ]
                     
                     if fecha_trab_inicio and fecha_trab_fin:
                         data_filtrada = data_filtrada[
-                            (data_filtrada[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date >= fecha_trab_inicio) &
-                            (data_filtrada[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date <= fecha_trab_fin)
+                            (data_filtrada[COLUMNAS['FECHA_TRABAJO']].dt.date >= fecha_trab_inicio) &
+                            (data_filtrada[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_trab_fin)
                         ]
 
                     # Aplicar filtros adicionales
                     if evaluadores_seleccionados and 'TODOS LOS EVALUADORES' not in evaluadores_seleccionados:
-                        data_filtrada = data_filtrada[data_filtrada[COLUMNAS_FILTRO['EVALUADOR']].isin(evaluadores_seleccionados)]
+                        data_filtrada = data_filtrada[data_filtrada[COLUMNAS['EVALUADOR']].isin(evaluadores_seleccionados)]
                     if procesos_seleccionados:
-                        data_filtrada = data_filtrada[data_filtrada[COLUMNAS_FILTRO['PROCESO']].isin(procesos_seleccionados)]
+                        data_filtrada = data_filtrada[data_filtrada[COLUMNAS['PROCESO']].isin(procesos_seleccionados)]
                     if etapas_seleccionadas:
-                        data_filtrada = data_filtrada[data_filtrada[COLUMNAS_FILTRO['ETAPA']].isin(etapas_seleccionadas)]
+                        data_filtrada = data_filtrada[data_filtrada[COLUMNAS['ETAPA']].isin(etapas_seleccionadas)]
                     if estados_seleccionados:
-                        data_filtrada = data_filtrada[data_filtrada[COLUMNAS_FILTRO['ESTADO']].isin(estados_seleccionados)]
+                        data_filtrada = data_filtrada[data_filtrada[COLUMNAS['ESTADO']].isin(estados_seleccionados)]
 
                     # Crear tabla dinámica
                     if columnas_filas and columnas_columnas:
                         try:
                             pivot_table = pd.pivot_table(
                                 data_filtrada,
-                                values=COLUMNAS_FILTRO['EXPEDIENTE'],
-                                index=[COLUMNAS_FILTRO[col] for col in columnas_filas],
-                                columns=[COLUMNAS_FILTRO[col] for col in columnas_columnas],
+                                values=COLUMNAS['EXPEDIENTE'],
+                                index=[COLUMNAS[col] for col in columnas_filas],
+                                columns=[COLUMNAS[col] for col in columnas_columnas],
                                 aggfunc='nunique',  # Cambio a nunique para contar expedientes únicos
                                 fill_value=0,
                                 margins=True,
@@ -1094,8 +1068,8 @@ class SPEModule:
                                 'EXPEDIENTE', 'FECHA_ASIGNACION', 'PROCESO', 'FECHA_INGRESO',
                                 'EVALUADOR', 'ETAPA', 'ESTADO', 'FECHA_TRABAJO', 'BENEFICIARIO'
                             ]
-                            detalle_expedientes = data_filtrada[[COLUMNAS_FILTRO[col] for col in columnas_detalle]].sort_values(
-                                COLUMNAS_FILTRO['FECHA_TRABAJO']
+                            detalle_expedientes = data_filtrada[[COLUMNAS[col] for col in columnas_detalle]].sort_values(
+                                COLUMNAS['FECHA_TRABAJO']
                             )
                             st.dataframe(detalle_expedientes, use_container_width=True)
 
@@ -1141,11 +1115,7 @@ class SPEModule:
         """Renderizar análisis predictivo."""
         st.header("Análisis de Ingresos")
 
-        # Mapeo de columnas para análisis predictivo
-        COLUMNAS = {
-            'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_INGRESO': 'FECHA_INGRESO'
-        }
+        COLUMNAS = self.COLUMNAS
 
         try:
             # Crear una copia del DataFrame para no modificar el original

@@ -296,7 +296,7 @@ class SPEModule:
                             st.error(f"Error al guardar los datos: {str(e)}")
 
     def _get_last_date_from_db(self, collection):
-        """Obtener la última fecha registrada en la base de datos."""
+        """Obtener la ��ltima fecha registrada en la base de datos."""
         fecha_actual = pd.Timestamp.now(tz='America/Lima').date()
         
         # Buscar el último registro que NO sea del día actual
@@ -741,6 +741,7 @@ class SPEModule:
             datos_mes = data[
                 (data[COLUMNAS['FECHA_TRABAJO']].dt.month == mes) &
                 (data[COLUMNAS['FECHA_TRABAJO']].dt.year == 2024)
+            ]
             
             dias_trabajados = datos_mes[COLUMNAS['FECHA_TRABAJO']].dt.date.nunique()
             total_trabajado = len(datos_mes)

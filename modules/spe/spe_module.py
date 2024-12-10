@@ -19,6 +19,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import Ridge
 from statsmodels.nonparametric.smoothers_lowess import lowess
 from prophet import Prophet
+from src.utils.excel_utils import create_excel_download
 
 class SPEModule:
     SCOPES = [
@@ -279,6 +280,21 @@ class SPEModule:
             height=400
         )
 
+        # Agregar botón de descarga después de la tabla de evaluadores
+        excel_data = create_excel_download(
+            pivot_table,
+            "pendientes_por_evaluador.xlsx",
+            "Pendientes_Evaluador",
+            "Reporte de Expedientes Pendientes por Evaluador"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Tabla de Evaluadores",
+            data=excel_data,
+            file_name="pendientes_por_evaluador.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
         # 2. GRÁFICO DE EVALUADORES
         if len(pivot_table) > 1:
             fig = px.bar(
@@ -315,6 +331,21 @@ class SPEModule:
             pivot_table_estado,
             use_container_width=True,
             height=400
+        )
+
+        # Agregar botón de descarga después de la tabla de estados
+        excel_data_estado = create_excel_download(
+            pivot_table_estado,
+            "pendientes_por_estado.xlsx",
+            "Pendientes_Estado",
+            "Reporte de Expedientes Pendientes por Estado"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Tabla de Estados",
+            data=excel_data_estado,
+            file_name="pendientes_por_estado.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
         # 4. GRÁFICO DE ESTADOS
@@ -425,6 +456,21 @@ class SPEModule:
             height=400
         )
 
+        # Agregar botón de descarga después de la tabla del mes anterior
+        excel_data_anterior = create_excel_download(
+            stats_mes_anterior,
+            f"trabajados_{nombre_mes_anterior}.xlsx",
+            f"Trabajados_{nombre_mes_anterior}",
+            f"Expedientes Trabajados - {nombre_mes_anterior} {mes_anterior.year}"
+        )
+        
+        st.download_button(
+            label=f"📥 Descargar Tabla {nombre_mes_anterior}",
+            data=excel_data_anterior,
+            file_name=f"trabajados_{nombre_mes_anterior}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
         # Gráfico de tendencia diaria mes anterior
         datos_diarios_anterior = data[
             (data[COLUMNAS['FECHA_TRABAJO']].dt.month == mes_anterior.month) &
@@ -467,6 +513,21 @@ class SPEModule:
             stats_mes_actual,
             use_container_width=True,
             height=400
+        )
+
+        # Agregar botón de descarga después de la tabla del mes actual
+        excel_data_actual = create_excel_download(
+            stats_mes_actual,
+            f"trabajados_{nombre_mes_actual}.xlsx",
+            f"Trabajados_{nombre_mes_actual}",
+            f"Expedientes Trabajados - {nombre_mes_actual} {fecha_actual.year}"
+        )
+        
+        st.download_button(
+            label=f"📥 Descargar Tabla {nombre_mes_actual}",
+            data=excel_data_actual,
+            file_name=f"trabajados_{nombre_mes_actual}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
         # Gráfico de tendencia diaria mes actual
@@ -990,16 +1051,18 @@ class SPEModule:
                     }
                 )
 
-                # Botón de descarga
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    display_data.to_excel(writer, index=False, sheet_name='Reporte')
-                output.seek(0)
+                # Agregar botón de descarga formateado
+                excel_data = create_excel_download(
+                    display_data,
+                    "analisis_dinamico.xlsx",
+                    "Analisis_Dinamico",
+                    f"Análisis Dinámico - {selected_evaluador}"
+                )
                 
                 st.download_button(
-                    label="📥 Descargar Reporte",
-                    data=output,
-                    file_name=f"reporte_dinamico_{selected_evaluador.replace(' ', '_')}.xlsx",
+                    label="📥 Descargar Análisis Dinámico",
+                    data=excel_data,
+                    file_name=f"analisis_dinamico_{selected_evaluador.replace(' ', '_')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             else:
@@ -1117,3 +1180,21 @@ class SPEModule:
         with col3:
             volatilidad = ingresos_diarios['cantidad'].std() / promedio * 100
             st.metric("Volatilidad", f"{volatilidad:.1f}%")
+
+        # Después de mostrar la tabla comparativa
+        st.dataframe(df_comparativo)
+        
+        # Agregar botón de descarga formateado
+        excel_data = create_excel_download(
+            df_comparativo,
+            "analisis_predictivo.xlsx",
+            "Analisis_Predictivo",
+            "Análisis Predictivo de Ingresos 2024"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Análisis Predictivo",
+            data=excel_data,
+            file_name="analisis_predictivo_2024.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )

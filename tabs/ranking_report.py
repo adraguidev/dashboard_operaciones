@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import os
 import time
+from src.utils.excel_utils import create_excel_download
 
 @st.cache_data
 def load_consolidated_cached(module_name):

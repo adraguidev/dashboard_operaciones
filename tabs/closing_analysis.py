@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 from io import BytesIO
 import numpy as np
+from src.utils.excel_utils import create_excel_download
 
 def render_closing_analysis_tab(data: pd.DataFrame):
     try:
@@ -265,17 +266,19 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         
         st.dataframe(top_25_demorados)
 
-        # Opción para descargar el top 25
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            top_25_demorados.to_excel(writer, index=False, sheet_name="Top 25 Más Demorados")
-        output.seek(0)
+        # Agregar botón de descarga formateado
+        excel_data = create_excel_download(
+            top_25_demorados,
+            "top_25_demorados.xlsx",
+            "Top_25_Demorados",
+            f"Top 25 Expedientes Más Demorados - {selected_range}"
+        )
         
         st.download_button(
-            label="Descargar Top 25 Expedientes Más Demorados",
-            data=output,
+            label="📥 Descargar Top 25 Expedientes Demorados",
+            data=excel_data,
             file_name=f"top_25_demorados_{selected_range.lower().replace(' ', '_')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ) 
+        )
     except Exception as e:
         st.error(f"Error al procesar la pestaña de cierre de expedientes: {e}") 

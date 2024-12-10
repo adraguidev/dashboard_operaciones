@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from config.settings import INACTIVE_EVALUATORS, VULNERABILIDAD_EVALUATORS
+from src.utils.excel_utils import create_excel_download
 
 def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
     st.header("Reporte de Pendientes")
@@ -160,6 +161,21 @@ def render_pending_reports_tab(data: pd.DataFrame, selected_module: str):
                     width="small"
                 ) for col in pending_table.columns
             }
+        )
+
+        # Agregar botón de descarga formateado
+        excel_data = create_excel_download(
+            pending_table,
+            "pendientes_detalle.xlsx",
+            "Pendientes_Detalle",
+            f"Reporte de Pendientes - {selected_module}"
+        )
+        
+        st.download_button(
+            label="📥 Descargar Reporte de Pendientes",
+            data=excel_data,
+            file_name=f"pendientes_{selected_module.lower()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
         # Tabla resumen por tipo y año

@@ -836,18 +836,6 @@ class SPEModule:
         """Renderizar análisis dinámico."""
         st.header("Análisis Dinámico")
 
-        # Botón para recargar datos
-        col1, col2 = st.columns([1, 11])
-        with col1:
-            if st.button("🔄 Recargar Datos", key="reload_spe_data"):
-                # Limpiar todas las claves de caché que contengan 'spe'
-                for key in st.session_state.keys():
-                    if 'spe' in key.lower():
-                        del st.session_state[key]
-                st.cache_resource.clear()
-                st.cache_data.clear()
-                st.rerun()
-
         # Mapeo de columnas disponibles para filtrar
         COLUMNAS_FILTRO = {
             'EXPEDIENTE': 'EXPEDIENTE',
@@ -905,12 +893,12 @@ class SPEModule:
                     st.write("Fecha Asignación")
                     fecha_asig_inicio = st.date_input(
                         "Desde (Asignación)",
-                        value=data[COLUMNAS_FILTRO['FECHA_ASIGNACION']].min(),
+                        value=None,
                         key="fecha_asig_inicio"
                     )
                     fecha_asig_fin = st.date_input(
                         "Hasta (Asignación)",
-                        value=data[COLUMNAS_FILTRO['FECHA_ASIGNACION']].max(),
+                        value=None,
                         key="fecha_asig_fin"
                     )
 
@@ -919,12 +907,12 @@ class SPEModule:
                     st.write("Fecha Ingreso")
                     fecha_ing_inicio = st.date_input(
                         "Desde (Ingreso)",
-                        value=data[COLUMNAS_FILTRO['FECHA_INGRESO']].min(),
+                        value=None,
                         key="fecha_ing_inicio"
                     )
                     fecha_ing_fin = st.date_input(
                         "Hasta (Ingreso)",
-                        value=data[COLUMNAS_FILTRO['FECHA_INGRESO']].max(),
+                        value=None,
                         key="fecha_ing_fin"
                     )
 
@@ -933,12 +921,12 @@ class SPEModule:
                     st.write("Fecha Trabajo")
                     fecha_trab_inicio = st.date_input(
                         "Desde (Trabajo)",
-                        value=data[COLUMNAS_FILTRO['FECHA_TRABAJO']].min(),
+                        value=None,
                         key="fecha_trab_inicio"
                     )
                     fecha_trab_fin = st.date_input(
                         "Hasta (Trabajo)",
-                        value=data[COLUMNAS_FILTRO['FECHA_TRABAJO']].max(),
+                        value=None,
                         key="fecha_trab_fin"
                     )
 
@@ -996,15 +984,26 @@ class SPEModule:
             # Si se presionó el botón de filtrar, continuar con el procesamiento
             if filtrar:
                 with st.spinner('Aplicando filtros...'):
-                    # Aplicar filtros de fecha
-                    data_filtrada = data[
-                        (data[COLUMNAS_FILTRO['FECHA_ASIGNACION']].dt.date >= fecha_asig_inicio) &
-                        (data[COLUMNAS_FILTRO['FECHA_ASIGNACION']].dt.date <= fecha_asig_fin) &
-                        (data[COLUMNAS_FILTRO['FECHA_INGRESO']].dt.date >= fecha_ing_inicio) &
-                        (data[COLUMNAS_FILTRO['FECHA_INGRESO']].dt.date <= fecha_ing_fin) &
-                        (data[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date >= fecha_trab_inicio) &
-                        (data[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date <= fecha_trab_fin)
-                    ]
+                    # Aplicar filtros de fecha solo si se han seleccionado
+                    data_filtrada = data.copy()
+                    
+                    if fecha_asig_inicio and fecha_asig_fin:
+                        data_filtrada = data_filtrada[
+                            (data_filtrada[COLUMNAS_FILTRO['FECHA_ASIGNACION']].dt.date >= fecha_asig_inicio) &
+                            (data_filtrada[COLUMNAS_FILTRO['FECHA_ASIGNACION']].dt.date <= fecha_asig_fin)
+                        ]
+                    
+                    if fecha_ing_inicio and fecha_ing_fin:
+                        data_filtrada = data_filtrada[
+                            (data_filtrada[COLUMNAS_FILTRO['FECHA_INGRESO']].dt.date >= fecha_ing_inicio) &
+                            (data_filtrada[COLUMNAS_FILTRO['FECHA_INGRESO']].dt.date <= fecha_ing_fin)
+                        ]
+                    
+                    if fecha_trab_inicio and fecha_trab_fin:
+                        data_filtrada = data_filtrada[
+                            (data_filtrada[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date >= fecha_trab_inicio) &
+                            (data_filtrada[COLUMNAS_FILTRO['FECHA_TRABAJO']].dt.date <= fecha_trab_fin)
+                        ]
 
                     # Aplicar filtros adicionales
                     if evaluadores_seleccionados and 'TODOS LOS EVALUADORES' not in evaluadores_seleccionados:

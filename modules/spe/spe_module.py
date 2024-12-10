@@ -741,7 +741,6 @@ class SPEModule:
             datos_mes = data[
                 (data[COLUMNAS['FECHA_TRABAJO']].dt.month == mes) &
                 (data[COLUMNAS['FECHA_TRABAJO']].dt.year == 2024)
-            ]
             
             dias_trabajados = datos_mes[COLUMNAS['FECHA_TRABAJO']].dt.date.nunique()
             total_trabajado = len(datos_mes)
@@ -1167,9 +1166,16 @@ class SPEModule:
         fecha_30_dias = fecha_actual - pd.Timedelta(days=30)
         datos_30_dias = data[data[COLUMNAS['FECHA_INGRESO']] >= fecha_30_dias]
         
-        ingresos_diarios = datos_30_dias.groupby(
-            datos_30_dias[COLUMNAS['FECHA_INGRESO']].dt.date
-        ).size().reset_index(name='cantidad')
+        # Agrupar por fecha y contar expedientes
+        ingresos_diarios = (
+            datos_30_dias.groupby(datos_30_dias[COLUMNAS['FECHA_INGRESO']].dt.date)
+            .agg({COLUMNAS['EXPEDIENTE']: 'count'})
+            .reset_index()
+            .rename(columns={
+                COLUMNAS['FECHA_INGRESO']: 'fecha',
+                COLUMNAS['EXPEDIENTE']: 'cantidad'
+            })
+        )
         
         # Calcular estadísticas
         promedio_diario = ingresos_diarios['cantidad'].mean()
@@ -1194,7 +1200,7 @@ class SPEModule:
         
         # Datos reales
         fig_diaria.add_trace(go.Bar(
-            x=ingresos_diarios[COLUMNAS['FECHA_INGRESO']],
+            x=ingresos_diarios['fecha'],
             y=ingresos_diarios['cantidad'],
             name='Ingresos Diarios'
         ))
@@ -1203,7 +1209,7 @@ class SPEModule:
         z = np.polyfit(range(len(ingresos_diarios)), ingresos_diarios['cantidad'], 1)
         p = np.poly1d(z)
         fig_diaria.add_trace(go.Scatter(
-            x=ingresos_diarios[COLUMNAS['FECHA_INGRESO']],
+            x=ingresos_diarios['fecha'],
             y=p(range(len(ingresos_diarios))),
             name='Tendencia',
             line=dict(color='red', dash='dash')
@@ -1223,18 +1229,20 @@ class SPEModule:
         datos_anio = data[data[COLUMNAS['FECHA_INGRESO']] >= fecha_anio]
         
         # Agrupar por semana
-        ingresos_semanales = datos_anio.groupby([
-            datos_anio[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().year,
-            datos_anio[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().week
-        ]).agg({
-            COLUMNAS['EXPEDIENTE']: 'count',
-            COLUMNAS['FECHA_INGRESO']: ['min', 'max']
-        }).reset_index()
-
-        # Renombrar columnas para facilitar acceso
+        ingresos_semanales = (
+            datos_anio.groupby([
+                datos_anio[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().year,
+                datos_anio[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().week
+            ])
+            .agg({
+                COLUMNAS['EXPEDIENTE']: 'count',
+                COLUMNAS['FECHA_INGRESO']: ['min', 'max']
+            })
+            .reset_index()
+        )
         ingresos_semanales.columns = ['año', 'semana', 'cantidad', 'fecha_min', 'fecha_max']
 
-        # Calcular promedio por día hábil para cada semana
+        # Calcular días hábiles y promedio diario
         ingresos_semanales['dias_habiles'] = ingresos_semanales.apply(
             lambda x: len(pd.bdate_range(x['fecha_min'], x['fecha_max'])),
             axis=1
@@ -1256,15 +1264,17 @@ class SPEModule:
         st.subheader("📊 Comparativa Mensual")
         
         # Agrupar por mes
-        ingresos_mensuales = datos_anio.groupby([
-            datos_anio[COLUMNAS['FECHA_INGRESO']].dt.year,
-            datos_anio[COLUMNAS['FECHA_INGRESO']].dt.month
-        ]).agg({
-            COLUMNAS['EXPEDIENTE']: 'count',
-            COLUMNAS['FECHA_INGRESO']: ['min', 'max']
-        }).reset_index()
-
-        # Renombrar columnas
+        ingresos_mensuales = (
+            datos_anio.groupby([
+                datos_anio[COLUMNAS['FECHA_INGRESO']].dt.year,
+                datos_anio[COLUMNAS['FECHA_INGRESO']].dt.month
+            ])
+            .agg({
+                COLUMNAS['EXPEDIENTE']: 'count',
+                COLUMNAS['FECHA_INGRESO']: ['min', 'max']
+            })
+            .reset_index()
+        )
         ingresos_mensuales.columns = ['año', 'mes', 'cantidad', 'fecha_min', 'fecha_max']
 
         # Calcular días hábiles y promedio diario

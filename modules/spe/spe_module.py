@@ -296,7 +296,7 @@ class SPEModule:
                             st.error(f"Error al guardar los datos: {str(e)}")
 
     def _get_last_date_from_db(self, collection):
-        """Obtener la ��ltima fecha registrada en la base de datos."""
+        """Obtener la última fecha registrada en la base de datos."""
         fecha_actual = pd.Timestamp.now(tz='America/Lima').date()
         
         # Buscar el último registro que NO sea del día actual
@@ -323,13 +323,16 @@ class SPEModule:
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
+        # Crear una copia de los datos para evitar modificar el original
+        df_trabajo = data.copy()
+
         # Limpiar datos innecesarios
-        data = data.drop(['Column 12', 'Column 13', 'Column 14', 'Column 15', 'Column 16', 'Column 17'], axis=1)
+        df_trabajo = df_trabajo.drop(['Column 12', 'Column 13', 'Column 14', 'Column 15', 'Column 16', 'Column 17'], axis=1)
 
         # Filtrar solo expedientes pendientes (INICIADA o en blanco)
-        data_filtrada = data[
-            data[COLUMNAS['ETAPA']].isin(["", "INICIADA"]) | 
-            data[COLUMNAS['ETAPA']].isna()
+        data_filtrada = df_trabajo[
+            df_trabajo[COLUMNAS['ETAPA']].isin(["", "INICIADA"]) | 
+            df_trabajo[COLUMNAS['ETAPA']].isna()
         ]
 
         # 1. TABLA DE EVALUADORES
@@ -1148,9 +1151,12 @@ class SPEModule:
         }
 
         try:
+            # Crear una copia de los datos para evitar modificar el original
+            df_trabajo = data.copy()
+            
             # Convertir fecha de ingreso a datetime
-            data[COLUMNAS['FECHA_INGRESO']] = pd.to_datetime(
-                data[COLUMNAS['FECHA_INGRESO']], 
+            df_trabajo[COLUMNAS['FECHA_INGRESO']] = pd.to_datetime(
+                df_trabajo[COLUMNAS['FECHA_INGRESO']], 
                 format='mixed',
                 dayfirst=True,
                 errors='coerce'
@@ -1165,17 +1171,14 @@ class SPEModule:
         st.subheader("📊 Ingresos Diarios (Últimos 30 días)")
         
         fecha_30_dias = fecha_actual - pd.Timedelta(days=30)
-        datos_30_dias = data[data[COLUMNAS['FECHA_INGRESO']] >= fecha_30_dias]
+        datos_30_dias = df_trabajo[df_trabajo[COLUMNAS['FECHA_INGRESO']] >= fecha_30_dias]
         
         # Agrupar por fecha y contar expedientes
         ingresos_diarios = (
             datos_30_dias.groupby(datos_30_dias[COLUMNAS['FECHA_INGRESO']].dt.date)
-            .agg({COLUMNAS['EXPEDIENTE']: 'count'})
-            .reset_index()
-            .rename(columns={
-                COLUMNAS['FECHA_INGRESO']: 'fecha',
-                COLUMNAS['EXPEDIENTE']: 'cantidad'
-            })
+            .size()
+            .reset_index(name='cantidad')
+            .rename(columns={COLUMNAS['FECHA_INGRESO']: 'fecha'})
         )
         
         # Calcular estadísticas

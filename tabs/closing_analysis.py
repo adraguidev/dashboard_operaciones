@@ -280,41 +280,5 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             file_name=f"top_25_demorados_{selected_range.lower().replace(' ', '_')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-        # Después de la tabla de distribución de tiempos
-        st.dataframe(distribucion_tiempos_df)
-        
-        # Agregar botón de descarga formateado
-        excel_data_distribucion = create_excel_download(
-            distribucion_tiempos_df,
-            "distribucion_tiempos_cierre.xlsx",
-            "Distribucion_Tiempos",
-            f"Distribución de Tiempos de Cierre - {selected_range}"
-        )
-        
-        st.download_button(
-            label="📥 Descargar Distribución de Tiempos",
-            data=excel_data_distribucion,
-            file_name=f"distribucion_tiempos_cierre_{selected_range.lower().replace(' ', '_')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        
-        # Después de la matriz de tiempos por evaluador
-        st.dataframe(matriz_tiempos_evaluador)
-        
-        # Agregar botón de descarga formateado
-        excel_data_matriz = create_excel_download(
-            matriz_tiempos_evaluador,
-            "matriz_tiempos_evaluador.xlsx",
-            "Matriz_Tiempos",
-            f"Matriz de Tiempos por Evaluador - {selected_range}"
-        )
-        
-        st.download_button(
-            label="📥 Descargar Matriz de Tiempos",
-            data=excel_data_matriz,
-            file_name=f"matriz_tiempos_evaluador_{selected_range.lower().replace(' ', '_')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
     except Exception as e:
         st.error(f"Error al procesar la pestaña de cierre de expedientes: {e}") 

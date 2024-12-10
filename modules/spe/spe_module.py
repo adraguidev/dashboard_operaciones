@@ -37,16 +37,17 @@ class SPEModule:
         'FECHA_TRABAJO': 'Fecha_Trabajo',
         'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
         'PROCESO': 'PROCESO',
-        'FECHA_INGRESO': 'FECHA_INGRESO',
         'BENEFICIARIO': 'NOMBRES_BENEFICIARIO'
     }
 
     def __init__(self):
         """Inicializar módulo SPE."""
         self.credentials = get_google_credentials()
-        # Inicializar variable para datos
         if 'spe_data' not in st.session_state:
             st.session_state.spe_data = None
+        
+        # Agregar FECHA_INGRESO al mapeo de columnas
+        self.COLUMNAS['FECHA_INGRESO'] = 'FECHA_INGRESO'
 
     def load_data(self):
         """Cargar datos desde Google Sheets."""

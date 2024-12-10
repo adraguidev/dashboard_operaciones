@@ -124,6 +124,13 @@ class SPEModule:
                 dayfirst=True,
                 errors='coerce'
             )
+            
+            # Guardar las fechas inválidas antes de eliminarlas
+            fechas_invalidas = data[
+                (data[COLUMNAS['FECHA_TRABAJO']].isna()) & 
+                (data[COLUMNAS['FECHA_TRABAJO']].astype(str) != '')
+            ]
+            
         except Exception as e:
             st.error(f"Error al procesar fechas: {str(e)}")
             return
@@ -135,10 +142,17 @@ class SPEModule:
         if ultima_fecha:
             st.info(f"📅 Último registro guardado: {ultima_fecha.strftime('%d/%m/%Y')}")
 
-        # Preparar datos para guardar
-        datos_nuevos = data[
+        # Preparar datos para guardar (fechas anteriores a hoy no guardadas)
+        datos_por_guardar = data[
             (data[COLUMNAS['FECHA_TRABAJO']].dt.date <= fecha_ayer) &
             (data[COLUMNAS['FECHA_TRABAJO']].dt.date > (ultima_fecha or datetime.min.date())) &
+            (data[COLUMNAS['EVALUADOR']].notna()) &
+            (data[COLUMNAS['EVALUADOR']] != '')
+        ].copy()
+
+        # Datos del día actual
+        datos_hoy = data[
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha_actual.date()) &
             (data[COLUMNAS['EVALUADOR']].notna()) &
             (data[COLUMNAS['EVALUADOR']] != '')
         ].copy()
@@ -173,6 +187,20 @@ class SPEModule:
                             df_pivot, on='EVALUADOR', how='outer'
                         )
 
+        # Agregar datos de hoy si existen
+        if not datos_hoy.empty:
+            datos_hoy_agrupados = datos_hoy.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
+            fecha_hoy_str = fecha_actual.strftime('%d/%m')
+            df_hoy = pd.DataFrame({
+                'EVALUADOR': datos_hoy_agrupados[COLUMNAS['EVALUADOR']].tolist(),
+                fecha_hoy_str: datos_hoy_agrupados['cantidad'].tolist()
+            })
+            
+            if df_historico.empty:
+                df_historico = df_hoy
+            else:
+                df_historico = df_historico.merge(df_hoy, on='EVALUADOR', how='outer')
+
         # Mostrar tabla de ranking
         if not df_historico.empty:
             df_historico = df_historico.fillna(0)
@@ -187,7 +215,16 @@ class SPEModule:
             df_historico = df_historico[cols_ordenadas]
             df_historico['Total'] = df_historico.iloc[:, 1:].sum(axis=1)
             df_historico = df_historico.sort_values('Total', ascending=False)
-            st.dataframe(df_historico)
+
+            # Aplicar estilo para resaltar la columna de hoy
+            fecha_hoy_str = fecha_actual.strftime('%d/%m')
+            def highlight_today(col):
+                return ['background-color: #90EE90' if col.name == fecha_hoy_str else '' for _ in range(len(col))]
+
+            st.dataframe(
+                df_historico.style.apply(highlight_today),
+                use_container_width=True
+            )
 
             # Agregar botón de descarga formateado
             excel_data_ranking = create_excel_download(
@@ -201,6 +238,35 @@ class SPEModule:
                 label="📥 Descargar Ranking",
                 data=excel_data_ranking,
                 file_name="ranking_expedientes.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+        # Mostrar reporte de fechas inválidas
+        if not fechas_invalidas.empty:
+            st.subheader("🚨 Reporte de Fechas Inválidas")
+            st.warning("Los siguientes registros tienen fechas mal escritas o en formato incorrecto:")
+            
+            # Preparar datos para mostrar
+            fechas_invalidas_display = fechas_invalidas[[
+                COLUMNAS['EXPEDIENTE'],
+                COLUMNAS['EVALUADOR'],
+                COLUMNAS['FECHA_TRABAJO']
+            ]].sort_values(COLUMNAS['EVALUADOR'])
+            
+            st.dataframe(fechas_invalidas_display, use_container_width=True)
+            
+            # Botón para descargar reporte de fechas inválidas
+            excel_data_invalidas = create_excel_download(
+                fechas_invalidas_display,
+                "fechas_invalidas.xlsx",
+                "Fechas_Invalidas",
+                "Reporte de Fechas Inválidas"
+            )
+            
+            st.download_button(
+                label="📥 Descargar Reporte de Fechas Inválidas",
+                data=excel_data_invalidas,
+                file_name="fechas_invalidas.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
@@ -221,10 +287,10 @@ class SPEModule:
                         st.error(f"Error al resetear la última fecha: {str(e)}")
 
         with col2:
-            if not datos_nuevos.empty:
+            if not datos_por_guardar.empty:
                 # Mostrar fechas disponibles para guardar
                 fechas_disponibles = sorted(
-                    datos_nuevos[COLUMNAS['FECHA_TRABAJO']].dt.date.unique()
+                    datos_por_guardar[COLUMNAS['FECHA_TRABAJO']].dt.date.unique()
                 )
                 
                 if fechas_disponibles:
@@ -239,8 +305,8 @@ class SPEModule:
                     if selected_dates and st.button("💾 Guardar datos seleccionados"):
                         try:
                             for fecha in selected_dates:
-                                datos_dia = datos_nuevos[
-                                    datos_nuevos[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha
+                                datos_dia = datos_por_guardar[
+                                    datos_por_guardar[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha
                                 ]
                                 datos_agrupados = datos_dia.groupby(COLUMNAS['EVALUADOR']).size().reset_index(name='cantidad')
                                 

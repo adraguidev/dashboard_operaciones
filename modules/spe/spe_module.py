@@ -612,23 +612,16 @@ class SPEModule:
             try:
                 data[COLUMNAS_DISPONIBLES[col]] = pd.to_datetime(
                     data[COLUMNAS_DISPONIBLES[col]], 
-                    format='mixed',  # Usar formato mixto para mayor flexibilidad
-                    dayfirst=True,   # Indicar que el día va primero
+                    format='mixed',
+                    dayfirst=True,
                     errors='coerce'
                 )
             except Exception as e:
                 st.error(f"Error al procesar fechas para columna {col}: {str(e)}")
                 return
 
-        # Crear columnas adicionales para fechas
-        for col in COLUMNAS_FECHA:
-            fecha_col = COLUMNAS_DISPONIBLES[col]
-            data[f'{col}_AÑO'] = data[fecha_col].dt.year
-            data[f'{col}_MES'] = data[fecha_col].dt.strftime('%B-%Y')  # Nombre del mes y año
-            data[f'{col}_DIA'] = data[fecha_col].dt.strftime('%d-%B-%Y')  # Día, mes y año
-
-        # Añadir sección de visualizaciones
-        st.subheader("Visualizaciones")
+        # Mostrar gráficos de análisis
+        st.subheader("Análisis General")
         
         col1, col2 = st.columns(2)
         
@@ -640,7 +633,6 @@ class SPEModule:
                 x=COLUMNAS_DISPONIBLES['EVALUADOR'],
                 y='cantidad',
                 title='Expedientes por Evaluador',
-                labels={'cantidad': 'Cantidad de Expedientes'},
                 text_auto=True
             )
             fig_evaluador.update_traces(textposition='outside')
@@ -658,7 +650,6 @@ class SPEModule:
             st.plotly_chart(fig_estado, use_container_width=True)
 
         # Gráfico de tendencia temporal
-        st.subheader("Tendencia Temporal")
         expedientes_por_fecha = data.groupby(COLUMNAS_DISPONIBLES['FECHA_INGRESO']).size().reset_index(name='cantidad')
         expedientes_por_fecha = expedientes_por_fecha.sort_values(COLUMNAS_DISPONIBLES['FECHA_INGRESO'])
         
@@ -666,31 +657,29 @@ class SPEModule:
             expedientes_por_fecha,
             x=COLUMNAS_DISPONIBLES['FECHA_INGRESO'],
             y='cantidad',
-            title='Tendencia de Expedientes a lo largo del tiempo',
-            labels={'cantidad': 'Cantidad de Expedientes'}
+            title='Tendencia de Expedientes a lo largo del tiempo'
         )
         st.plotly_chart(fig_tendencia, use_container_width=True)
 
         # Gráfico de proceso
-        st.subheader("Distribución por Proceso")
         expedientes_por_proceso = data.groupby(COLUMNAS_DISPONIBLES['PROCESO']).size().reset_index(name='cantidad')
-        expedientes_por_proceso = expedientes_por_proceso.sort_values('cantidad', ascending=True)
-        
         fig_proceso = px.bar(
             expedientes_por_proceso,
-            x='cantidad',
-            y=COLUMNAS_DISPONIBLES['PROCESO'],
-            orientation='h',
+            x=COLUMNAS_DISPONIBLES['PROCESO'],
+            y='cantidad',
             title='Expedientes por Proceso',
-            labels={'cantidad': 'Cantidad de Expedientes'},
             text_auto=True
         )
         fig_proceso.update_traces(textposition='outside')
         st.plotly_chart(fig_proceso, use_container_width=True)
 
-        # Mostrar la tabla interactiva después de los gráficos
-        st.subheader("Filtrado y Análisis Avanzado")
-        
+        # Crear columnas adicionales para fechas (para la tabla dinámica)
+        for col in COLUMNAS_FECHA:
+            fecha_col = COLUMNAS_DISPONIBLES[col]
+            data[f'{col}_AÑO'] = data[fecha_col].dt.year
+            data[f'{col}_MES'] = data[fecha_col].dt.strftime('%B-%Y')
+            data[f'{col}_DIA'] = data[fecha_col].dt.strftime('%d-%B-%Y')
+
         # Configuración de AgGrid
         gb = GridOptionsBuilder.from_dataframe(data)
 
@@ -742,6 +731,7 @@ class SPEModule:
         grid_options = gb.build()
 
         # Mostrar grid interactivo
+        st.subheader("Filtrado y Análisis Avanzado")
         AgGrid(
             data,
             grid_options,

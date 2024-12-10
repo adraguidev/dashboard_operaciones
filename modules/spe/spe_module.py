@@ -1144,7 +1144,7 @@ class SPEModule:
 
         COLUMNAS = {
             'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_INGRESO': 'FECHA _ INGRESO'
+            'FECHA_INGRESO': 'FECHA _ INGRESO'  # Notar el espacio en el nombre de la columna
         }
 
         try:
@@ -1168,7 +1168,7 @@ class SPEModule:
         datos_30_dias = data[data[COLUMNAS['FECHA_INGRESO']] >= fecha_30_dias]
         
         ingresos_diarios = datos_30_dias.groupby(
-            data[COLUMNAS['FECHA_INGRESO']].dt.date
+            datos_30_dias[COLUMNAS['FECHA_INGRESO']].dt.date
         ).size().reset_index(name='cantidad')
         
         # Calcular estadísticas
@@ -1194,7 +1194,7 @@ class SPEModule:
         
         # Datos reales
         fig_diaria.add_trace(go.Bar(
-            x=ingresos_diarios['FECHA_INGRESO'],
+            x=ingresos_diarios[COLUMNAS['FECHA_INGRESO']],
             y=ingresos_diarios['cantidad'],
             name='Ingresos Diarios'
         ))
@@ -1203,7 +1203,7 @@ class SPEModule:
         z = np.polyfit(range(len(ingresos_diarios)), ingresos_diarios['cantidad'], 1)
         p = np.poly1d(z)
         fig_diaria.add_trace(go.Scatter(
-            x=ingresos_diarios['FECHA_INGRESO'],
+            x=ingresos_diarios[COLUMNAS['FECHA_INGRESO']],
             y=p(range(len(ingresos_diarios))),
             name='Tendencia',
             line=dict(color='red', dash='dash')
@@ -1223,26 +1223,27 @@ class SPEModule:
         datos_anio = data[data[COLUMNAS['FECHA_INGRESO']] >= fecha_anio]
         
         # Agrupar por semana
-        ingresos_semanales = datos_anio.groupby(
-            [data[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().year,
-             data[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().week]
-        ).agg({
+        ingresos_semanales = datos_anio.groupby([
+            datos_anio[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().year,
+            datos_anio[COLUMNAS['FECHA_INGRESO']].dt.isocalendar().week
+        ]).agg({
             COLUMNAS['EXPEDIENTE']: 'count',
             COLUMNAS['FECHA_INGRESO']: ['min', 'max']
         }).reset_index()
 
-        # Calcular promedio por d��a hábil para cada semana
-        ingresos_semanales['dias_habiles'] = ingresos_semanales[COLUMNAS['FECHA_INGRESO']]['max'].apply(
-            lambda x: len(pd.bdate_range(
-                ingresos_semanales[COLUMNAS['FECHA_INGRESO']]['min'].iloc[0],
-                x
-            ))
+        # Renombrar columnas para facilitar acceso
+        ingresos_semanales.columns = ['año', 'semana', 'cantidad', 'fecha_min', 'fecha_max']
+
+        # Calcular promedio por día hábil para cada semana
+        ingresos_semanales['dias_habiles'] = ingresos_semanales.apply(
+            lambda x: len(pd.bdate_range(x['fecha_min'], x['fecha_max'])),
+            axis=1
         )
-        ingresos_semanales['promedio_diario'] = ingresos_semanales[COLUMNAS['EXPEDIENTE']]['count'] / ingresos_semanales['dias_habiles']
+        ingresos_semanales['promedio_diario'] = ingresos_semanales['cantidad'] / ingresos_semanales['dias_habiles']
 
         # Mostrar estadísticas semanales
-        promedio_semanal = ingresos_semanales[COLUMNAS['EXPEDIENTE']]['count'].mean()
-        tendencia_semanal = np.polyfit(range(len(ingresos_semanales)), ingresos_semanales[COLUMNAS['EXPEDIENTE']]['count'], 1)[0]
+        promedio_semanal = ingresos_semanales['cantidad'].mean()
+        tendencia_semanal = np.polyfit(range(len(ingresos_semanales)), ingresos_semanales['cantidad'], 1)[0]
         
         col1, col2 = st.columns(2)
         with col1:
@@ -1255,85 +1256,58 @@ class SPEModule:
         st.subheader("📊 Comparativa Mensual")
         
         # Agrupar por mes
-        ingresos_mensuales = datos_anio.groupby(
-            [data[COLUMNAS['FECHA_INGRESO']].dt.year,
-             data[COLUMNAS['FECHA_INGRESO']].dt.month]
-        ).agg({
+        ingresos_mensuales = datos_anio.groupby([
+            datos_anio[COLUMNAS['FECHA_INGRESO']].dt.year,
+            datos_anio[COLUMNAS['FECHA_INGRESO']].dt.month
+        ]).agg({
             COLUMNAS['EXPEDIENTE']: 'count',
             COLUMNAS['FECHA_INGRESO']: ['min', 'max']
         }).reset_index()
 
-        # Calcular promedio diario para comparación justa
-        ingresos_mensuales['dias_transcurridos'] = ingresos_mensuales[COLUMNAS['FECHA_INGRESO']]['max'].apply(
-            lambda x: len(pd.bdate_range(
-                ingresos_mensuales[COLUMNAS['FECHA_INGRESO']]['min'].iloc[0],
-                x
-            ))
-        )
-        ingresos_mensuales['promedio_diario'] = ingresos_mensuales[COLUMNAS['EXPEDIENTE']]['count'] / ingresos_mensuales['dias_transcurridos']
-        
-        # Proyección del mes actual
-        mes_actual = ingresos_mensuales.iloc[-1]
-        dias_habiles_mes = len(pd.bdate_range(
-            mes_actual[COLUMNAS['FECHA_INGRESO']]['min'],
-            pd.Timestamp(fecha_actual.year, fecha_actual.month + 1, 1) - pd.Timedelta(days=1)
-        ))
-        proyeccion_mes = mes_actual['promedio_diario'] * dias_habiles_mes
+        # Renombrar columnas
+        ingresos_mensuales.columns = ['año', 'mes', 'cantidad', 'fecha_min', 'fecha_max']
 
-        # Mostrar proyección
-        st.info(f"📈 Proyección para el mes actual: {proyeccion_mes:.0f} expedientes")
-        
+        # Calcular días hábiles y promedio diario
+        ingresos_mensuales['dias_habiles'] = ingresos_mensuales.apply(
+            lambda x: len(pd.bdate_range(x['fecha_min'], x['fecha_max'])),
+            axis=1
+        )
+        ingresos_mensuales['promedio_diario'] = ingresos_mensuales['cantidad'] / ingresos_mensuales['dias_habiles']
+
         # Análisis de estacionalidad
         meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-        ingresos_mensuales['mes_nombre'] = ingresos_mensuales[COLUMNAS['FECHA_INGRESO']].dt.month.map(
-            lambda x: meses[x-1]
-        )
-        
-        # Identificar meses con mayor y menor carga
-        meses_carga = ingresos_mensuales.groupby('mes_nombre')['promedio_diario'].mean().sort_values()
-        st.write("🔍 Análisis de Estacionalidad:")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("Meses con mayor carga:")
-            for mes in meses_carga.tail(3).index:
-                st.write(f"• {mes}")
-        with col2:
-            st.write("Meses con menor carga:")
-            for mes in meses_carga.head(3).index:
-                st.write(f"• {mes}")
+        ingresos_mensuales['mes_nombre'] = ingresos_mensuales['mes'].map(lambda x: meses[x-1])
 
-        # 4. PREDICCIONES
-        st.subheader("🔮 Predicciones")
-        
-        # Calcular tendencia y estacionalidad
-        decomposition = seasonal_decompose(
-            ingresos_mensuales['promedio_diario'],
-            period=12,
-            extrapolate_trend='freq'
-        )
-        
-        # Predicción para próximo mes
-        tendencia_valor = decomposition.trend.iloc[-1]
-        estacionalidad = decomposition.seasonal.iloc[-1]
-        prediccion_proximo_mes = (tendencia_valor + estacionalidad) * dias_habiles_mes
+        # Mostrar análisis mensual
+        st.write("📊 Resumen Mensual")
+        resumen_mensual = ingresos_mensuales[['mes_nombre', 'cantidad', 'promedio_diario']].copy()
+        resumen_mensual.columns = ['Mes', 'Total Expedientes', 'Promedio Diario']
+        st.dataframe(resumen_mensual.style.format({
+            'Total Expedientes': '{:.0f}',
+            'Promedio Diario': '{:.1f}'
+        }))
 
-        st.metric(
-            "Predicción próximo mes",
-            f"{prediccion_proximo_mes:.0f}",
-            f"{((prediccion_proximo_mes - proyeccion_mes) / proyeccion_mes * 100):.1f}%"
-        )
+        # Proyección mes actual
+        mes_actual = ingresos_mensuales.iloc[-1]
+        dias_habiles_totales = len(pd.bdate_range(
+            mes_actual['fecha_min'],
+            pd.Timestamp(fecha_actual.year, fecha_actual.month + 1, 1) - pd.Timedelta(days=1)
+        ))
+        proyeccion_mes = mes_actual['promedio_diario'] * dias_habiles_totales
+
+        st.info(f"📈 Proyección para el mes actual: {proyeccion_mes:.0f} expedientes")
 
         # Recomendaciones basadas en el análisis
         st.subheader("💡 Recomendaciones")
         
         recomendaciones = []
         if tendencia > 0:
-            recomendaciones.append("• La tendencia creciente sugiere preparar recursos adicionales.")
+            recomendaciones.append("• La tendencia de ingresos diarios es creciente. Se recomienda preparar recursos adicionales.")
         if max_diario > promedio_diario * 1.5:
-            recomendaciones.append("• Hay picos significativos de ingresos. Considerar buffer de capacidad.")
-        if tendencia_semanal < 0 and tendencia > 0:
-            recomendaciones.append("• Tendencia diaria y semanal difieren. Monitorear cambios de patrón.")
+            recomendaciones.append("• Se detectan picos significativos en los ingresos diarios. Considerar mantener un buffer de capacidad.")
+        if mes_actual['promedio_diario'] > promedio_diario:
+            recomendaciones.append("• El mes actual muestra un volumen superior al promedio. Evaluar necesidad de recursos adicionales.")
 
         for rec in recomendaciones:
             st.write(rec)

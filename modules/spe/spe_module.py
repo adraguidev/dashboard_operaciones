@@ -517,16 +517,16 @@ class SPEModule:
                 help="Comparación del promedio diario actual vs mes anterior"
             )
 
-        # Eficiencia por evaluador (días trabajados hasta la fecha)
+        # Eficiencia por evaluador (reemplazando el indicador anterior)
         with col2:
-            dias_habiles_anterior = stats_mes_anterior['DIAS_TRABAJADOS'].mean()
-            dias_transcurridos = (fecha_actual_sin_hora - fecha_actual.replace(day=1).date()).days + 1
-            dias_habiles_actual = min(dias_transcurridos, stats_mes_actual['DIAS_TRABAJADOS'].mean())
-            eficiencia_dias = (dias_habiles_actual / dias_habiles_anterior) * 100
+            promedio_evaluadores_anterior = stats_mes_anterior['PROMEDIO'].mean()
+            promedio_evaluadores_actual = stats_mes_actual['PROMEDIO'].mean()
+            var_eficiencia = ((promedio_evaluadores_actual / promedio_evaluadores_anterior) - 1) * 100
             st.metric(
-                "Días Trabajados",
-                f"{dias_habiles_actual:.1f} de {dias_transcurridos}",
-                help="Días trabajados en el mes actual"
+                "Eficiencia Promedio por Evaluador",
+                f"{promedio_evaluadores_actual:.1f}",
+                f"{var_eficiencia:+.1f}%",
+                help="Promedio de expedientes por día por evaluador"
             )
 
         # Productividad proporcional
@@ -583,6 +583,62 @@ class SPEModule:
         )
         fig_promedio.update_traces(textposition='outside')
         st.plotly_chart(fig_promedio, use_container_width=True)
+
+        # Agregar comparativo anual 2024
+        st.subheader("Comparativo Mensual 2024")
+        
+        # Preparar datos para todos los meses de 2024
+        meses_2024 = []
+        for mes in range(1, fecha_actual.month + 1):
+            fecha_mes = pd.Timestamp(2024, mes, 1)
+            stats_mes, nombre_mes = procesar_datos_mes(fecha_mes, data)
+            
+            meses_2024.append({
+                'Mes': nombre_mes,
+                'Total_Expedientes': stats_mes['CANT_EXPEDIENTES'].sum(),
+                'Promedio_Diario': stats_mes['PROMEDIO'].mean(),
+                'Cant_Evaluadores': len(stats_mes),
+                'Expedientes_Por_Evaluador': stats_mes['CANT_EXPEDIENTES'].mean()
+            })
+        
+        df_comparativo = pd.DataFrame(meses_2024)
+        
+        # Mostrar tabla comparativa
+        st.dataframe(df_comparativo, use_container_width=True)
+        
+        # Gráfico de tendencia mensual
+        fig_tendencia_mensual = go.Figure()
+        
+        # Expedientes totales
+        fig_tendencia_mensual.add_trace(go.Bar(
+            name='Total Expedientes',
+            x=df_comparativo['Mes'],
+            y=df_comparativo['Total_Expedientes'],
+            text=df_comparativo['Total_Expedientes'].round(0),
+            textposition='outside',
+            yaxis='y'
+        ))
+        
+        # Promedio diario
+        fig_tendencia_mensual.add_trace(go.Scatter(
+            name='Promedio Diario',
+            x=df_comparativo['Mes'],
+            y=df_comparativo['Promedio_Diario'],
+            text=df_comparativo['Promedio_Diario'].round(1),
+            textposition='top center',
+            mode='lines+markers+text',
+            yaxis='y2'
+        ))
+        
+        fig_tendencia_mensual.update_layout(
+            title='Evolución Mensual 2024',
+            yaxis=dict(title='Total Expedientes'),
+            yaxis2=dict(title='Promedio Diario', overlaying='y', side='right'),
+            barmode='group',
+            showlegend=True
+        )
+        
+        st.plotly_chart(fig_tendencia_mensual, use_container_width=True)
 
         # Botón de descarga con ambos reportes
         output = BytesIO()

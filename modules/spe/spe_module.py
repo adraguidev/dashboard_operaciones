@@ -17,6 +17,8 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import Ridge
+from statsmodels.nonparametric.smoothers_lowess import lowess
+from prophet import Prophet
 
 class SPEModule:
     SCOPES = [
@@ -820,63 +822,110 @@ class SPEModule:
         )
 
     def render_predictive_analysis(self, data):
-        """Análisis predictivo simplificado usando regresión lineal"""
-        st.header("Predicción de Ingresos")
+        """Renderizar análisis predictivo de ingresos usando ML y análisis estadístico avanzado."""
+        st.header("Análisis Predictivo de Ingresos 2024")
+
+        # Preparación inicial de datos
+        data['FECHA _ INGRESO'] = pd.to_datetime(data['FECHA _ INGRESO'], format='%d/%m/%Y', errors='coerce')
+        data = data.dropna(subset=['FECHA _ INGRESO'])
+        data = data[data['FECHA _ INGRESO'].dt.year == 2024]
+
+        # 1. Análisis Diario
+        st.subheader("Evolución Diaria")
+        ingresos_diarios = data.groupby('FECHA _ INGRESO').size().reset_index(name='cantidad')
         
-        # Preparar datos históricos con formato de fecha más flexible
-        try:
-            ingresos_diarios = data.groupby('FECHA _ INGRESO').size().reset_index(name='cantidad')
-            ingresos_diarios['FECHA _ INGRESO'] = pd.to_datetime(
-                ingresos_diarios['FECHA _ INGRESO'],
-                format='mixed',  # Usar formato mixto para mayor flexibilidad
-                dayfirst=True,   # Indicar que el día va primero
-                errors='coerce'
-            )
-            
-            # Eliminar filas con fechas inválidas
-            ingresos_diarios = ingresos_diarios.dropna(subset=['FECHA _ INGRESO'])
-            
-            if ingresos_diarios.empty:
-                st.error("No hay datos válidos para realizar la predicción")
-                return
-            
-        except Exception as e:
-            st.error(f"Error al procesar fechas: {str(e)}")
-            return
-        
-        # Crear modelo de regresión lineal
-        X = np.arange(len(ingresos_diarios)).reshape(-1, 1)
-        y = ingresos_diarios['cantidad'].values
-        model = LinearRegression()
-        model.fit(X, y)
-        
-        # Predicción para próximos 30 días
-        future_dates = pd.date_range(
-            start=ingresos_diarios['FECHA _ INGRESO'].max(),
-            periods=31,
-            freq='D'
+        # Aplicar LOESS para suavizado
+        x_diario = (ingresos_diarios['FECHA _ INGRESO'] - ingresos_diarios['FECHA _ INGRESO'].min()).dt.days
+        tendencia_diaria = lowess(
+            ingresos_diarios['cantidad'],
+            x_diario,
+            frac=0.3,
+            it=3,
+            return_sorted=False
         )
-        X_future = np.arange(len(ingresos_diarios) + 30).reshape(-1, 1)
-        predictions = model.predict(X_future)
-        
-        # Visualización
-        fig = go.Figure()
-        
-        # Datos históricos
-        fig.add_trace(go.Scatter(
+
+        fig_diario = go.Figure()
+        fig_diario.add_trace(go.Scatter(
             x=ingresos_diarios['FECHA _ INGRESO'],
             y=ingresos_diarios['cantidad'],
+            mode='markers+lines',
+            name='Ingresos Diarios'
+        ))
+        fig_diario.add_trace(go.Scatter(
+            x=ingresos_diarios['FECHA _ INGRESO'],
+            y=tendencia_diaria,
             mode='lines',
+            name='Tendencia'
+        ))
+        st.plotly_chart(fig_diario)
+
+        # 2. Análisis con Prophet
+        st.subheader("Predicción con Prophet")
+        df_prophet = pd.DataFrame({
+            'ds': ingresos_diarios['FECHA _ INGRESO'],
+            'y': ingresos_diarios['cantidad']
+        })
+
+        model = Prophet(
+            changepoint_prior_scale=0.5,
+            yearly_seasonality=False,
+            weekly_seasonality=True,
+            daily_seasonality=False
+        )
+        model.fit(df_prophet)
+
+        future = model.make_future_dataframe(periods=30)
+        forecast = model.predict(future)
+
+        fig_prophet = go.Figure()
+        fig_prophet.add_trace(go.Scatter(
+            x=df_prophet['ds'],
+            y=df_prophet['y'],
+            mode='markers',
             name='Datos Históricos'
         ))
-        
-        # Predicciones
-        fig.add_trace(go.Scatter(
-            x=future_dates,
-            y=predictions[-30:],
+        fig_prophet.add_trace(go.Scatter(
+            x=forecast['ds'],
+            y=forecast['yhat'],
             mode='lines',
-            name='Predicción',
-            line=dict(dash='dash')
+            name='Predicción'
         ))
+        fig_prophet.add_trace(go.Scatter(
+            x=forecast['ds'],
+            y=forecast['yhat_upper'],
+            fill=None,
+            mode='lines',
+            line=dict(color='rgba(0,0,0,0)'),
+            name='Intervalo Superior'
+        ))
+        fig_prophet.add_trace(go.Scatter(
+            x=forecast['ds'],
+            y=forecast['yhat_lower'],
+            fill='tonexty',
+            mode='lines',
+            line=dict(color='rgba(0,0,0,0)'),
+            name='Intervalo Inferior'
+        ))
+        st.plotly_chart(fig_prophet)
+
+        # 3. Análisis de Componentes
+        st.subheader("Análisis de Componentes")
+        fig_components = model.plot_components(forecast)
+        st.pyplot(fig_components)
+
+        # 4. Métricas y Estadísticas
+        st.subheader("Métricas Clave")
+        col1, col2, col3 = st.columns(3)
         
-        st.plotly_chart(fig)
+        with col1:
+            promedio = ingresos_diarios['cantidad'].mean()
+            st.metric("Promedio Diario", f"{promedio:.1f}")
+        
+        with col2:
+            tendencia = (ingresos_diarios['cantidad'].tail(7).mean() / 
+                        ingresos_diarios['cantidad'].head(7).mean() - 1) * 100
+            st.metric("Tendencia", f"{tendencia:.1f}%")
+        
+        with col3:
+            volatilidad = ingresos_diarios['cantidad'].std() / promedio * 100
+            st.metric("Volatilidad", f"{volatilidad:.1f}%")

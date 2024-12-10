@@ -319,7 +319,7 @@ class SPEModule:
             'EXPEDIENTE': 'EXPEDIENTE',
             'ETAPA': 'ETAPA_EVALUACIÓN',
             'ESTADO': 'ESTADO',
-            'FECHA_INGRESO': 'FECHA _ INGRESO',
+            'FECHA_INGRESO': 'FECHA_INGRESO',
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
@@ -805,7 +805,7 @@ class SPEModule:
             line=dict(color='red')
         ))
 
-        # Actualizar dise��o
+        # Actualizar diseño
         fig_tendencia_mensual.update_layout(
             title='Evolución Mensual del Trabajo Realizado 2024',
             yaxis=dict(
@@ -880,7 +880,7 @@ class SPEModule:
             'EXPEDIENTE': 'EXPEDIENTE',
             'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
             'PROCESO': 'PROCESO',
-            'FECHA_INGRESO': 'FECHA _ INGRESO',
+            'FECHA_INGRESO': 'FECHA_INGRESO',
             'EVALUADOR': 'EVALUADOR',
             'ETAPA': 'ETAPA_EVALUACIÓN',
             'ESTADO': 'ESTADO',
@@ -1145,7 +1145,7 @@ class SPEModule:
         # Mapeo de columnas con el nombre exacto
         COLUMNAS = {
             'EXPEDIENTE': 'EXPEDIENTE',
-            'FECHA_INGRESO': 'FECHA _ INGRESO'  # Nombre exacto con espacios
+            'FECHA_INGRESO': 'FECHA_INGRESO'  # Nombre exacto con espacios
         }
 
         try:

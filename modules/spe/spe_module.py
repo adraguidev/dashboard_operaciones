@@ -412,77 +412,75 @@ class SPEModule:
 
         # Procesar mes anterior
         stats_mes_anterior, nombre_mes_anterior = procesar_datos_mes(mes_anterior, data)
-        
-        # Mostrar tabla y gráfico mes anterior
+
+        # Mostrar tabla mes anterior
         st.subheader(f"Expedientes Trabajados - {nombre_mes_anterior} {mes_anterior.year}")
-        
-        # Tabla mes anterior
         st.dataframe(
             stats_mes_anterior,
             use_container_width=True,
             height=400
         )
-        
-        # Gráfico de barras mes anterior
-        fig_anterior = px.bar(
-            stats_mes_anterior,
-            x='EVALUADOR',
-            y='CANT_EXPEDIENTES',
-            title=f"Expedientes Trabajados - {nombre_mes_anterior} {mes_anterior.year}",
-            text='CANT_EXPEDIENTES',
-            labels={'CANT_EXPEDIENTES': 'Cantidad de Expedientes', 'EVALUADOR': 'Evaluador'}
+
+        # Gráfico de tendencia diaria mes anterior
+        datos_diarios_anterior = data[
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.month == mes_anterior.month) &
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.year == mes_anterior.year)
+        ].groupby(COLUMNAS['FECHA_TRABAJO']).size().reset_index(name='cantidad')
+
+        fig_tendencia_anterior = px.line(
+            datos_diarios_anterior,
+            x=COLUMNAS['FECHA_TRABAJO'],
+            y='cantidad',
+            title=f'Tendencia Diaria - {nombre_mes_anterior} {mes_anterior.year}',
+            labels={'cantidad': 'Expedientes Trabajados'}
         )
-        fig_anterior.update_traces(textposition='outside')
-        st.plotly_chart(fig_anterior, use_container_width=True)
-        
-        # Gráfico de promedio diario mes anterior
-        fig_promedio_anterior = px.bar(
-            stats_mes_anterior,
-            x='EVALUADOR',
-            y='PROMEDIO',
-            title=f"Promedio Diario - {nombre_mes_anterior} {mes_anterior.year}",
-            text='PROMEDIO',
-            labels={'PROMEDIO': 'Promedio Diario', 'EVALUADOR': 'Evaluador'}
-        )
-        fig_promedio_anterior.update_traces(textposition='outside')
-        st.plotly_chart(fig_promedio_anterior, use_container_width=True)
+        st.plotly_chart(fig_tendencia_anterior, use_container_width=True)
 
         # Procesar mes actual
         stats_mes_actual, nombre_mes_actual = procesar_datos_mes(fecha_actual, data)
 
-        # Mostrar tabla y gráfico mes actual
+        # Mostrar tabla mes actual
         st.subheader(f"Expedientes Trabajados - {nombre_mes_actual} {fecha_actual.year}")
-        
-        # Tabla mes actual
         st.dataframe(
             stats_mes_actual,
             use_container_width=True,
             height=400
         )
-        
-        # Gráfico de barras mes actual
-        fig_actual = px.bar(
-            stats_mes_actual,
-            x='EVALUADOR',
-            y='CANT_EXPEDIENTES',
-            title=f"Expedientes Trabajados - {nombre_mes_actual} {fecha_actual.year}",
-            text='CANT_EXPEDIENTES',
-            labels={'CANT_EXPEDIENTES': 'Cantidad de Expedientes', 'EVALUADOR': 'Evaluador'}
+
+        # Gráfico de tendencia diaria mes actual
+        datos_diarios_actual = data[
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.month == fecha_actual.month) &
+            (data[COLUMNAS['FECHA_TRABAJO']].dt.year == fecha_actual.year)
+        ].groupby(COLUMNAS['FECHA_TRABAJO']).size().reset_index(name='cantidad')
+
+        fig_tendencia_actual = px.line(
+            datos_diarios_actual,
+            x=COLUMNAS['FECHA_TRABAJO'],
+            y='cantidad',
+            title=f'Tendencia Diaria - {nombre_mes_actual} {fecha_actual.year}',
+            labels={'cantidad': 'Expedientes Trabajados'}
         )
-        fig_actual.update_traces(textposition='outside')
-        st.plotly_chart(fig_actual, use_container_width=True)
-        
-        # Gráfico de promedio diario mes actual
-        fig_promedio_actual = px.bar(
+        st.plotly_chart(fig_tendencia_actual, use_container_width=True)
+
+        # Gráfico de distribución por evaluador
+        fig_distribucion = px.pie(
             stats_mes_actual,
+            values='CANT_EXPEDIENTES',
+            names='EVALUADOR',
+            title=f'Distribución de Expedientes por Evaluador - {nombre_mes_actual}'
+        )
+        st.plotly_chart(fig_distribucion, use_container_width=True)
+
+        # Gráfico de promedio diario
+        fig_promedio = px.bar(
+            stats_mes_actual.sort_values('PROMEDIO', ascending=False),
             x='EVALUADOR',
             y='PROMEDIO',
-            title=f"Promedio Diario - {nombre_mes_actual} {fecha_actual.year}",
-            text='PROMEDIO',
-            labels={'PROMEDIO': 'Promedio Diario', 'EVALUADOR': 'Evaluador'}
+            title=f'Promedio Diario por Evaluador - {nombre_mes_actual}',
+            text='PROMEDIO'
         )
-        fig_promedio_actual.update_traces(textposition='outside')
-        st.plotly_chart(fig_promedio_actual, use_container_width=True)
+        fig_promedio.update_traces(textposition='outside')
+        st.plotly_chart(fig_promedio, use_container_width=True)
 
         # Comparativa entre meses
         st.subheader("Comparativa entre Meses")

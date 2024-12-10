@@ -29,7 +29,7 @@ class SPEModule:
     ]
 
     # Definir el mapeo de columnas como constante de clase
-    COLUMNAS = {
+    COLUMNAS_BASE = {
         'EVALUADOR': 'EVALUADOR',
         'EXPEDIENTE': 'EXPEDIENTE',
         'ETAPA': 'ETAPA_EVALUACIÓN',
@@ -46,9 +46,9 @@ class SPEModule:
         if 'spe_data' not in st.session_state:
             st.session_state.spe_data = None
         
-        # Agregar FECHA_INGRESO al mapeo de columnas solo si no existe
-        if 'FECHA_INGRESO' not in self.COLUMNAS:
-            self.COLUMNAS['FECHA_INGRESO'] = 'FECHA_INGRESO'
+        # Crear una copia del diccionario base y agregar FECHA_INGRESO
+        self.COLUMNAS = self.COLUMNAS_BASE.copy()
+        self.COLUMNAS['FECHA_INGRESO'] = 'FECHA_INGRESO'
 
     def load_data(self):
         """Cargar datos desde Google Sheets."""

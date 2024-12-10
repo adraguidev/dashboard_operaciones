@@ -227,92 +227,102 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                         key="fecha_fin_otros"
                     )
 
-            # Aplicar filtros
-            if selected_evaluator == 'TODOS LOS EVALUADORES':
-                filtered_data = data.copy()
-            else:
-                filtered_data = data[data['EVALASIGN'] == selected_evaluator]
-            
-            if selected_years:
-                filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
-            
-            if estado_eval == "Pendientes":
-                filtered_data = filtered_data[filtered_data['Evaluado'] == 'NO']
-            elif estado_eval == "Evaluados":
-                filtered_data = filtered_data[filtered_data['Evaluado'] == 'SI']
-            
-            if selected_estados:
-                filtered_data = filtered_data[filtered_data['ESTADO'].isin(selected_estados)]
-            
-            if selected_etapas:
-                filtered_data = filtered_data[filtered_data['UltimaEtapa'].isin(selected_etapas)]
-            
-            if fecha_inicio:
-                filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date >= fecha_inicio]
-            if fecha_fin:
-                filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date <= fecha_fin]
+            # Agregar botón de filtrado después de todos los filtros
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                filtrar = st.button("🔍 Aplicar Filtros", type="primary")
 
-            # Mostrar resumen
-            if not filtered_data.empty:
-                st.markdown("### 📊 Resumen")
-                total = len(filtered_data)
-                pendientes = len(filtered_data[filtered_data['Evaluado'] == 'NO'])
-                evaluados = total - pendientes
+            if filtrar:
+                # Aplicar filtros
+                if selected_evaluator == 'TODOS LOS EVALUADORES':
+                    filtered_data = data.copy()
+                else:
+                    filtered_data = data[data['EVALASIGN'] == selected_evaluator]
                 
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Expedientes", f"{total:,d}")
-                col2.metric("Pendientes", f"{pendientes:,d}")
-                col3.metric("Evaluados", f"{evaluados:,d}")
+                if selected_years:
+                    filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
+                
+                if estado_eval == "Pendientes":
+                    filtered_data = filtered_data[filtered_data['Evaluado'] == 'NO']
+                elif estado_eval == "Evaluados":
+                    filtered_data = filtered_data[filtered_data['Evaluado'] == 'SI']
+                
+                if selected_estados:
+                    filtered_data = filtered_data[filtered_data['ESTADO'].isin(selected_estados)]
+                
+                if selected_etapas:
+                    filtered_data = filtered_data[filtered_data['UltimaEtapa'].isin(selected_etapas)]
+                
+                if fecha_inicio:
+                    filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date >= fecha_inicio]
+                if fecha_fin:
+                    filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date <= fecha_fin]
 
-            # Mostrar datos filtrados
-            st.markdown("### 📋 Detalle de Expedientes")
-            
-            if not filtered_data.empty:
-                # Usar todas las columnas disponibles
-                display_data = filtered_data.copy()
-                
-                # Formatear fechas donde sea necesario
-                date_columns = display_data.select_dtypes(include=['datetime64']).columns
-                for col in date_columns:
-                    display_data[col] = display_data[col].dt.strftime('%d/%m/%Y')
-                
-                # Mostrar tabla con todas las columnas
-                st.dataframe(
-                    display_data,
-                    use_container_width=True
-                )
+                # Mostrar resumen solo si hay datos filtrados
+                if not filtered_data.empty:
+                    st.markdown("### 📊 Resumen")
+                    total = len(filtered_data)
+                    pendientes = len(filtered_data[filtered_data['Evaluado'] == 'NO'])
+                    evaluados = total - pendientes
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Total Expedientes", f"{total:,d}")
+                    col2.metric("Pendientes", f"{pendientes:,d}")
+                    col3.metric("Evaluados", f"{evaluados:,d}")
 
-                # Modificar la descarga para incluir todas las columnas
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    display_data.to_excel(writer, index=False, sheet_name='Reporte')
-                output.seek(0)
-                
-                filename_prefix = "reporte_todos" if selected_evaluator == 'TODOS LOS EVALUADORES' else f"reporte_{selected_evaluator.replace(' ', '_')}"
-                
-                st.download_button(
-                    label="📥 Descargar Reporte",
-                    data=output,
-                    file_name=f"{filename_prefix}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                    # Mostrar datos filtrados
+                    st.markdown("### 📋 Detalle de Expedientes")
+                    
+                    # Usar todas las columnas disponibles
+                    display_data = filtered_data.copy()
+                    
+                    # Formatear fechas donde sea necesario
+                    date_columns = display_data.select_dtypes(include=['datetime64']).columns
+                    for col in date_columns:
+                        display_data[col] = display_data[col].dt.strftime('%d/%m/%Y')
+                    
+                    # Mostrar tabla con todas las columnas
+                    st.dataframe(
+                        display_data,
+                        use_container_width=True
+                    )
 
-                # Modificar el reporte formateado para incluir todas las columnas
-                excel_data_evaluador = create_excel_download(
-                    display_data,
-                    f"{filename_prefix}_formateado.xlsx",
-                    "Reporte_Evaluador",
-                    f"Reporte de {'Todos los Evaluadores' if selected_evaluator == 'TODOS LOS EVALUADORES' else selected_evaluator}"
-                )
+                    # Botones de descarga
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Botón de descarga normal
+                        output = BytesIO()
+                        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                            display_data.to_excel(writer, index=False, sheet_name='Reporte')
+                        output.seek(0)
+                        
+                        filename_prefix = "reporte_todos" if selected_evaluator == 'TODOS LOS EVALUADORES' else f"reporte_{selected_evaluator.replace(' ', '_')}"
+                        
+                        st.download_button(
+                            label="📥 Descargar Reporte",
+                            data=output,
+                            file_name=f"{filename_prefix}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
 
-                st.download_button(
-                    label="📥 Descargar Reporte Formateado",
-                    data=excel_data_evaluador,
-                    file_name=f"{filename_prefix}_formateado.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            else:
-                st.info("No se encontraron expedientes con los filtros seleccionados")
+                    with col2:
+                        # Botón de descarga formateado
+                        excel_data_evaluador = create_excel_download(
+                            display_data,
+                            f"{filename_prefix}_formateado.xlsx",
+                            "Reporte_Evaluador",
+                            f"Reporte de {'Todos los Evaluadores' if selected_evaluator == 'TODOS LOS EVALUADORES' else selected_evaluator}"
+                        )
+
+                        st.download_button(
+                            label="📥 Descargar Reporte Formateado",
+                            data=excel_data_evaluador,
+                            file_name=f"{filename_prefix}_formateado.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                else:
+                    st.info("No se encontraron expedientes con los filtros seleccionados")
 
     except Exception as e:
         st.error(f"Error al procesar el reporte: {str(e)}")

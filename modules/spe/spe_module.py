@@ -413,24 +413,101 @@ class SPEModule:
         # Procesar mes anterior
         stats_mes_anterior, nombre_mes_anterior = procesar_datos_mes(mes_anterior, data)
         
-        # Mostrar tabla mes anterior
+        # Mostrar tabla y gráfico mes anterior
         st.subheader(f"Expedientes Trabajados - {nombre_mes_anterior} {mes_anterior.year}")
+        
+        # Tabla mes anterior
         st.dataframe(
             stats_mes_anterior,
             use_container_width=True,
             height=400
         )
+        
+        # Gráfico de barras mes anterior
+        fig_anterior = px.bar(
+            stats_mes_anterior,
+            x='EVALUADOR',
+            y='CANT_EXPEDIENTES',
+            title=f"Expedientes Trabajados - {nombre_mes_anterior} {mes_anterior.year}",
+            text='CANT_EXPEDIENTES',
+            labels={'CANT_EXPEDIENTES': 'Cantidad de Expedientes', 'EVALUADOR': 'Evaluador'}
+        )
+        fig_anterior.update_traces(textposition='outside')
+        st.plotly_chart(fig_anterior, use_container_width=True)
+        
+        # Gráfico de promedio diario mes anterior
+        fig_promedio_anterior = px.bar(
+            stats_mes_anterior,
+            x='EVALUADOR',
+            y='PROMEDIO',
+            title=f"Promedio Diario - {nombre_mes_anterior} {mes_anterior.year}",
+            text='PROMEDIO',
+            labels={'PROMEDIO': 'Promedio Diario', 'EVALUADOR': 'Evaluador'}
+        )
+        fig_promedio_anterior.update_traces(textposition='outside')
+        st.plotly_chart(fig_promedio_anterior, use_container_width=True)
 
         # Procesar mes actual
         stats_mes_actual, nombre_mes_actual = procesar_datos_mes(fecha_actual, data)
-        
-        # Mostrar tabla mes actual
+
+        # Mostrar tabla y gráfico mes actual
         st.subheader(f"Expedientes Trabajados - {nombre_mes_actual} {fecha_actual.year}")
+        
+        # Tabla mes actual
         st.dataframe(
             stats_mes_actual,
             use_container_width=True,
             height=400
         )
+        
+        # Gráfico de barras mes actual
+        fig_actual = px.bar(
+            stats_mes_actual,
+            x='EVALUADOR',
+            y='CANT_EXPEDIENTES',
+            title=f"Expedientes Trabajados - {nombre_mes_actual} {fecha_actual.year}",
+            text='CANT_EXPEDIENTES',
+            labels={'CANT_EXPEDIENTES': 'Cantidad de Expedientes', 'EVALUADOR': 'Evaluador'}
+        )
+        fig_actual.update_traces(textposition='outside')
+        st.plotly_chart(fig_actual, use_container_width=True)
+        
+        # Gráfico de promedio diario mes actual
+        fig_promedio_actual = px.bar(
+            stats_mes_actual,
+            x='EVALUADOR',
+            y='PROMEDIO',
+            title=f"Promedio Diario - {nombre_mes_actual} {fecha_actual.year}",
+            text='PROMEDIO',
+            labels={'PROMEDIO': 'Promedio Diario', 'EVALUADOR': 'Evaluador'}
+        )
+        fig_promedio_actual.update_traces(textposition='outside')
+        st.plotly_chart(fig_promedio_actual, use_container_width=True)
+
+        # Comparativa entre meses
+        st.subheader("Comparativa entre Meses")
+        
+        # Preparar datos para comparativa
+        comparativa = pd.merge(
+            stats_mes_anterior[['EVALUADOR', 'CANT_EXPEDIENTES']].rename(columns={'CANT_EXPEDIENTES': nombre_mes_anterior}),
+            stats_mes_actual[['EVALUADOR', 'CANT_EXPEDIENTES']].rename(columns={'CANT_EXPEDIENTES': nombre_mes_actual}),
+            on='EVALUADOR',
+            how='outer'
+        ).fillna(0)
+        
+        # Gráfico de comparativa
+        fig_comparativa = go.Figure(data=[
+            go.Bar(name=nombre_mes_anterior, x=comparativa['EVALUADOR'], y=comparativa[nombre_mes_anterior], text=comparativa[nombre_mes_anterior].astype(int)),
+            go.Bar(name=nombre_mes_actual, x=comparativa['EVALUADOR'], y=comparativa[nombre_mes_actual], text=comparativa[nombre_mes_actual].astype(int))
+        ])
+        
+        fig_comparativa.update_layout(
+            title=f"Comparativa {nombre_mes_anterior} vs {nombre_mes_actual}",
+            barmode='group',
+            yaxis_title="Cantidad de Expedientes"
+        )
+        fig_comparativa.update_traces(textposition='outside')
+        st.plotly_chart(fig_comparativa, use_container_width=True)
 
         # Botón de descarga con ambos reportes
         output = BytesIO()

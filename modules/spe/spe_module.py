@@ -313,13 +313,12 @@ class SPEModule:
         """Renderizar reporte de pendientes."""
         st.header("Reporte de Pendientes")
 
-        # Mapeo de nombres de columnas con los nombres reales del Google Sheet
+        # Mapeo de nombres de columnas
         COLUMNAS = {
             'EVALUADOR': 'EVALUADOR',
             'EXPEDIENTE': 'EXPEDIENTE',
             'ETAPA': 'ETAPA_EVALUACIÓN',
             'ESTADO': 'ESTADO',
-            'FECHA_INGRESO': 'FECHA_INGRESO',
             'FECHA_TRABAJO': 'Fecha_Trabajo'
         }
 
@@ -448,8 +447,8 @@ class SPEModule:
                 COLUMNAS['EVALUADOR'], 
                 COLUMNAS['ETAPA'],
                 COLUMNAS['ESTADO'],
-                COLUMNAS['FECHA_INGRESO']
-            ]].sort_values([COLUMNAS['EVALUADOR'], COLUMNAS['FECHA_INGRESO']])
+                COLUMNAS['FECHA_TRABAJO']
+            ]].sort_values([COLUMNAS['EVALUADOR'], COLUMNAS['FECHA_TRABAJO']])
             detalle.to_excel(writer, sheet_name='Detalle_Expedientes', index=False)
         output.seek(0)
 
@@ -1142,7 +1141,7 @@ class SPEModule:
         """Renderizar análisis predictivo."""
         st.header("Análisis de Ingresos")
 
-        # Mapeo de columnas con el nombre exacto
+        # Mapeo de columnas para análisis predictivo
         COLUMNAS = {
             'EXPEDIENTE': 'EXPEDIENTE',
             'FECHA_INGRESO': 'FECHA_INGRESO'

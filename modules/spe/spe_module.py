@@ -906,10 +906,20 @@ class SPEModule:
 
             # Filtros adicionales
             st.subheader("Filtros Adicionales")
-            filtros_cols = st.columns(3)
+            filtros_cols = st.columns(4)  # Cambiado a 4 columnas
             
-            # Filtro de Proceso
+            # Filtro de Evaluador (Nuevo)
             with filtros_cols[0]:
+                evaluadores = sorted(data[COLUMNAS_FILTRO['EVALUADOR']].dropna().unique())
+                evaluadores = ['TODOS LOS EVALUADORES'] + evaluadores  # Agregar opción TODOS
+                evaluadores_seleccionados = st.multiselect(
+                    "Evaluador",
+                    options=evaluadores,
+                    default=['TODOS LOS EVALUADORES']
+                )
+
+            # Filtro de Proceso
+            with filtros_cols[1]:
                 procesos = sorted(data[COLUMNAS_FILTRO['PROCESO']].dropna().unique())
                 procesos_seleccionados = st.multiselect(
                     "Proceso",
@@ -918,7 +928,7 @@ class SPEModule:
                 )
 
             # Filtro de Etapa
-            with filtros_cols[1]:
+            with filtros_cols[2]:
                 etapas = sorted(data[COLUMNAS_FILTRO['ETAPA']].dropna().unique())
                 etapas_seleccionadas = st.multiselect(
                     "Etapa",
@@ -927,7 +937,7 @@ class SPEModule:
                 )
 
             # Filtro de Estado
-            with filtros_cols[2]:
+            with filtros_cols[3]:
                 estados = sorted(data[COLUMNAS_FILTRO['ESTADO']].dropna().unique())
                 estados_seleccionados = st.multiselect(
                     "Estado",
@@ -948,6 +958,8 @@ class SPEModule:
             ]
 
             # Aplicar filtros adicionales
+            if evaluadores_seleccionados and 'TODOS LOS EVALUADORES' not in evaluadores_seleccionados:
+                data_filtrada = data_filtrada[data_filtrada[COLUMNAS_FILTRO['EVALUADOR']].isin(evaluadores_seleccionados)]
             if procesos_seleccionados:
                 data_filtrada = data_filtrada[data_filtrada[COLUMNAS_FILTRO['PROCESO']].isin(procesos_seleccionados)]
             if etapas_seleccionadas:

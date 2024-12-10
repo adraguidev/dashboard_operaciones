@@ -116,11 +116,10 @@ class SPEModule:
         fecha_actual = pd.Timestamp.now(tz='America/Lima')
         fecha_ayer = (fecha_actual - pd.Timedelta(days=1)).date()
 
-        # Convertir fecha de trabajo a datetime de manera más segura
+        # Convertir fecha de trabajo a datetime considerando timezone
         try:
-            # Primero limpiar valores no válidos
             data[COLUMNAS['FECHA_TRABAJO']] = pd.to_datetime(
-                data[COLUMNAS['FECHA_TRABAJO']].replace(['', 'NaT', 'NaN', 'nat'], pd.NaT), 
+                data[COLUMNAS['FECHA_TRABAJO']], 
                 format='mixed',
                 dayfirst=True,
                 errors='coerce'
@@ -128,9 +127,6 @@ class SPEModule:
         except Exception as e:
             st.error(f"Error al procesar fechas: {str(e)}")
             return
-
-        # Filtrar filas con fechas válidas antes de procesar
-        data = data[data[COLUMNAS['FECHA_TRABAJO']].notna()]
 
         # Obtener última fecha registrada
         ultima_fecha_db = self._get_last_date_from_db(collection)
@@ -171,40 +167,35 @@ class SPEModule:
 
         # Procesar datos nuevos del Google Sheets que aún no están en la BD
         datos_nuevos = data[
-            (data[COLUMNAS['FECHA_TRABAJO']].notna()) &  # Asegurar que la fecha es válida
+            (data[COLUMNAS['FECHA_TRABAJO']].notna()) &
             (data[COLUMNAS['EVALUADOR']].notna()) &
             (data[COLUMNAS['EVALUADOR']] != '')
         ].copy()
 
-        # Asegurar que las fechas son datetime antes de agrupar
-        if not datos_nuevos.empty:
-            try:
-                # Agrupar datos nuevos por fecha y evaluador
-                datos_nuevos_agrupados = datos_nuevos.groupby([
-                    datos_nuevos[COLUMNAS['FECHA_TRABAJO']].dt.date,
-                    COLUMNAS['EVALUADOR']
-                ]).size().reset_index(name='cantidad')
+        # Agrupar datos nuevos por fecha y evaluador
+        datos_nuevos_agrupados = datos_nuevos.groupby([
+            data[COLUMNAS['FECHA_TRABAJO']].dt.date,
+            COLUMNAS['EVALUADOR']
+        ]).size().reset_index(name='cantidad')
 
-                # Agregar datos nuevos al DataFrame histórico
-                for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].unique():
-                    if fecha not in fechas_guardadas and fecha <= fecha_ayer:
-                        fecha_str = pd.Timestamp(fecha).strftime('%d/%m')
-                        datos_fecha = datos_nuevos_agrupados[
-                            datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']] == fecha
-                        ]
-                        df_pivot = pd.DataFrame({
-                            'EVALUADOR': datos_fecha[COLUMNAS['EVALUADOR']].tolist(),
-                            fecha_str: datos_fecha['cantidad'].tolist()
-                        })
-                        
-                        if df_historico.empty:
-                            df_historico = df_pivot
-                        else:
-                            df_historico = df_historico.merge(
-                                df_pivot, on='EVALUADOR', how='outer'
-                            )
-            except Exception as e:
-                st.error(f"Error al procesar datos nuevos: {str(e)}")
+        # Agregar datos nuevos al DataFrame histórico
+        for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].dt.date.unique():
+            if fecha not in fechas_guardadas and fecha <= fecha_ayer:
+                fecha_str = fecha.strftime('%d/%m')
+                datos_fecha = datos_nuevos_agrupados[
+                    datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].dt.date == fecha
+                ]
+                df_pivot = pd.DataFrame({
+                    'EVALUADOR': datos_fecha[COLUMNAS['EVALUADOR']].tolist(),
+                    fecha_str: datos_fecha['cantidad'].tolist()
+                })
+                
+                if df_historico.empty:
+                    df_historico = df_pivot
+                else:
+                    df_historico = df_historico.merge(
+                        df_pivot, on='EVALUADOR', how='outer'
+                    )
 
         # Mostrar tabla de ranking
         if not df_historico.empty:
@@ -220,85 +211,34 @@ class SPEModule:
             df_historico = df_historico[cols_ordenadas]
             df_historico['Total'] = df_historico.iloc[:, 1:].sum(axis=1)
             df_historico = df_historico.sort_values('Total', ascending=False)
-
-            # Identificar columnas con datos no guardados
-            columnas_no_guardadas = []
-            for col in cols_fecha:
-                try:
-                    # Intentar convertir la fecha agregando el año actual
-                    fecha_col = pd.to_datetime(
-                        col + f"/{datetime.now().year}", 
-                        format="%d/%m/%Y",
-                        errors='coerce'
-                    )
-                    if fecha_col is not pd.NaT and fecha_col.date() not in fechas_guardadas:
-                        columnas_no_guardadas.append(col)
-                except Exception:
-                    # Si hay error en el formato, intentar otros formatos comunes
-                    try:
-                        # Limpiar el string de fecha
-                        fecha_str = col.strip().replace('_x', '')
-                        fecha_col = pd.to_datetime(
-                            fecha_str + f"/{datetime.now().year}",
-                            format="%d/%m/%Y",
-                            errors='coerce'
-                        )
-                        if fecha_col is not pd.NaT and fecha_col.date() not in fechas_guardadas:
-                            columnas_no_guardadas.append(col)
-                    except Exception as e:
-                        st.error(f"Error al procesar la fecha {col}: {str(e)}")
-                        continue
-
+            
             # Mostrar datos pendientes de guardar
-            fechas_pendientes = []
-            try:
-                fechas_pendientes = sorted(set(
-                    fecha for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].unique()
-                    if fecha not in fechas_guardadas and fecha <= fecha_ayer
-                ))
-            except Exception as e:
-                st.error(f"Error al procesar fechas pendientes: {str(e)}")
-
+            fechas_pendientes = sorted(set(
+                fecha for fecha in datos_nuevos_agrupados[COLUMNAS['FECHA_TRABAJO']].dt.date.unique()
+                if fecha not in fechas_guardadas and fecha <= fecha_ayer
+            ))
+            
             if fechas_pendientes:
                 st.warning("⚠️ Hay datos pendientes por guardar de las siguientes fechas:")
                 for fecha in fechas_pendientes:
-                    try:
-                        st.write(f"- {fecha.strftime('%d/%m/%Y')}")
-                    except Exception as e:
-                        st.error(f"Error al mostrar fecha pendiente: {str(e)}")
-                st.write("Las columnas resaltadas en amarillo contienen datos no guardados.")
+                    st.write(f"- {fecha.strftime('%d/%m/%Y')}")
 
-            # Aplicar estilo al DataFrame para resaltar columnas no guardadas
-            def highlight_cols(col):
-                if col in columnas_no_guardadas:
-                    return ['background-color: #ffeb3b'] * len(df_historico)
-                return [''] * len(df_historico)
+            st.dataframe(df_historico)
+
+            # Agregar botón de descarga formateado
+            excel_data_ranking = create_excel_download(
+                df_historico,
+                "ranking_expedientes.xlsx",
+                "Ranking_Expedientes",
+                "Ranking de Expedientes Trabajados"
+            )
             
-            try:
-                # Mostrar DataFrame con estilo
-                st.dataframe(
-                    df_historico.style.apply(highlight_cols, subset=columnas_no_guardadas),
-                    use_container_width=True
-                )
-            except Exception as e:
-                st.error(f"Error al mostrar tabla con estilos: {str(e)}")
-                # Mostrar DataFrame sin estilos como fallback
-                st.dataframe(df_historico, use_container_width=True)
-
-        # Agregar botón de descarga formateado
-        excel_data_ranking = create_excel_download(
-            df_historico,
-            "ranking_expedientes.xlsx",
-            "Ranking_Expedientes",
-            "Ranking de Expedientes Trabajados"
-        )
-        
-        st.download_button(
-            label="📥 Descargar Ranking",
-            data=excel_data_ranking,
-            file_name="ranking_expedientes.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+            st.download_button(
+                label="📥 Descargar Ranking",
+                data=excel_data_ranking,
+                file_name="ranking_expedientes.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
         # Botones de acción
         col1, col2 = st.columns(2)
@@ -1173,7 +1113,7 @@ class SPEModule:
 
                             # 3. Visualización gráfica (si aplica)
                             if len(columnas_filas) == 1 and len(columnas_columnas) == 1:
-                                st.write("Visualización Gr��fica")
+                                st.write("Visualización Gráfica")
                                 pivot_plot = pivot_table.drop('Total', axis=1).drop('Total')
                                 
                                 fig = px.bar(

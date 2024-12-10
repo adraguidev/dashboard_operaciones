@@ -844,13 +844,16 @@ class SPEModule:
                 st.error("No hay datos disponibles para mostrar")
                 return
 
-            # Mapeo de columnas
+            # Mapeo correcto de columnas del Google Sheet
             COLUMNAS = {
-                'EVALUADOR': 'EVALUADOR',
                 'EXPEDIENTE': 'EXPEDIENTE',
+                'FECHA_ASIGNACION': 'FECHA_ASIGNACION',
+                'PROCESO': 'PROCESO',
+                'FECHA_INGRESO': 'FECHA _ INGRESO',
+                'EVALUADOR': 'EVALUADOR',
                 'ETAPA': 'ETAPA_EVALUACIÓN',
                 'ESTADO': 'ESTADO',
-                'FECHA_INGRESO': 'FECHA _ INGRESO',
+                'OBSERVACION': 'OBSERVACIÓN',
                 'FECHA_TRABAJO': 'Fecha_Trabajo'
             }
 
@@ -867,13 +870,12 @@ class SPEModule:
                 )
 
             with col2:
-                # Selector de años
-                available_years = sorted(data['Anio'].unique(), reverse=True)
-                selected_years = st.multiselect(
-                    "Seleccionar Año(s)",
-                    options=available_years,
-                    default=[max(available_years)],
-                    help="Selecciona uno o varios años"
+                # Filtro por proceso
+                procesos = sorted(data[COLUMNAS['PROCESO']].dropna().unique())
+                selected_procesos = st.multiselect(
+                    "Proceso",
+                    options=procesos,
+                    help="Filtra por tipo de proceso"
                 )
 
             with col3:
@@ -893,20 +895,20 @@ class SPEModule:
                     # Filtro por etapa
                     etapas = sorted(data[COLUMNAS['ETAPA']].dropna().unique())
                     selected_etapas = st.multiselect(
-                        "Etapa",
+                        "Etapa de Evaluación",
                         options=etapas,
-                        help="Filtra por etapa del expediente"
+                        help="Filtra por etapa de evaluación"
                     )
                     
                 with col2:
-                    # Rango de fechas
+                    # Rango de fechas de trabajo
                     fecha_inicio = st.date_input(
-                        "Fecha Desde", 
+                        "Fecha de Trabajo Desde", 
                         value=None,
                         key="fecha_inicio"
                     )
                     fecha_fin = st.date_input(
-                        "Fecha Hasta", 
+                        "Fecha de Trabajo Hasta", 
                         value=None,
                         key="fecha_fin"
                     )
@@ -914,8 +916,8 @@ class SPEModule:
             # Aplicar filtros
             filtered_data = data[data[COLUMNAS['EVALUADOR']] == selected_evaluador]
             
-            if selected_years:
-                filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
+            if selected_procesos:
+                filtered_data = filtered_data[filtered_data[COLUMNAS['PROCESO']].isin(selected_procesos)]
             
             if selected_estados:
                 filtered_data = filtered_data[filtered_data[COLUMNAS['ESTADO']].isin(selected_estados)]
@@ -961,13 +963,17 @@ class SPEModule:
                 # Preparar datos para mostrar
                 display_data = filtered_data[[
                     COLUMNAS['EXPEDIENTE'],
+                    COLUMNAS['PROCESO'],
+                    COLUMNAS['FECHA_INGRESO'],
                     COLUMNAS['ESTADO'],
                     COLUMNAS['ETAPA'],
-                    COLUMNAS['FECHA_TRABAJO']
+                    COLUMNAS['FECHA_TRABAJO'],
+                    COLUMNAS['OBSERVACION']
                 ]].copy()
                 
                 # Formatear fechas
-                display_data[COLUMNAS['FECHA_TRABAJO']] = display_data[COLUMNAS['FECHA_TRABAJO']].dt.strftime('%d/%m/%Y')
+                for col in [COLUMNAS['FECHA_INGRESO'], COLUMNAS['FECHA_TRABAJO']]:
+                    display_data[col] = pd.to_datetime(display_data[col], format='mixed', dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y')
                 
                 # Mostrar tabla
                 st.dataframe(
@@ -975,9 +981,12 @@ class SPEModule:
                     use_container_width=True,
                     column_config={
                         COLUMNAS['EXPEDIENTE']: 'Expediente',
+                        COLUMNAS['PROCESO']: 'Proceso',
+                        COLUMNAS['FECHA_INGRESO']: 'Fecha de Ingreso',
                         COLUMNAS['ESTADO']: 'Estado',
                         COLUMNAS['ETAPA']: 'Etapa',
-                        COLUMNAS['FECHA_TRABAJO']: 'Fecha de Trabajo'
+                        COLUMNAS['FECHA_TRABAJO']: 'Fecha de Trabajo',
+                        COLUMNAS['OBSERVACION']: 'Observación'
                     }
                 )
 

@@ -24,7 +24,7 @@ def get_file_hash(file_path):
             
     return f"{hash_md5.hexdigest()}_{mod_time}"
 
-@st.cache_data(hash_funcs={str: get_file_hash})
+@st.cache_data(hash_funcs={str: get_file_hash}, max_entries=3)
 def load_consolidated_cached(module_name):
     """
     Cargar datos consolidados del módulo con caché basado en hash del archivo.
@@ -34,21 +34,21 @@ def load_consolidated_cached(module_name):
         file_path = find_consolidated_file(folder, module_name)
         
         if file_path:
-            # El hash del archivo se usa como parte de la clave de caché
-            file_hash = get_file_hash(file_path)
-            
-            data = pd.read_excel(
+            # Cargar datos en chunks para archivos grandes
+            chunks = []
+            for chunk in pd.read_excel(
                 file_path,
                 engine='openpyxl',
-                dtype_backend='pyarrow'
-            )
-            data = process_loaded_data(data)
+                dtype_backend='pyarrow',
+                chunksize=10000  # Procesar en bloques de 10,000 filas
+            ):
+                chunks.append(chunk)
             
-            # Agregar metadata sobre la carga
-            st.session_state[f'last_load_{module_name}'] = {
-                'timestamp': datetime.now(),
-                'file_hash': file_hash
-            }
+            data = pd.concat(chunks, ignore_index=True)
+            
+            # Optimizar tipos de datos inmediatamente
+            data = optimize_dtypes(data)
+            data = process_loaded_data(data)
             
             return data
             
@@ -123,3 +123,18 @@ def load_spe_data():
             st.error(f"Error al leer MATRIZ.xlsx: {str(e)}")
     
     return None 
+
+def optimize_dtypes(df):
+    """Optimiza los tipos de datos para reducir uso de memoria"""
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            # Convertir strings a categorías si tienen pocos valores únicos
+            if df[col].nunique() / len(df) < 0.5:  # menos del 50% son únicos
+                df[col] = df[col].astype('category')
+        elif df[col].dtype == 'float64':
+            # Reducir precisión de flotantes donde sea posible
+            df[col] = pd.to_numeric(df[col], downcast='float')
+        elif df[col].dtype == 'int64':
+            # Reducir tamaño de enteros donde sea posible
+            df[col] = pd.to_numeric(df[col], downcast='integer')
+    return df 

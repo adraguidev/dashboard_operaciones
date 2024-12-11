@@ -9,6 +9,9 @@ from tabs.assignment_report import render_assignment_report_tab
 import tabs.ranking_report as ranking_report
 from modules.spe.spe_module import SPEModule
 from src.utils.database import get_google_credentials
+import gc
+import psutil
+import os
 
 # Configuración de página
 st.set_page_config(
@@ -31,10 +34,22 @@ def get_data_loader():
         st.error(f"Error al inicializar DataLoader: {str(e)}")
         return None
 
+def check_memory_usage():
+    """Monitorea el uso de memoria"""
+    process = psutil.Process(os.getpid())
+    memory_usage = process.memory_info().rss / 1024 / 1024  # MB
+    if memory_usage > 1000:  # Si usa más de 1GB
+        gc.collect()  # Forzar recolección de basura
+        return True
+    return False
+
 def main():
     try:
         # Inicializar servicios con manejo de memoria
         with st.spinner('Cargando datos...'):
+            if check_memory_usage():
+                st.warning("Alto uso de memoria detectado. Optimizando...")
+            
             data_loader = get_data_loader()
             if data_loader is None:
                 st.error("No se pudo inicializar la conexión a la base de datos.")
@@ -99,6 +114,10 @@ def main():
                     selected_module, 
                     rankings_collection
                 )
+
+        # Monitorear memoria periódicamente
+        if check_memory_usage():
+            st.warning("Optimizando rendimiento...")
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

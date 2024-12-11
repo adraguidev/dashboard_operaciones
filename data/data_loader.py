@@ -3,23 +3,53 @@ import os
 from config.settings import MODULE_FOLDERS
 import streamlit as st
 from .data_processor import process_date_columns, validate_data_integrity
+import hashlib
+from datetime import datetime
 
-@st.cache_data(ttl=3600)
+def get_file_hash(file_path):
+    """
+    Obtiene el hash del archivo y su última fecha de modificación.
+    """
+    if not os.path.exists(file_path):
+        return None
+    
+    # Obtener timestamp de última modificación
+    mod_time = os.path.getmtime(file_path)
+    
+    # Calcular hash del archivo
+    hash_md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+            
+    return f"{hash_md5.hexdigest()}_{mod_time}"
+
+@st.cache_data(hash_funcs={str: get_file_hash})
 def load_consolidated_cached(module_name):
     """
-    Cargar datos consolidados del módulo con caché de Streamlit.
+    Cargar datos consolidados del módulo con caché basado en hash del archivo.
     """
     try:
         folder = MODULE_FOLDERS[module_name]
         file_path = find_consolidated_file(folder, module_name)
         
         if file_path:
+            # El hash del archivo se usa como parte de la clave de caché
+            file_hash = get_file_hash(file_path)
+            
             data = pd.read_excel(
                 file_path,
                 engine='openpyxl',
                 dtype_backend='pyarrow'
             )
             data = process_loaded_data(data)
+            
+            # Agregar metadata sobre la carga
+            st.session_state[f'last_load_{module_name}'] = {
+                'timestamp': datetime.now(),
+                'file_hash': file_hash
+            }
+            
             return data
             
         return None

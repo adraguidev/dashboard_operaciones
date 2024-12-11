@@ -4,7 +4,7 @@ from config.settings import MODULE_FOLDERS
 import streamlit as st
 from .data_processor import process_date_columns, validate_data_integrity
 
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_consolidated_cached(module_name):
     """
     Cargar datos consolidados del módulo con caché de Streamlit.
@@ -14,7 +14,11 @@ def load_consolidated_cached(module_name):
         file_path = find_consolidated_file(folder, module_name)
         
         if file_path:
-            data = pd.read_excel(file_path)
+            data = pd.read_excel(
+                file_path,
+                engine='openpyxl',
+                dtype_backend='pyarrow'
+            )
             data = process_loaded_data(data)
             return data
             
@@ -39,25 +43,26 @@ def process_loaded_data(data):
     """
     Procesar datos cargados aplicando transformaciones necesarias.
     """
-    # Procesar columnas de fecha
-    data = process_date_columns(data)
-    
-    # Convertir tipos de datos
-    if 'Anio' in data.columns:
-        data['Anio'] = data['Anio'].astype(int)
-    if 'Mes' in data.columns:
-        data['Mes'] = data['Mes'].astype(int)
-    
-    # Validar integridad
-    validation_results = validate_data_integrity(data)
-    
-    # Mostrar advertencias si hay problemas
-    if validation_results['missing_dates'] > 0:
-        st.warning(f"Hay {validation_results['missing_dates']} registros con fechas faltantes")
-    if validation_results['invalid_dates'] > 0:
-        st.warning(f"Hay {validation_results['invalid_dates']} registros con fechas inválidas")
-    
-    return data
+    with st.spinner('Procesando datos...'):
+        # Procesar columnas de fecha
+        data = process_date_columns(data)
+        
+        # Convertir tipos de datos
+        if 'Anio' in data.columns:
+            data['Anio'] = pd.to_numeric(data['Anio'], downcast='integer')
+        if 'Mes' in data.columns:
+            data['Mes'] = pd.to_numeric(data['Mes'], downcast='integer')
+        
+        # Validar integridad
+        validation_results = validate_data_integrity(data)
+        
+        # Mostrar advertencias si hay problemas
+        if validation_results['missing_dates'] > 0:
+            st.warning(f"Hay {validation_results['missing_dates']} registros con fechas faltantes")
+        if validation_results['invalid_dates'] > 0:
+            st.warning(f"Hay {validation_results['invalid_dates']} registros con fechas inválidas")
+        
+        return data
 
 def load_ccm_ley_data():
     """

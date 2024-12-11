@@ -18,14 +18,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, ttl=3600)
 def get_data_loader():
     """Inicializa y retorna una instancia cacheada del DataLoader."""
     try:
         loader = DataLoader()
-        # Verificar conexión a ambas bases de datos
-        loader.migraciones_db.command('ping')
-        loader.expedientes_db.command('ping')
+        # Agregar timeout a las verificaciones de conexión
+        loader.migraciones_db.command('ping', maxTimeMS=5000)
+        loader.expedientes_db.command('ping', maxTimeMS=5000)
         return loader
     except Exception as e:
         st.error(f"Error al inicializar DataLoader: {str(e)}")
@@ -33,11 +33,12 @@ def get_data_loader():
 
 def main():
     try:
-        # Inicializar servicios
-        data_loader = get_data_loader()
-        if data_loader is None:
-            st.error("No se pudo inicializar la conexión a la base de datos.")
-            return
+        # Inicializar servicios con manejo de memoria
+        with st.spinner('Cargando datos...'):
+            data_loader = get_data_loader()
+            if data_loader is None:
+                st.error("No se pudo inicializar la conexión a la base de datos.")
+                return
 
         # Obtener credenciales de Google
         try:
@@ -60,13 +61,15 @@ def main():
             if google_credentials is None:
                 st.error("No se pueden cargar datos de SPE sin credenciales de Google.")
                 return
-            spe = SPEModule()
-            spe.render_module()
+            with st.spinner('Cargando módulo SPE...'):
+                spe = SPEModule()
+                spe.render_module()
         else:
-            data = data_loader.load_module_data(selected_module)
-            if data is None:
-                st.error("No se encontraron datos para este módulo en la base de datos.")
-                return
+            with st.spinner('Cargando datos del módulo...'):
+                data = data_loader.load_module_data(selected_module)
+                if data is None:
+                    st.error("No se encontraron datos para este módulo en la base de datos.")
+                    return
 
             # Crear pestañas
             tabs = st.tabs([

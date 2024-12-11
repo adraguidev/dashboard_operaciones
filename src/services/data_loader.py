@@ -17,22 +17,29 @@ class DataLoader:
     def __init__(_self):
         """Inicializa las conexiones a MongoDB usando los secrets de Streamlit."""
         try:
-            _self.client = MongoClient(MONGODB_URI)
-            # Base de datos para datos consolidados
+            # Agregar timeout para la conexión inicial
+            _self.client = MongoClient(
+                MONGODB_URI,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=5000
+            )
             _self.migraciones_db = _self.client['migraciones_db']
-            # Base de datos para rankings
             _self.expedientes_db = _self.client['expedientes_db']
-            # Verificar conexiones
-            _self.migraciones_db.command('ping')
-            _self.expedientes_db.command('ping')
+            # Verificar conexiones con timeout
+            _self.migraciones_db.command('ping', maxTimeMS=5000)
+            _self.expedientes_db.command('ping', maxTimeMS=5000)
         except Exception as e:
             st.error(f"Error al conectar con MongoDB: {str(e)}")
             raise
 
-    @st.cache_data(ttl=3600)
+    @st.cache_data(ttl=3600, max_entries=100)
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
         """Carga datos consolidados desde migraciones_db."""
         try:
+            # Liberar memoria antes de cargar nuevos datos
+            import gc
+            gc.collect()
+
             # SPE usa Google Sheets
             if module_name == 'SPE':
                 return _self._load_spe_from_sheets()
@@ -59,13 +66,36 @@ class DataLoader:
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
-            # Obtener datos de migraciones_db
+            # Obtener datos de migraciones_db con timeout
             collection = _self.migraciones_db[collection_name]
-            cursor = collection.find({}, {'_id': 0})
-            data = pd.DataFrame(list(cursor))
+            cursor = collection.find(
+                {}, 
+                {'_id': 0},
+                maxTimeMS=30000  # 30 segundos timeout
+            )
+            
+            # Cargar datos en chunks para mejor manejo de memoria
+            chunk_size = 1000
+            chunks = []
+            while True:
+                try:
+                    chunk = list(cursor.limit(chunk_size).skip(len(chunks) * chunk_size))
+                    if not chunk:
+                        break
+                    chunks.append(pd.DataFrame(chunk))
+                except Exception as e:
+                    st.error(f"Error al cargar chunk de datos: {str(e)}")
+                    break
 
-            if data.empty:
+            if not chunks:
                 return None
+
+            data = pd.concat(chunks, ignore_index=True)
+            
+            # Optimizar tipos de datos para reducir uso de memoria
+            for col in data.select_dtypes(include=['object']).columns:
+                if data[col].nunique() / len(data) < 0.5:  # Si hay muchos valores repetidos
+                    data[col] = data[col].astype('category')
 
             # Convertir columnas de fecha - Modificado para manejar múltiples formatos
             date_columns = [

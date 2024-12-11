@@ -22,8 +22,12 @@ st.set_page_config(
 def get_data_loader():
     """Inicializa y retorna una instancia cacheada del DataLoader."""
     try:
+        # Liberar memoria antes de crear nueva instancia
+        import gc
+        gc.collect()
+        
         loader = DataLoader()
-        # Agregar timeout a las verificaciones de conexión
+        # Verificar conexiones con timeout
         loader.migraciones_db.command('ping', maxTimeMS=5000)
         loader.expedientes_db.command('ping', maxTimeMS=5000)
         return loader
@@ -33,6 +37,10 @@ def get_data_loader():
 
 def main():
     try:
+        # Configurar límite de memoria para streamlit
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024 * 2, -1))  # 2GB limit
+        
         # Inicializar servicios con manejo de memoria
         with st.spinner('Cargando datos...'):
             data_loader = get_data_loader()
@@ -66,9 +74,25 @@ def main():
                 spe.render_module()
         else:
             with st.spinner('Cargando datos del módulo...'):
-                data = data_loader.load_module_data(selected_module)
-                if data is None:
-                    st.error("No se encontraron datos para este módulo en la base de datos.")
+                try:
+                    # Limpiar caché si hay error previo
+                    if st.session_state.get('data_error'):
+                        st.cache_data.clear()
+                        st.session_state.data_error = False
+                    
+                    data = data_loader.load_module_data(selected_module)
+                    if data is None:
+                        st.error("No se encontraron datos para este módulo en la base de datos.")
+                        return
+                    
+                    # Verificar tamaño de datos
+                    data_size = data.memory_usage(deep=True).sum() / 1024**2  # MB
+                    if data_size > 500:  # Si datos superan 500MB
+                        st.warning(f"El conjunto de datos es grande ({data_size:.1f}MB). Puede afectar el rendimiento.")
+                
+                except Exception as e:
+                    st.session_state.data_error = True
+                    st.error(f"Error al cargar datos del módulo: {str(e)}")
                     return
 
             # Crear pestañas
@@ -102,7 +126,8 @@ def main():
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")
-        print(f"Error detallado: {str(e)}")
+        import traceback
+        st.error(f"Error detallado: {traceback.format_exc()}")
 
 if __name__ == "__main__":
     main()

@@ -23,7 +23,7 @@ def get_data_loader():
     """Inicializa y retorna una instancia cacheada del DataLoader."""
     try:
         loader = DataLoader()
-        # Verificar conexión con timeout
+        # Agregar timeout a las verificaciones de conexión
         loader.migraciones_db.command('ping', maxTimeMS=5000)
         loader.expedientes_db.command('ping', maxTimeMS=5000)
         return loader
@@ -33,93 +33,72 @@ def get_data_loader():
 
 def main():
     try:
-        # Inicializar servicios con manejo de memoria y errores mejorado
+        # Inicializar servicios con manejo de memoria
         with st.spinner('Cargando datos...'):
             data_loader = get_data_loader()
             if data_loader is None:
                 st.error("No se pudo inicializar la conexión a la base de datos.")
                 return
 
-        # Agregar manejo de errores para credenciales de Google
-        google_credentials = None
+        # Obtener credenciales de Google
         try:
             google_credentials = get_google_credentials()
         except Exception as e:
-            st.warning("No se pudieron obtener las credenciales de Google. SPE podría no funcionar correctamente.")
+            st.warning(f"No se pudieron obtener las credenciales de Google. SPE podría no funcionar correctamente.")
+            google_credentials = None
 
         st.title("Gestión de Expedientes")
 
-        # Selección de módulo con manejo de estado
+        # Selección de módulo (directamente, sin mostrar últimas actualizaciones)
         selected_module = st.sidebar.radio(
             "Selecciona un módulo",
             options=list(MODULES.keys()),
-            format_func=lambda x: MODULES[x],
-            key='module_selector'  # Agregar key para mejor manejo de estado
+            format_func=lambda x: MODULES[x]
         )
 
-        # Cargar datos con manejo de memoria y errores mejorado
+        # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':
             if google_credentials is None:
                 st.error("No se pueden cargar datos de SPE sin credenciales de Google.")
                 return
-            
-            try:
-                with st.spinner('Cargando módulo SPE...'):
-                    spe = SPEModule()
-                    spe.render_module()
-            except Exception as e:
-                st.error(f"Error al cargar módulo SPE: {str(e)}")
-                print(f"Error detallado SPE: {str(e)}")
-                return
+            with st.spinner('Cargando módulo SPE...'):
+                spe = SPEModule()
+                spe.render_module()
         else:
-            try:
-                with st.spinner(f'Cargando datos del módulo {selected_module}...'):
-                    data = data_loader.load_module_data(selected_module)
-                    if data is None:
-                        st.error(f"No se encontraron datos para el módulo {selected_module}.")
-                        return
+            with st.spinner('Cargando datos del módulo...'):
+                data = data_loader.load_module_data(selected_module)
+                if data is None:
+                    st.error("No se encontraron datos para este módulo en la base de datos.")
+                    return
 
-                    # Verificar integridad de datos críticos
-                    required_columns = ['NumeroTramite', 'FechaExpendiente', 'Evaluado']
-                    missing_columns = [col for col in required_columns if col not in data.columns]
-                    if missing_columns:
-                        st.error(f"Faltan columnas requeridas: {', '.join(missing_columns)}")
-                        return
+            # Crear pestañas
+            tabs = st.tabs([
+                "Reporte de pendientes",
+                "Ingreso de Expedientes",
+                "Cierre de Expedientes",
+                "Reporte por Evaluador",
+                "Reporte de Asignaciones",
+                "Ranking de Expedientes Trabajados"
+            ])
 
-                    # Renderizar pestañas con manejo de errores individual
-                    tabs = st.tabs([
-                        "Reporte de pendientes",
-                        "Ingreso de Expedientes",
-                        "Cierre de Expedientes",
-                        "Reporte por Evaluador",
-                        "Reporte de Asignaciones",
-                        "Ranking de Expedientes Trabajados"
-                    ])
-
-                    for i, (tab, render_func) in enumerate([
-                        (tabs[0], lambda: render_pending_reports_tab(data, selected_module)),
-                        (tabs[1], lambda: render_entry_analysis_tab(data)),
-                        (tabs[2], lambda: render_closing_analysis_tab(data)),
-                        (tabs[3], lambda: render_evaluator_report_tab(data)),
-                        (tabs[4], lambda: render_assignment_report_tab(data)),
-                        (tabs[5], lambda: ranking_report.render_ranking_report_tab(
-                            data, 
-                            selected_module, 
-                            data_loader.get_rankings_collection()
-                        ))
-                    ]):
-                        try:
-                            with tab:
-                                render_func()
-                        except Exception as e:
-                            with tab:
-                                st.error(f"Error al renderizar pestaña: {str(e)}")
-                                print(f"Error detallado en pestaña {i}: {str(e)}")
-
-            except Exception as e:
-                st.error(f"Error al procesar datos del módulo {selected_module}: {str(e)}")
-                print(f"Error detallado en procesamiento: {str(e)}")
-                return
+            # Renderizar cada pestaña
+            with tabs[0]:
+                render_pending_reports_tab(data, selected_module)
+            with tabs[1]:
+                render_entry_analysis_tab(data)
+            with tabs[2]:
+                render_closing_analysis_tab(data)
+            with tabs[3]:
+                render_evaluator_report_tab(data)
+            with tabs[4]:
+                render_assignment_report_tab(data)
+            with tabs[5]:
+                rankings_collection = data_loader.get_rankings_collection()
+                ranking_report.render_ranking_report_tab(
+                    data, 
+                    selected_module, 
+                    rankings_collection
+                )
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-@st.cache_resource(show_spinner=False, ttl=3600)
+@st.cache_resource(show_spinner=False)
 def get_data_loader():
     """Inicializa y retorna una instancia cacheada del DataLoader."""
     try:
@@ -29,24 +29,6 @@ def get_data_loader():
         return loader
     except Exception as e:
         st.error(f"Error al inicializar DataLoader: {str(e)}")
-        return None
-
-def load_module_data_chunked(data_loader, selected_module):
-    """Carga datos del módulo en chunks para mejor manejo de memoria"""
-    try:
-        data = data_loader.load_module_data(selected_module)
-        if data is not None:
-            # Optimizar tipos de datos inmediatamente
-            for col in data.select_dtypes(include=['object']).columns:
-                if data[col].nunique() / len(data) < 0.5:
-                    data[col] = data[col].astype('category')
-            for col in data.select_dtypes(include=['float64']).columns:
-                data[col] = data[col].astype('float32')
-            for col in data.select_dtypes(include=['int64']).columns:
-                data[col] = data[col].astype('int32')
-        return data
-    except Exception as e:
-        st.error(f"Error al cargar datos del módulo: {str(e)}")
         return None
 
 def main():
@@ -81,7 +63,7 @@ def main():
             spe = SPEModule()
             spe.render_module()
         else:
-            data = load_module_data_chunked(data_loader, selected_module)
+            data = data_loader.load_module_data(selected_module)
             if data is None:
                 st.error("No se encontraron datos para este módulo en la base de datos.")
                 return

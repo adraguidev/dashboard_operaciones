@@ -23,19 +23,6 @@ def load_consolidated_cached(module_name):
 
 def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings_collection):
     try:
-        # Filtrar datos inicialmente para reducir memoria
-        current_year = datetime.now().year
-        data = data[
-            (data['Anio'] >= current_year - 1) & 
-            (data['EVALASIGN'].notna()) & 
-            (data['EVALASIGN'] != '')
-        ].copy()
-        
-        # Convertir tipos de datos para optimizar memoria
-        data['EVALASIGN'] = data['EVALASIGN'].astype('category')
-        data['Anio'] = data['Anio'].astype('int32')
-        data['Mes'] = data['Mes'].astype('int32')
-        
         # Deshabilitar la pestaña para CCM-LEY y SOL
         if selected_module in ['CCM-LEY', 'SOL']:
             st.info(f"⚠️ El módulo de ranking no está disponible para {selected_module}")
@@ -241,7 +228,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                         ).size().reset_index(name='cantidad')
                         
                         save_rankings_to_db(selected_module, rankings_collection, datos_agrupados)
-                        st.success("✅ Datos guardados correctamente")
+                        st.success("��� Datos guardados correctamente")
                         st.rerun()
 
         # Sección de edición manual

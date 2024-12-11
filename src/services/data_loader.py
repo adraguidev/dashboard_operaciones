@@ -5,6 +5,10 @@ from pymongo import MongoClient
 import os
 from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS
 from dotenv import load_dotenv
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Cargar variables de entorno
 load_dotenv()
@@ -17,16 +21,42 @@ class DataLoader:
     def __init__(_self):
         """Inicializa las conexiones a MongoDB usando los secrets de Streamlit."""
         try:
-            _self.client = MongoClient(MONGODB_URI)
+            logger.info("Iniciando conexión a MongoDB...")
+            # Primero intentar obtener la URI desde secrets de Streamlit
+            try:
+                mongo_uri = st.secrets["connections"]["mongodb"]["uri"]
+            except:
+                # Si no está en secrets, usar variables de entorno
+                if not MONGODB_URI:
+                    raise ValueError("No se encontró la URI de MongoDB en secrets ni en variables de entorno")
+                mongo_uri = MONGODB_URI
+
+            _self.client = MongoClient(
+                mongo_uri,
+                connectTimeoutMS=30000,
+                socketTimeoutMS=None,
+                serverSelectionTimeoutMS=30000,
+                retryWrites=True,
+                retryReads=True
+            )
+            
             # Base de datos para datos consolidados
             _self.migraciones_db = _self.client['migraciones_db']
             # Base de datos para rankings
             _self.expedientes_db = _self.client['expedientes_db']
-            # Verificar conexiones
-            _self.migraciones_db.command('ping')
-            _self.expedientes_db.command('ping')
+            
+            # Verificar conexiones con timeout
+            _self.migraciones_db.command('ping', maxTimeMS=5000)
+            _self.expedientes_db.command('ping', maxTimeMS=5000)
+            
+            logger.info("Conexión exitosa a MongoDB")
         except Exception as e:
+            logger.error(f"Error detallado de conexión: {str(e)}")
             st.error(f"Error al conectar con MongoDB: {str(e)}")
+            st.info("Verificando configuración...")
+            st.info("1. ¿La URI de MongoDB está configurada correctamente?")
+            st.info("2. ¿Tu IP está en la lista blanca de MongoDB Atlas?")
+            st.info("3. ¿Las credenciales son correctas?")
             raise
 
     @st.cache_data(ttl=3600)

@@ -1,7 +1,6 @@
 [server]
 maxUploadSize = 200
 enableXsrfProtection = true
-enableCORS = false
 maxMessageSize = 200
 
 [browser]
@@ -9,10 +8,6 @@ gatherUsageStats = false
 
 [theme]
 base = "light"
-
-[runner]
-magicEnabled = false
-fastRerenderEnabled = false
 
 [client]
 showErrorDetails = true

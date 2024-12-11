@@ -9,6 +9,7 @@ from tabs.assignment_report import render_assignment_report_tab
 import tabs.ranking_report as ranking_report
 from modules.spe.spe_module import SPEModule
 from src.utils.database import get_google_credentials
+from config.logging_config import logger
 import gc
 import psutil
 import os
@@ -21,27 +22,36 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-@st.cache_resource(show_spinner=False, ttl=3600)
+@st.cache_resource(ttl=1800)  # 30 minutos
 def get_data_loader():
-    """Inicializa y retorna una instancia cacheada del DataLoader."""
+    """Inicializa el DataLoader con configuración para la nube"""
     try:
         loader = DataLoader()
-        # Agregar timeout a las verificaciones de conexión
-        loader.migraciones_db.command('ping', maxTimeMS=5000)
-        loader.expedientes_db.command('ping', maxTimeMS=5000)
+        # Timeouts más cortos para la nube
+        loader.migraciones_db.command('ping', maxTimeMS=3000)
+        loader.expedientes_db.command('ping', maxTimeMS=3000)
         return loader
     except Exception as e:
-        st.error(f"Error al inicializar DataLoader: {str(e)}")
+        logger.error(f"Error al inicializar DataLoader: {str(e)}")
         return None
 
 def check_memory_usage():
-    """Monitorea el uso de memoria"""
-    process = psutil.Process(os.getpid())
-    memory_usage = process.memory_info().rss / 1024 / 1024  # MB
-    if memory_usage > 1000:  # Si usa más de 1GB
-        gc.collect()  # Forzar recolección de basura
-        return True
-    return False
+    """Monitorea el uso de memoria de forma segura en la nube"""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_usage = process.memory_info().rss / 1024 / 1024  # MB
+        
+        # Log del uso de memoria
+        logger.info(f"Uso de memoria actual: {memory_usage:.2f} MB")
+        
+        if memory_usage > 800:  # Umbral más bajo para la nube
+            gc.collect()
+            logger.warning(f"Alto uso de memoria: {memory_usage:.2f} MB - Limpiando cache")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error al verificar memoria: {str(e)}")
+        return False
 
 def main():
     try:

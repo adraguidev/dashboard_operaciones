@@ -5,6 +5,8 @@ import streamlit as st
 from .data_processor import process_date_columns, validate_data_integrity
 import hashlib
 from datetime import datetime
+import gc
+from config.logging_config import logger
 
 def get_file_hash(file_path):
     """
@@ -24,7 +26,7 @@ def get_file_hash(file_path):
             
     return f"{hash_md5.hexdigest()}_{mod_time}"
 
-@st.cache_data(hash_funcs={str: get_file_hash}, max_entries=3)
+@st.cache_data(hash_funcs={str: get_file_hash}, ttl=1800, max_entries=2)
 def load_consolidated_cached(module_name):
     """
     Cargar datos consolidados del módulo con caché basado en hash del archivo.
@@ -34,27 +36,29 @@ def load_consolidated_cached(module_name):
         file_path = find_consolidated_file(folder, module_name)
         
         if file_path:
-            # Cargar datos en chunks para archivos grandes
+            # Chunks más pequeños para la nube
             chunks = []
             for chunk in pd.read_excel(
                 file_path,
                 engine='openpyxl',
                 dtype_backend='pyarrow',
-                chunksize=10000  # Procesar en bloques de 10,000 filas
+                chunksize=5000  # Reducido a 5000 filas por chunk
             ):
                 chunks.append(chunk)
+                # Forzar limpieza después de cada chunk
+                gc.collect()
             
             data = pd.concat(chunks, ignore_index=True)
-            
-            # Optimizar tipos de datos inmediatamente
             data = optimize_dtypes(data)
-            data = process_loaded_data(data)
+            
+            # Log del tamaño de datos
+            logger.info(f"Datos cargados para {module_name}: {len(data)} filas")
             
             return data
             
         return None
     except Exception as e:
-        st.error(f"Error al cargar datos del módulo {module_name}: {str(e)}")
+        logger.error(f"Error al cargar {module_name}: {str(e)}")
         return None
 
 def find_consolidated_file(folder, module_name):

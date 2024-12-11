@@ -30,3 +30,8 @@ python-dateutil>=2.8.2
 pytz>=2023.3
 pyarrow>=14.0.1
 fastparquet>=2023.8.0
+
+
+# Optimizaciones de rendimiento
+psutil>=5.9.0
+fastparquet>=2023.8.0

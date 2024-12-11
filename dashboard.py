@@ -9,10 +9,6 @@ from tabs.assignment_report import render_assignment_report_tab
 import tabs.ranking_report as ranking_report
 from modules.spe.spe_module import SPEModule
 from src.utils.database import get_google_credentials
-from config.logging_config import logger
-import gc
-import psutil
-import os
 
 # Configuración de página
 st.set_page_config(
@@ -22,44 +18,23 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-@st.cache_resource(ttl=1800)  # 30 minutos
+@st.cache_resource(show_spinner=False, ttl=3600)
 def get_data_loader():
-    """Inicializa el DataLoader con configuración para la nube"""
+    """Inicializa y retorna una instancia cacheada del DataLoader."""
     try:
         loader = DataLoader()
-        # Timeouts más cortos para la nube
-        loader.migraciones_db.command('ping', maxTimeMS=3000)
-        loader.expedientes_db.command('ping', maxTimeMS=3000)
+        # Agregar timeout a las verificaciones de conexión
+        loader.migraciones_db.command('ping', maxTimeMS=5000)
+        loader.expedientes_db.command('ping', maxTimeMS=5000)
         return loader
     except Exception as e:
-        logger.error(f"Error al inicializar DataLoader: {str(e)}")
+        st.error(f"Error al inicializar DataLoader: {str(e)}")
         return None
-
-def check_memory_usage():
-    """Monitorea el uso de memoria de forma segura en la nube"""
-    try:
-        process = psutil.Process(os.getpid())
-        memory_usage = process.memory_info().rss / 1024 / 1024  # MB
-        
-        # Log del uso de memoria
-        logger.info(f"Uso de memoria actual: {memory_usage:.2f} MB")
-        
-        if memory_usage > 800:  # Umbral más bajo para la nube
-            gc.collect()
-            logger.warning(f"Alto uso de memoria: {memory_usage:.2f} MB - Limpiando cache")
-            return True
-        return False
-    except Exception as e:
-        logger.error(f"Error al verificar memoria: {str(e)}")
-        return False
 
 def main():
     try:
         # Inicializar servicios con manejo de memoria
         with st.spinner('Cargando datos...'):
-            if check_memory_usage():
-                st.warning("Alto uso de memoria detectado. Optimizando...")
-            
             data_loader = get_data_loader()
             if data_loader is None:
                 st.error("No se pudo inicializar la conexión a la base de datos.")
@@ -124,10 +99,6 @@ def main():
                     selected_module, 
                     rankings_collection
                 )
-
-        # Monitorear memoria periódicamente
-        if check_memory_usage():
-            st.warning("Optimizando rendimiento...")
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

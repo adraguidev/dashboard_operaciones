@@ -3,62 +3,28 @@ import os
 from config.settings import MODULE_FOLDERS
 import streamlit as st
 from .data_processor import process_date_columns, validate_data_integrity
-import hashlib
-from datetime import datetime
-import gc
-from config.logging_config import logger
 
-def get_file_hash(file_path):
-    """
-    Obtiene el hash del archivo y su última fecha de modificación.
-    """
-    if not os.path.exists(file_path):
-        return None
-    
-    # Obtener timestamp de última modificación
-    mod_time = os.path.getmtime(file_path)
-    
-    # Calcular hash del archivo
-    hash_md5 = hashlib.md5()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-            
-    return f"{hash_md5.hexdigest()}_{mod_time}"
-
-@st.cache_data(hash_funcs={str: get_file_hash}, ttl=1800, max_entries=2)
+@st.cache_data(ttl=3600)
 def load_consolidated_cached(module_name):
     """
-    Cargar datos consolidados del módulo con caché basado en hash del archivo.
+    Cargar datos consolidados del módulo con caché de Streamlit.
     """
     try:
         folder = MODULE_FOLDERS[module_name]
         file_path = find_consolidated_file(folder, module_name)
         
         if file_path:
-            # Chunks más pequeños para la nube
-            chunks = []
-            for chunk in pd.read_excel(
+            data = pd.read_excel(
                 file_path,
                 engine='openpyxl',
-                dtype_backend='pyarrow',
-                chunksize=5000  # Reducido a 5000 filas por chunk
-            ):
-                chunks.append(chunk)
-                # Forzar limpieza después de cada chunk
-                gc.collect()
-            
-            data = pd.concat(chunks, ignore_index=True)
-            data = optimize_dtypes(data)
-            
-            # Log del tamaño de datos
-            logger.info(f"Datos cargados para {module_name}: {len(data)} filas")
-            
+                dtype_backend='pyarrow'
+            )
+            data = process_loaded_data(data)
             return data
             
         return None
     except Exception as e:
-        logger.error(f"Error al cargar {module_name}: {str(e)}")
+        st.error(f"Error al cargar datos del módulo {module_name}: {str(e)}")
         return None
 
 def find_consolidated_file(folder, module_name):
@@ -127,18 +93,3 @@ def load_spe_data():
             st.error(f"Error al leer MATRIZ.xlsx: {str(e)}")
     
     return None 
-
-def optimize_dtypes(df):
-    """Optimiza los tipos de datos para reducir uso de memoria"""
-    for col in df.columns:
-        if df[col].dtype == 'object':
-            # Convertir strings a categorías si tienen pocos valores únicos
-            if df[col].nunique() / len(df) < 0.5:  # menos del 50% son únicos
-                df[col] = df[col].astype('category')
-        elif df[col].dtype == 'float64':
-            # Reducir precisión de flotantes donde sea posible
-            df[col] = pd.to_numeric(df[col], downcast='float')
-        elif df[col].dtype == 'int64':
-            # Reducir tamaño de enteros donde sea posible
-            df[col] = pd.to_numeric(df[col], downcast='integer')
-    return df 

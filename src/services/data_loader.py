@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 from datetime import datetime
-from pymongo import MongoClient, ReadPreference
+from pymongo import MongoClient
 import os
 from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS
 
@@ -9,26 +9,14 @@ class DataLoader:
     def __init__(_self):
         """Inicializa las conexiones a MongoDB usando los secrets de Streamlit."""
         try:
-            # Configurar cliente con timeouts y pooling
-            _self.client = MongoClient(
-                st.secrets["connections"]["mongodb"]["uri"],
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=5000,
-                maxPoolSize=10,
-                waitQueueTimeoutMS=5000,
-                retryWrites=True
-            )
-            
-            # Verificar conexiones con timeout
-            _self.migraciones_db = _self.client.get_database(
-                'migraciones_db',
-                read_preference=ReadPreference.SECONDARY_PREFERRED
-            )
-            _self.expedientes_db = _self.client.get_database(
-                'expedientes_db',
-                read_preference=ReadPreference.SECONDARY_PREFERRED
-            )
-            
+            _self.client = MongoClient(st.secrets["connections"]["mongodb"]["uri"])
+            # Base de datos para datos consolidados
+            _self.migraciones_db = _self.client['migraciones_db']
+            # Base de datos para rankings
+            _self.expedientes_db = _self.client['expedientes_db']
+            # Verificar conexiones
+            _self.migraciones_db.command('ping')
+            _self.expedientes_db.command('ping')
         except Exception as e:
             st.error(f"Error al conectar con MongoDB: {str(e)}")
             raise

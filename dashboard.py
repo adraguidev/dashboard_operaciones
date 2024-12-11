@@ -22,12 +22,8 @@ st.set_page_config(
 def get_data_loader():
     """Inicializa y retorna una instancia cacheada del DataLoader."""
     try:
-        # Liberar memoria antes de crear nueva instancia
-        import gc
-        gc.collect()
-        
         loader = DataLoader()
-        # Verificar conexiones con timeout
+        # Agregar timeout a las verificaciones de conexión
         loader.migraciones_db.command('ping', maxTimeMS=5000)
         loader.expedientes_db.command('ping', maxTimeMS=5000)
         return loader
@@ -37,23 +33,6 @@ def get_data_loader():
 
 def main():
     try:
-        # Configurar límites de memoria
-        import resource
-        import psutil
-        
-        # Limitar memoria virtual a 2GB
-        resource.setrlimit(resource.RLIMIT_AS, (2 * 1024 * 1024 * 1024, -1))
-        
-        # Configurar proceso actual
-        process = psutil.Process()
-        if hasattr(process, 'nice'):
-            process.nice(10)  # Prioridad más baja
-        
-        # Configurar opciones de pandas
-        import pandas as pd
-        pd.options.mode.chunksize = 1000
-        pd.options.mode.use_inf_as_na = True
-        
         # Inicializar servicios con manejo de memoria
         with st.spinner('Cargando datos...'):
             data_loader = get_data_loader()
@@ -87,38 +66,9 @@ def main():
                 spe.render_module()
         else:
             with st.spinner('Cargando datos del módulo...'):
-                try:
-                    # Limpiar caché si hay error previo
-                    if st.session_state.get('data_error'):
-                        st.cache_data.clear()
-                        st.session_state.data_error = False
-                    
-                    # Monitorear memoria antes de cargar
-                    mem_before = process.memory_info().rss / 1024 / 1024
-                    
-                    data = data_loader.load_module_data(selected_module)
-                    if data is None:
-                        st.error("No se encontraron datos para este módulo en la base de datos.")
-                        return
-                    
-                    # Monitorear uso de memoria
-                    mem_after = process.memory_info().rss / 1024 / 1024
-                    mem_used = mem_after - mem_before
-                    
-                    if mem_used > 500:  # Si usa más de 500MB
-                        st.warning(f"Alto uso de memoria: {mem_used:.1f}MB")
-                        
-                    # Verificar tamaño de datos
-                    data_size = data.memory_usage(deep=True).sum() / 1024**2
-                    if data_size > 500:
-                        st.warning(f"Conjunto de datos grande: {data_size:.1f}MB")
-                        
-                except MemoryError:
-                    st.error("Error de memoria. Intente cerrar otras aplicaciones y recargar.")
-                    return
-                except Exception as e:
-                    st.session_state.data_error = True
-                    st.error(f"Error al cargar datos: {str(e)}")
+                data = data_loader.load_module_data(selected_module)
+                if data is None:
+                    st.error("No se encontraron datos para este módulo en la base de datos.")
                     return
 
             # Crear pestañas
@@ -152,8 +102,7 @@ def main():
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")
-        import traceback
-        st.error(f"Error detallado: {traceback.format_exc()}")
+        print(f"Error detallado: {str(e)}")
 
 if __name__ == "__main__":
     main()

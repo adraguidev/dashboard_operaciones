@@ -7,36 +7,56 @@ def render_evaluator_report_tab(data: pd.DataFrame):
     try:
         st.header("👨‍💼 Reporte por Evaluador")
         
+        # Configuración de paginación
+        items_per_page = 1000
+        total_items = len(data)
+        num_pages = (total_items + items_per_page - 1) // items_per_page
+        
+        # Selector de página
+        current_page = st.number_input(
+            "Página",
+            min_value=1,
+            max_value=max(1, num_pages),
+            value=1
+        )
+        
+        # Calcular índices de inicio y fin
+        start_idx = (current_page - 1) * items_per_page
+        end_idx = min(start_idx + items_per_page, total_items)
+        
+        # Obtener subset de datos para la página actual
+        page_data = data.iloc[start_idx:end_idx]
+        
         # Validar datos de manera más eficiente
-        if data is None or len(data) == 0:  # Usar len en lugar de .empty
+        if page_data is None or len(page_data) == 0:  # Usar len en lugar de .empty
             st.error("No hay datos disponibles para mostrar")
             return
 
         # Optimizar la carga inicial de datos
-        data = data.copy()  # Crear una copia única al inicio
+        page_data = page_data.copy()  # Crear una copia única al inicio
         
         # Convertir fechas una sola vez al inicio
         date_columns = ['FechaExpendiente', 'FechaPre', 'FechaEtapaAprobacionMasivaFin']
         for col in date_columns:
-            if col in data.columns:
+            if col in page_data.columns:
                 try:
-                    if data[col].dtype != 'datetime64[ns]':
-                        data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
+                    if page_data[col].dtype != 'datetime64[ns]':
+                        page_data[col] = pd.to_datetime(page_data[col], format='%d/%m/%Y', errors='coerce')
                 except Exception:
                     pass
 
         # Limpiar y preparar la columna EVALASIGN una sola vez
-        if 'EVALASIGN' in data.columns:
-            data['EVALASIGN'] = data['EVALASIGN'].fillna('').astype(str)
-            evaluators = sorted(data[data['EVALASIGN'].str.strip() != '']['EVALASIGN'].unique())
+        if 'EVALASIGN' in page_data.columns:
+            page_data['EVALASIGN'] = page_data['EVALASIGN'].fillna('').astype(str)
+            evaluators = sorted(page_data[page_data['EVALASIGN'].str.strip() != '']['EVALASIGN'].unique())
             evaluators = ['TODOS LOS EVALUADORES'] + evaluators
         
         # Verificar si es módulo SOL de manera más precisa
         is_sol_module = (
-            'EstadoTramite' in data.columns and 
-            'Pre_Concluido' in data.columns and
-            'FechaEtapaAprobacionMasivaFin' in data.columns and
-            'ESTADO' not in data.columns  # Asegurarnos que es SOL y no otro módulo
+            'EstadoTramite' in page_data.columns and 
+            'Pre_Concluido' in page_data.columns and
+            'FechaEtapaAprobacionMasivaFin' in page_data.columns and
+            'ESTADO' not in page_data.columns  # Asegurarnos que es SOL y no otro módulo
         )
 
         if is_sol_module:
@@ -45,7 +65,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             
             with col1:
                 # Selector de años
-                available_years = sorted(data['Anio'].unique(), reverse=True)
+                available_years = sorted(page_data['Anio'].unique(), reverse=True)
                 selected_years = st.multiselect(
                     "Seleccionar Año(s)",
                     options=available_years,
@@ -55,7 +75,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
 
             with col2:
                 # Selector de dependencias
-                dependencias = sorted(data['Dependencia'].unique())
+                dependencias = sorted(page_data['Dependencia'].unique())
                 selected_dependencias = st.multiselect(
                     "Seleccionar Dependencia(s)",
                     options=dependencias,
@@ -68,7 +88,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 
                 with col1:
                     # Filtro por última etapa
-                    etapas = sorted(data['UltimaEtapa'].dropna().unique())
+                    etapas = sorted(page_data['UltimaEtapa'].dropna().unique())
                     selected_etapas = st.multiselect(
                         "Última Etapa",
                         options=etapas,
@@ -76,7 +96,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     )
                     
                     # Filtro por estado de trámite
-                    estados = sorted(data['EstadoTramite'].dropna().unique())
+                    estados = sorted(page_data['EstadoTramite'].dropna().unique())
                     selected_estados = st.multiselect(
                         "Estado del Trámite",
                         options=estados,
@@ -97,7 +117,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     )
 
             # Aplicar filtros para SOL
-            filtered_data = data.copy()
+            filtered_data = page_data.copy()
             
             if selected_years:
                 filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
@@ -174,13 +194,13 @@ def render_evaluator_report_tab(data: pd.DataFrame):
 
         else:
             # Asegurar que EVALASIGN existe antes de continuar
-            if 'EVALASIGN' not in data.columns:
+            if 'EVALASIGN' not in page_data.columns:
                 st.error("No se encontró la columna de evaluadores")
                 return
 
             # Modificación para incluir "TODOS LOS EVALUADORES"
-            data['EVALASIGN'] = data['EVALASIGN'].fillna('')
-            evaluators = sorted(data[data['EVALASIGN'] != '']['EVALASIGN'].unique())
+            page_data['EVALASIGN'] = page_data['EVALASIGN'].fillna('')
+            evaluators = sorted(page_data[page_data['EVALASIGN'] != '']['EVALASIGN'].unique())
             evaluators = ['TODOS LOS EVALUADORES'] + evaluators
             
             # Selección de evaluador
@@ -195,7 +215,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             
             with col1:
                 # Selector de años
-                available_years = sorted(data['Anio'].unique(), reverse=True)
+                available_years = sorted(page_data['Anio'].unique(), reverse=True)
                 selected_years = st.multiselect(
                     "Seleccionar Año(s)",
                     options=available_years,
@@ -214,7 +234,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
 
             with col3:
                 # Filtro por estado del expediente
-                estados_unicos = sorted(data['ESTADO'].dropna().unique())
+                estados_unicos = sorted(page_data['ESTADO'].dropna().unique())
                 selected_estados = st.multiselect(
                     "Estado del Expediente",
                     options=estados_unicos,
@@ -227,7 +247,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 
                 with col1:
                     # Filtro por última etapa
-                    etapas = sorted(data['UltimaEtapa'].dropna().unique())
+                    etapas = sorted(page_data['UltimaEtapa'].dropna().unique())
                     selected_etapas = st.multiselect(
                         "Última Etapa",
                         options=etapas,
@@ -284,7 +304,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             # Usar la función cacheada para el filtrado
             if filtrar:
                 filtered_data = filter_data(
-                    data,
+                    page_data,
                     selected_evaluator,
                     selected_years,
                     selected_estados,

@@ -51,65 +51,53 @@ class DataLoader:
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
-            # Obtener datos de migraciones_db
-            collection = _self.migraciones_db[collection_name]
-            cursor = collection.find({}, {'_id': 0})
-            data = pd.DataFrame(list(cursor))
-
-            if data.empty:
-                return None
-
-            # Convertir columnas de fecha - Modificado para manejar múltiples formatos
-            date_columns = [
-                'FechaExpendiente', 'FechaEtapaAprobacionMasivaFin', 
-                'FechaPre', 'FechaTramite', 'FechaAsignacion',
-                'FECHA DE TRABAJO'
+            # Optimizar la consulta inicial para reducir el uso de memoria
+            pipeline = [
+                {
+                    "$project": {
+                        "_id": 0,
+                        "NumeroTramite": 1,
+                        "EVALASIGN": 1,
+                        "Anio": 1,
+                        "Mes": 1,
+                        "FechaExpendiente": 1,
+                        "FECHA DE TRABAJO": 1,
+                        "Evaluado": 1
+                    }
+                }
             ]
             
-            for col in date_columns:
-                if col in data.columns:
-                    try:
-                        # Primero intentar con formato específico dd/mm/yyyy
-                        data[col] = pd.to_datetime(
-                            data[col], 
-                            format='%d/%m/%Y',
-                            errors='coerce'
-                        )
-                    except:
-                        try:
-                            # Si falla, intentar con dayfirst=True para formatos variados
-                            data[col] = pd.to_datetime(
-                                data[col], 
-                                dayfirst=True,
-                                errors='coerce'
-                            )
-                        except:
-                            pass
-
-                    # Si hay valores nulos, intentar otros formatos comunes
-                    if data[col].isna().any():
-                        mask = data[col].isna()
-                        try:
-                            # Intentar formato yyyy-mm-dd
-                            temp_dates = pd.to_datetime(
-                                data.loc[mask, col],
-                                format='%Y-%m-%d',
-                                errors='coerce'
-                            )
-                            data.loc[mask, col] = temp_dates
-                        except:
-                            pass
-
-                    # Asegurar que no tiene timezone
-                    if data[col].dtype == 'datetime64[ns]' and data[col].dt.tz is not None:
-                        data[col] = data[col].dt.tz_localize(None)
-
-            # Procesar datos específicos del módulo
-            if module_name == 'CCM-LEY':
-                data = _self._process_ccm_ley_data(data)
+            # Usar cursor para procesar en chunks
+            cursor = _self.migraciones_db[collection_name].aggregate(pipeline, allowDiskUse=True)
+            
+            chunks = []
+            chunk_size = 10000
+            current_chunk = []
+            
+            for doc in cursor:
+                current_chunk.append(doc)
+                if len(current_chunk) >= chunk_size:
+                    chunks.append(pd.DataFrame(current_chunk))
+                    current_chunk = []
+            
+            if current_chunk:
+                chunks.append(pd.DataFrame(current_chunk))
+            
+            if not chunks:
+                return None
+            
+            data = pd.concat(chunks, ignore_index=True)
+            
+            # Optimizar tipos de datos inmediatamente
+            if 'Anio' in data.columns:
+                data['Anio'] = pd.to_numeric(data['Anio'], downcast='integer')
+            if 'Mes' in data.columns:
+                data['Mes'] = pd.to_numeric(data['Mes'], downcast='integer')
+            if 'EVALASIGN' in data.columns:
+                data['EVALASIGN'] = data['EVALASIGN'].astype('category')
             
             return data
-
+            
         except Exception as e:
             st.error(f"Error al cargar datos: {str(e)}")
             return None

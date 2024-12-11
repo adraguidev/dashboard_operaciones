@@ -23,18 +23,33 @@ def load_consolidated_cached(module_name):
 
 def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings_collection):
     try:
-        # Filtrar datos inicialmente para reducir memoria
-        current_year = datetime.now().year
+        # Configuración de paginación
+        ITEMS_PER_PAGE = 1000
+        
+        # Filtrar datos inicialmente
         data = data[
-            (data['Anio'] >= current_year - 1) & 
             (data['EVALASIGN'].notna()) & 
             (data['EVALASIGN'] != '')
         ].copy()
         
-        # Convertir tipos de datos para optimizar memoria
-        data['EVALASIGN'] = data['EVALASIGN'].astype('category')
-        data['Anio'] = data['Anio'].astype('int32')
-        data['Mes'] = data['Mes'].astype('int32')
+        # Calcular número total de páginas
+        total_items = len(data)
+        total_pages = (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
+        
+        # Selector de página
+        page_number = st.number_input(
+            "Página",
+            min_value=1,
+            max_value=max(1, total_pages),
+            value=1
+        )
+        
+        # Calcular índices de la página actual
+        start_idx = (page_number - 1) * ITEMS_PER_PAGE
+        end_idx = min(start_idx + ITEMS_PER_PAGE, total_items)
+        
+        # Obtener datos de la página actual
+        current_page_data = data.iloc[start_idx:end_idx]
         
         # Deshabilitar la pestaña para CCM-LEY y SOL
         if selected_module in ['CCM-LEY', 'SOL']:
@@ -46,7 +61,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         # Verificar que estamos usando la colección correcta
         st.write(f"Usando colección: {rankings_collection.database.name}.{rankings_collection.name}")
         
-        if data is None or data.empty:
+        if current_page_data is None or current_page_data.empty:
             st.error("No hay datos disponibles para mostrar")
             return
 
@@ -58,11 +73,11 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             
             if ccm_data is not None and ccm_esp_data is not None:
                 # Filtrar CCM-LEY: registros de CCM que no están en CCM-ESP
-                data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
+                current_page_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
                 
                 # Verificar si existe la columna TipoTramite y filtrar
-                if 'TipoTramite' in data.columns:
-                    data = data[data['TipoTramite'] == 'LEY'].copy()
+                if 'TipoTramite' in current_page_data.columns:
+                    current_page_data = current_page_data[current_page_data['TipoTramite'] == 'LEY'].copy()
             else:
                 st.error("No se pudieron cargar los datos necesarios para CCM-LEY")
                 return
@@ -74,9 +89,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             st.info(f"📅 Último registro guardado: {ultima_fecha_registrada.strftime('%d/%m/%Y')}")
         
         # Preparar datos actuales
-        data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
+        current_page_data['FECHA DE TRABAJO'] = pd.to_datetime(current_page_data['FECHA DE TRABAJO'], errors='coerce')
         # Eliminar filas con fechas nulas
-        data = data.dropna(subset=['FECHA DE TRABAJO'])
+        current_page_data = current_page_data.dropna(subset=['FECHA DE TRABAJO'])
         
         fecha_actual = datetime.now().date()
         fecha_ayer = fecha_actual - timedelta(days=1)
@@ -90,12 +105,12 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         )
         
         # Preparar datos nuevos solo para mostrar en el selector de guardado
-        datos_nuevos = data[
-            (data['FECHA DE TRABAJO'].dt.date >= fecha_inicio) &
-            (data['FECHA DE TRABAJO'].dt.date <= fecha_ayer) &
-            (data['EVALASIGN'].notna()) &  # Filtrar registros con evaluador
-            (data['EVALASIGN'] != '') &
-            (data['EVALASIGN'].str.strip() != '')
+        datos_nuevos = current_page_data[
+            (current_page_data['FECHA DE TRABAJO'].dt.date >= fecha_inicio) &
+            (current_page_data['FECHA DE TRABAJO'].dt.date <= fecha_ayer) &
+            (current_page_data['EVALASIGN'].notna()) &  # Filtrar registros con evaluador
+            (current_page_data['EVALASIGN'] != '') &
+            (current_page_data['EVALASIGN'].str.strip() != '')
         ].copy()
 
         # Crear matriz de ranking solo con datos históricos
@@ -378,9 +393,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         st.markdown("---")
         st.subheader("🔍 Detalle de Expedientes por Evaluador")
 
-        if not data.empty:
+        if not current_page_data.empty:
             # Obtener lista de evaluadores únicos
-            evaluadores = sorted(data['EVALASIGN'].unique())
+            evaluadores = sorted(current_page_data['EVALASIGN'].unique())
             
             # Crear selectores en dos columnas
             col1, col2 = st.columns(2)
@@ -394,9 +409,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             
             with col2:
                 # Obtener fechas disponibles para el evaluador seleccionado
-                fechas_disponibles = data[
-                    (data['EVALASIGN'] == evaluador_seleccionado) &
-                    (data['FECHA DE TRABAJO'].notna())  # Asegurar que la fecha no sea nula
+                fechas_disponibles = current_page_data[
+                    (current_page_data['EVALASIGN'] == evaluador_seleccionado) &
+                    (current_page_data['FECHA DE TRABAJO'].notna())  # Asegurar que la fecha no sea nula
                 ]['FECHA DE TRABAJO'].dt.date.unique()
                 
                 # Filtrar fechas válidas
@@ -416,9 +431,9 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             
             # Mostrar detalle del día seleccionado
             if evaluador_seleccionado and fecha_seleccionada:
-                expedientes = data[
-                    (data['EVALASIGN'] == evaluador_seleccionado) &
-                    (data['FECHA DE TRABAJO'].dt.date == fecha_seleccionada)
+                expedientes = current_page_data[
+                    (current_page_data['EVALASIGN'] == evaluador_seleccionado) &
+                    (current_page_data['FECHA DE TRABAJO'].dt.date == fecha_seleccionada)
                 ].copy()
                 
                 if not expedientes.empty:
@@ -566,10 +581,10 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
         st.subheader("⚠ Inconsistencias Detectadas")
 
         # Filtrar expedientes sin evaluador
-        expedientes_sin_evaluador = data[
-            (data['EVALASIGN'].isna()) | 
-            (data['EVALASIGN'] == '') | 
-            (data['EVALASIGN'].str.strip() == '')
+        expedientes_sin_evaluador = current_page_data[
+            (current_page_data['EVALASIGN'].isna()) | 
+            (current_page_data['EVALASIGN'] == '') | 
+            (current_page_data['EVALASIGN'].str.strip() == '')
         ].copy()
 
         if not expedientes_sin_evaluador.empty:

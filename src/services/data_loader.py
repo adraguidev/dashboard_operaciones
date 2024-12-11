@@ -51,53 +51,52 @@ class DataLoader:
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
-            # Optimizar la consulta inicial para reducir el uso de memoria
-            pipeline = [
-                {
-                    "$project": {
-                        "_id": 0,
-                        "NumeroTramite": 1,
-                        "EVALASIGN": 1,
-                        "Anio": 1,
-                        "Mes": 1,
-                        "FechaExpendiente": 1,
-                        "FECHA DE TRABAJO": 1,
-                        "Evaluado": 1
-                    }
-                }
-            ]
-            
-            # Usar cursor para procesar en chunks
-            cursor = _self.migraciones_db[collection_name].aggregate(pipeline, allowDiskUse=True)
-            
+            # Optimizar la consulta para cargar solo los campos necesarios
+            needed_fields = {
+                "_id": 0,
+                "NumeroTramite": 1,
+                "EVALASIGN": 1,
+                "Anio": 1,
+                "Mes": 1,
+                "FechaExpendiente": 1,
+                "FECHA DE TRABAJO": 1,
+                "Evaluado": 1,
+                "ESTADO": 1,
+                "UltimaEtapa": 1,
+                "Dependencia": 1
+            }
+
+            # Usar cursor con batch_size para controlar el uso de memoria
+            cursor = _self.migraciones_db[collection_name].find(
+                {},
+                needed_fields
+            ).batch_size(5000)
+
+            # Procesar en chunks más pequeños
             chunks = []
-            chunk_size = 10000
             current_chunk = []
             
             for doc in cursor:
                 current_chunk.append(doc)
-                if len(current_chunk) >= chunk_size:
-                    chunks.append(pd.DataFrame(current_chunk))
+                if len(current_chunk) >= 5000:
+                    df_chunk = pd.DataFrame(current_chunk)
+                    # Optimizar tipos de datos inmediatamente
+                    df_chunk = optimize_datatypes(df_chunk)
+                    chunks.append(df_chunk)
                     current_chunk = []
             
             if current_chunk:
-                chunks.append(pd.DataFrame(current_chunk))
-            
+                df_chunk = pd.DataFrame(current_chunk)
+                df_chunk = optimize_datatypes(df_chunk)
+                chunks.append(df_chunk)
+
             if not chunks:
                 return None
-            
+
+            # Concatenar chunks optimizados
             data = pd.concat(chunks, ignore_index=True)
-            
-            # Optimizar tipos de datos inmediatamente
-            if 'Anio' in data.columns:
-                data['Anio'] = pd.to_numeric(data['Anio'], downcast='integer')
-            if 'Mes' in data.columns:
-                data['Mes'] = pd.to_numeric(data['Mes'], downcast='integer')
-            if 'EVALASIGN' in data.columns:
-                data['EVALASIGN'] = data['EVALASIGN'].astype('category')
-            
             return data
-            
+
         except Exception as e:
             st.error(f"Error al cargar datos: {str(e)}")
             return None
@@ -138,3 +137,22 @@ class DataLoader:
     def get_rankings_collection(_self):
         """Retorna la colección de rankings de expedientes_db."""
         return _self.expedientes_db['rankings']
+
+def optimize_datatypes(df):
+    """Optimiza los tipos de datos para reducir uso de memoria"""
+    if df.empty:
+        return df
+        
+    # Convertir strings a categorías si son repetitivos
+    for col in df.select_dtypes(include=['object']):
+        if df[col].nunique() / len(df) < 0.5:  # Si hay muchos valores repetidos
+            df[col] = df[col].astype('category')
+    
+    # Optimizar tipos numéricos
+    for col in df.select_dtypes(include=['int64']):
+        df[col] = pd.to_numeric(df[col], downcast='integer')
+    
+    for col in df.select_dtypes(include=['float64']):
+        df[col] = pd.to_numeric(df[col], downcast='float')
+    
+    return df

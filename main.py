@@ -30,8 +30,8 @@ def mostrar_menu():
     print("3. Manejo de reportes evaluados")
     print("4. Procesar consolidados iniciales")
     print("5. Realizar cruces combinados")
-    print("6. Ejecutar todos los pasos")
-    print("7. Subir datos a MongoDB")
+    print("6. Subir datos a MongoDB")
+    print("7. Ejecutar todos los pasos")
     print("8. Verificar rutas de archivos")
     print("0. Salir")
     print("Nota: Puedes seleccionar múltiples opciones separadas por comas (ej: 1,3,5)")
@@ -87,19 +87,34 @@ def ejecutar_paso(opcion):
         print("\n>>> Ejecutando: Realizar cruces combinados")
         procesar_cruces_combinados()
     elif opcion == 6:
-        print("\n>>> Ejecutando: Ejecutar todos los pasos")
-        ejecutar_todos_pasos()
-    elif opcion == 7:
         print("\n>>> Ejecutando: Subir datos a MongoDB")
         subir_a_mongodb()
+    elif opcion == 7:
+        print("\n>>> Ejecutando: Todos los pasos en secuencia")
+        ejecutar_todos_pasos()
     elif opcion == 8:
         print("\n>>> Ejecutando: Verificar rutas de archivos")
         verificar_rutas()
 
 def ejecutar_todos_pasos():
     print("\n=== Ejecutando todos los pasos ===")
+    # Ejecutar solo los pasos del 1 al 5, y luego MongoDB (6)
     for paso in range(1, 6):
-        ejecutar_paso(paso)
+        print(f"\n>> Paso {paso} de 6")
+        if paso == 1:
+            descargar_y_consolidar()
+        elif paso == 2:
+            ejecutar_consolidacion()
+        elif paso == 3:
+            manejar_reportes()
+        elif paso == 4:
+            procesar_consolidados()
+        elif paso == 5:
+            procesar_cruces_combinados()
+    
+    # Ejecutar la subida a MongoDB como último paso
+    print("\n>> Paso 6 de 6")
+    subir_a_mongodb()
 
 def verificar_rutas():
     print(f"Directorio base: {descargas_dir}")
@@ -118,20 +133,17 @@ def main():
             print("\nSaliendo del programa...")
             break
         
-        if seleccion.strip() == "6":
+        if seleccion.strip() == "7":
             ejecutar_todos_pasos()
             continue
         
         try:
-            # Convertir la entrada en una lista de números
             opciones = [int(opt.strip()) for opt in seleccion.split(",")]
             
-            # Validar que las opciones sean válidas
             if any(opt < 0 or opt > 8 for opt in opciones):
                 print("\n❌ Error: Algunas opciones no son válidas. Por favor intenta nuevamente.")
                 continue
                 
-            # Ejecutar cada paso seleccionado
             for opcion in opciones:
                 ejecutar_paso(opcion)
                 

@@ -1,5 +1,5 @@
 # Base
-streamlit>=1.0.0
+streamlit>=1.32.0
 pandas>=1.0.0
 numpy>=1.23.0,<2.0.0
 

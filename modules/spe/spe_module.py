@@ -331,8 +331,11 @@ class SPEModule:
 
         COLUMNAS = self.columnas
 
-        # Limpiar datos innecesarios
-        data = data.drop(['Column 12', 'Column 13', 'Column 14', 'Column 15', 'Column 16', 'Column 17'], axis=1)
+        # Limpiar datos innecesarios solo si existen las columnas
+        columnas_a_eliminar = ['Column 12', 'Column 13', 'Column 14', 'Column 15', 'Column 16', 'Column 17']
+        columnas_existentes = [col for col in columnas_a_eliminar if col in data.columns]
+        if columnas_existentes:
+            data = data.drop(columnas_existentes, axis=1)
 
         # Filtrar solo expedientes pendientes (INICIADA o en blanco)
         data_filtrada = data[

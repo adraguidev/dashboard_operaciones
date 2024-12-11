@@ -7,33 +7,378 @@ def render_evaluator_report_tab(data: pd.DataFrame):
     try:
         st.header("👨‍💼 Reporte por Evaluador")
         
-        # Reducir datos inicialmente
-        data = data[
-            ['NumeroTramite', 'EVALASIGN', 'Anio', 'Mes', 'FechaExpendiente', 
-             'Evaluado', 'ESTADO', 'UltimaEtapa', 'Dependencia']
-        ].copy()
-        
-        # Implementar paginación
-        ITEMS_PER_PAGE = 500
+        # Configuración de paginación
+        items_per_page = 1000
         total_items = len(data)
-        total_pages = (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
+        num_pages = (total_items + items_per_page - 1) // items_per_page
         
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            page = st.number_input(
-                "Página",
-                min_value=1,
-                max_value=total_pages,
-                value=1
+        # Selector de página
+        current_page = st.number_input(
+            "Página",
+            min_value=1,
+            max_value=max(1, num_pages),
+            value=1
+        )
+        
+        # Calcular índices de inicio y fin
+        start_idx = (current_page - 1) * items_per_page
+        end_idx = min(start_idx + items_per_page, total_items)
+        
+        # Obtener subset de datos para la página actual
+        page_data = data.iloc[start_idx:end_idx]
+        
+        # Validar datos de manera más eficiente
+        if page_data is None or len(page_data) == 0:  # Usar len en lugar de .empty
+            st.error("No hay datos disponibles para mostrar")
+            return
+
+        # Optimizar la carga inicial de datos
+        page_data = page_data.copy()  # Crear una copia única al inicio
+        
+        # Convertir fechas una sola vez al inicio
+        date_columns = ['FechaExpendiente', 'FechaPre', 'FechaEtapaAprobacionMasivaFin']
+        for col in date_columns:
+            if col in page_data.columns:
+                try:
+                    if page_data[col].dtype != 'datetime64[ns]':
+                        page_data[col] = pd.to_datetime(page_data[col], format='%d/%m/%Y', errors='coerce')
+                except Exception:
+                    pass
+
+        # Limpiar y preparar la columna EVALASIGN una sola vez
+        if 'EVALASIGN' in page_data.columns:
+            page_data['EVALASIGN'] = page_data['EVALASIGN'].fillna('').astype(str)
+            evaluators = sorted(page_data[page_data['EVALASIGN'].str.strip() != '']['EVALASIGN'].unique())
+            evaluators = ['TODOS LOS EVALUADORES'] + evaluators
+        
+        # Verificar si es módulo SOL de manera más precisa
+        is_sol_module = (
+            'EstadoTramite' in page_data.columns and 
+            'Pre_Concluido' in page_data.columns and
+            'FechaEtapaAprobacionMasivaFin' in page_data.columns and
+            'ESTADO' not in page_data.columns  # Asegurarnos que es SOL y no otro módulo
+        )
+
+        if is_sol_module:
+            # Filtros específicos para SOL
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Selector de años
+                available_years = sorted(page_data['Anio'].unique(), reverse=True)
+                selected_years = st.multiselect(
+                    "Seleccionar Año(s)",
+                    options=available_years,
+                    default=[max(available_years)],
+                    help="Selecciona uno o varios años"
+                )
+
+            with col2:
+                # Selector de dependencias
+                dependencias = sorted(page_data['Dependencia'].unique())
+                selected_dependencias = st.multiselect(
+                    "Seleccionar Dependencia(s)",
+                    options=dependencias,
+                    help="Selecciona una o varias dependencias"
+                )
+
+            # Filtros adicionales expandibles
+            with st.expander("📌 Filtros Adicionales"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Filtro por última etapa
+                    etapas = sorted(page_data['UltimaEtapa'].dropna().unique())
+                    selected_etapas = st.multiselect(
+                        "Última Etapa",
+                        options=etapas,
+                        help="Filtra por última etapa del expediente"
+                    )
+                    
+                    # Filtro por estado de trámite
+                    estados = sorted(page_data['EstadoTramite'].dropna().unique())
+                    selected_estados = st.multiselect(
+                        "Estado del Trámite",
+                        options=estados,
+                        help="Filtra por estado del trámite"
+                    )
+                
+                with col2:
+                    # Rango de fechas
+                    fecha_inicio = st.date_input(
+                        "Fecha Desde", 
+                        value=None,
+                        key="fecha_inicio_sol"
+                    )
+                    fecha_fin = st.date_input(
+                        "Fecha Hasta", 
+                        value=None,
+                        key="fecha_fin_sol"
+                    )
+
+            # Aplicar filtros para SOL
+            filtered_data = page_data.copy()
+            
+            if selected_years:
+                filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
+                
+            if selected_dependencias:
+                filtered_data = filtered_data[filtered_data['Dependencia'].isin(selected_dependencias)]
+                
+            if selected_etapas:
+                filtered_data = filtered_data[filtered_data['UltimaEtapa'].isin(selected_etapas)]
+                
+            if selected_estados:
+                filtered_data = filtered_data[filtered_data['EstadoTramite'].isin(selected_estados)]
+                
+            if fecha_inicio:
+                filtered_data = filtered_data[pd.to_datetime(filtered_data['FechaExpendiente'], format='%d/%m/%Y').dt.date >= fecha_inicio]
+            if fecha_fin:
+                filtered_data = filtered_data[pd.to_datetime(filtered_data['FechaExpendiente'], format='%d/%m/%Y').dt.date <= fecha_fin]
+
+            # Mostrar resumen para SOL
+            if not filtered_data.empty:
+                st.markdown("### 📊 Resumen")
+                total = len(filtered_data)
+                aprobados = len(filtered_data[filtered_data['EstadoTramite'] == 'APROBADO'])
+                pre_concluidos = len(filtered_data[filtered_data['Pre_Concluido'] == 'SI'])
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Expedientes", f"{total:,d}")
+                col2.metric("Aprobados", f"{aprobados:,d}")
+                col3.metric("Pre Concluidos", f"{pre_concluidos:,d}")
+
+                # Mostrar datos filtrados
+                st.markdown("### 📋 Detalle de Expedientes")
+                
+                # Preparar datos para mostrar
+                display_data = filtered_data[[
+                    'NumeroTramite', 'Dependencia', 'EstadoTramite', 
+                    'UltimaEtapa', 'FechaExpendiente', 
+                    'FechaEtapaAprobacionMasivaFin', 'Pre_Concluido'
+                ]].copy()
+                
+                # Formatear fechas
+                display_data['FechaExpendiente'] = pd.to_datetime(display_data['FechaExpendiente'], format='%d/%m/%Y').dt.strftime('%d/%m/%Y')
+                display_data['FechaEtapaAprobacionMasivaFin'] = pd.to_datetime(display_data['FechaEtapaAprobacionMasivaFin'], format='%d/%m/%Y').dt.strftime('%d/%m/%Y')
+                
+                # Mostrar tabla
+                st.dataframe(
+                    display_data,
+                    use_container_width=True,
+                    column_config={
+                        'NumeroTramite': 'Expediente',
+                        'Dependencia': 'Dependencia',
+                        'EstadoTramite': 'Estado',
+                        'UltimaEtapa': 'Última Etapa',
+                        'FechaExpendiente': 'Fecha Ingreso',
+                        'FechaEtapaAprobacionMasivaFin': 'Fecha Aprobación',
+                        'Pre_Concluido': 'Pre Concluido'
+                    }
+                )
+
+                # Botón de descarga
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    display_data.to_excel(writer, index=False, sheet_name='Reporte')
+                output.seek(0)
+                
+                st.download_button(
+                    label="📥 Descargar Reporte",
+                    data=output,
+                    file_name=f"reporte_sol_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.info("No se encontraron expedientes con los filtros seleccionados")
+
+        else:
+            # Asegurar que EVALASIGN existe antes de continuar
+            if 'EVALASIGN' not in page_data.columns:
+                st.error("No se encontró la columna de evaluadores")
+                return
+
+            # Modificación para incluir "TODOS LOS EVALUADORES"
+            page_data['EVALASIGN'] = page_data['EVALASIGN'].fillna('')
+            evaluators = sorted(page_data[page_data['EVALASIGN'] != '']['EVALASIGN'].unique())
+            evaluators = ['TODOS LOS EVALUADORES'] + evaluators
+            
+            # Selección de evaluador
+            selected_evaluator = st.selectbox(
+                "Seleccionar Evaluador",
+                options=evaluators,
+                help="Busca y selecciona un evaluador específico o todos los evaluadores"
             )
-        
-        start_idx = (page - 1) * ITEMS_PER_PAGE
-        end_idx = min(start_idx + ITEMS_PER_PAGE, total_items)
-        
-        # Trabajar con el subset de datos
-        current_data = data.iloc[start_idx:end_idx]
-        
-        # Resto del código usando current_data en lugar de data...
+
+            # Filtros en columnas
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                # Selector de años
+                available_years = sorted(page_data['Anio'].unique(), reverse=True)
+                selected_years = st.multiselect(
+                    "Seleccionar Año(s)",
+                    options=available_years,
+                    default=[max(available_years)],
+                    help="Selecciona uno o varios años"
+                )
+
+            with col2:
+                # Filtro por estado de evaluación
+                estado_eval_options = ["Todos", "Pendientes", "Evaluados"]
+                estado_eval = st.radio(
+                    "Estado de Evaluación",
+                    options=estado_eval_options,
+                    horizontal=True
+                )
+
+            with col3:
+                # Filtro por estado del expediente
+                estados_unicos = sorted(page_data['ESTADO'].dropna().unique())
+                selected_estados = st.multiselect(
+                    "Estado del Expediente",
+                    options=estados_unicos,
+                    help="Filtra por estados específicos"
+                )
+
+            # Filtros adicionales expandibles
+            with st.expander("📌 Filtros Adicionales"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Filtro por última etapa
+                    etapas = sorted(page_data['UltimaEtapa'].dropna().unique())
+                    selected_etapas = st.multiselect(
+                        "Última Etapa",
+                        options=etapas,
+                        help="Filtra por última etapa del expediente"
+                    )
+                    
+                    # Rango de fechas (con keys únicos)
+                    fecha_inicio = st.date_input(
+                        "Fecha Desde", 
+                        value=None,
+                        key="fecha_inicio_otros"
+                    )
+                    fecha_fin = st.date_input(
+                        "Fecha Hasta", 
+                        value=None,
+                        key="fecha_fin_otros"
+                    )
+
+            # Agregar botón de filtrado después de todos los filtros
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                filtrar = st.button("🔍 Aplicar Filtros", type="primary")
+
+            @st.cache_data  # Cachear los resultados del filtrado
+            def filter_data(df, evaluator, years, estados, etapas, estado_eval, fecha_inicio, fecha_fin):
+                filtered = df.copy()
+                
+                if evaluator == 'TODOS LOS EVALUADORES':
+                    filtered = filtered[filtered['EVALASIGN'].str.strip() != '']
+                else:
+                    filtered = filtered[filtered['EVALASIGN'] == evaluator]
+                
+                if years:
+                    filtered = filtered[filtered['Anio'].isin(years)]
+                
+                if estado_eval == "Pendientes":
+                    filtered = filtered[filtered['Evaluado'] == 'NO']
+                elif estado_eval == "Evaluados":
+                    filtered = filtered[filtered['Evaluado'] == 'SI']
+                
+                if selected_estados:
+                    filtered = filtered[filtered['ESTADO'].isin(selected_estados)]
+                
+                if selected_etapas:
+                    filtered = filtered[filtered['UltimaEtapa'].isin(selected_etapas)]
+                
+                if fecha_inicio:
+                    filtered = filtered[filtered['FechaExpendiente'].dt.date >= fecha_inicio]
+                if fecha_fin:
+                    filtered = filtered[filtered['FechaExpendiente'].dt.date <= fecha_fin]
+                
+                return filtered
+
+            # Usar la función cacheada para el filtrado
+            if filtrar:
+                filtered_data = filter_data(
+                    page_data,
+                    selected_evaluator,
+                    selected_years,
+                    selected_estados,
+                    selected_etapas,
+                    estado_eval,
+                    fecha_inicio,
+                    fecha_fin
+                )
+                
+                # Mostrar resumen solo si hay datos filtrados
+                if not filtered_data.empty:
+                    st.markdown("### 📊 Resumen")
+                    total = len(filtered_data)
+                    pendientes = len(filtered_data[filtered_data['Evaluado'] == 'NO'])
+                    evaluados = total - pendientes
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Total Expedientes", f"{total:,d}")
+                    col2.metric("Pendientes", f"{pendientes:,d}")
+                    col3.metric("Evaluados", f"{evaluados:,d}")
+
+                    # Mostrar datos filtrados
+                    st.markdown("### 📋 Detalle de Expedientes")
+                    
+                    # Usar todas las columnas disponibles
+                    display_data = filtered_data.copy()
+                    
+                    # Formatear fechas donde sea necesario
+                    date_columns = display_data.select_dtypes(include=['datetime64']).columns
+                    for col in date_columns:
+                        display_data[col] = display_data[col].dt.strftime('%d/%m/%Y')
+                    
+                    # Mostrar tabla con todas las columnas
+                    st.dataframe(
+                        display_data,
+                        use_container_width=True
+                    )
+
+                    # Botones de descarga
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Botón de descarga normal
+                        output = BytesIO()
+                        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                            display_data.to_excel(writer, index=False, sheet_name='Reporte')
+                        output.seek(0)
+                        
+                        filename_prefix = "reporte_todos" if selected_evaluator == 'TODOS LOS EVALUADORES' else f"reporte_{selected_evaluator.replace(' ', '_')}"
+                        
+                        st.download_button(
+                            label="📥 Descargar Reporte",
+                            data=output,
+                            file_name=f"{filename_prefix}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+
+                    with col2:
+                        # Botón de descarga formateado
+                        excel_data_evaluador = create_excel_download(
+                            display_data,
+                            f"{filename_prefix}_formateado.xlsx",
+                            "Reporte_Evaluador",
+                            f"Reporte de {'Todos los Evaluadores' if selected_evaluator == 'TODOS LOS EVALUADORES' else selected_evaluator}"
+                        )
+
+                        st.download_button(
+                            label="📥 Descargar Reporte Formateado",
+                            data=excel_data_evaluador,
+                            file_name=f"{filename_prefix}_formateado.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                else:
+                    st.info("No se encontraron expedientes con los filtros seleccionados")
 
     except Exception as e:
         st.error(f"Error al procesar el reporte: {str(e)}")

@@ -37,9 +37,22 @@ def get_data_loader():
 
 def main():
     try:
-        # Configurar límite de memoria para streamlit
+        # Configurar límites de memoria
         import resource
-        resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024 * 2, -1))  # 2GB limit
+        import psutil
+        
+        # Limitar memoria virtual a 2GB
+        resource.setrlimit(resource.RLIMIT_AS, (2 * 1024 * 1024 * 1024, -1))
+        
+        # Configurar proceso actual
+        process = psutil.Process()
+        if hasattr(process, 'nice'):
+            process.nice(10)  # Prioridad más baja
+        
+        # Configurar opciones de pandas
+        import pandas as pd
+        pd.options.mode.chunksize = 1000
+        pd.options.mode.use_inf_as_na = True
         
         # Inicializar servicios con manejo de memoria
         with st.spinner('Cargando datos...'):
@@ -80,19 +93,32 @@ def main():
                         st.cache_data.clear()
                         st.session_state.data_error = False
                     
+                    # Monitorear memoria antes de cargar
+                    mem_before = process.memory_info().rss / 1024 / 1024
+                    
                     data = data_loader.load_module_data(selected_module)
                     if data is None:
                         st.error("No se encontraron datos para este módulo en la base de datos.")
                         return
                     
+                    # Monitorear uso de memoria
+                    mem_after = process.memory_info().rss / 1024 / 1024
+                    mem_used = mem_after - mem_before
+                    
+                    if mem_used > 500:  # Si usa más de 500MB
+                        st.warning(f"Alto uso de memoria: {mem_used:.1f}MB")
+                        
                     # Verificar tamaño de datos
-                    data_size = data.memory_usage(deep=True).sum() / 1024**2  # MB
-                    if data_size > 500:  # Si datos superan 500MB
-                        st.warning(f"El conjunto de datos es grande ({data_size:.1f}MB). Puede afectar el rendimiento.")
-                
+                    data_size = data.memory_usage(deep=True).sum() / 1024**2
+                    if data_size > 500:
+                        st.warning(f"Conjunto de datos grande: {data_size:.1f}MB")
+                        
+                except MemoryError:
+                    st.error("Error de memoria. Intente cerrar otras aplicaciones y recargar.")
+                    return
                 except Exception as e:
                     st.session_state.data_error = True
-                    st.error(f"Error al cargar datos del módulo: {str(e)}")
+                    st.error(f"Error al cargar datos: {str(e)}")
                     return
 
             # Crear pestañas

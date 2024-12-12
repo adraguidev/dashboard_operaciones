@@ -27,11 +27,17 @@ EXPOSE 8501
 
 ENV STREAMLIT_SERVER_PORT=8501 \
     STREAMLIT_SERVER_ADDRESS=0.0.0.0 \
-    STREAMLIT_BROWSER_SERVER_ADDRESS=dashboardusm.tech
+    STREAMLIT_BROWSER_SERVER_ADDRESS=dashboardusm.tech \
+    STREAMLIT_SERVER_HEADLESS=true \
+    STREAMLIT_SERVER_RUN_ON_SAVE=true
+
+HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
 CMD ["streamlit", "run", "dashboard.py", \
      "--server.port=8501", \
      "--server.address=0.0.0.0", \
      "--browser.serverAddress=dashboardusm.tech", \
      "--server.enableCORS=true", \
-     "--server.enableXsrfProtection=false"]
+     "--server.enableXsrfProtection=false", \
+     "--server.headless=true", \
+     "--server.runOnSave=true"]

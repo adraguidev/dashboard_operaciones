@@ -1,5 +1,5 @@
 import streamlit as st
-from config.settings import MODULES
+from config.settings import MODULES, MONGODB_COLLECTIONS
 from src.services.data_loader import DataLoader
 from tabs.pending_reports import render_pending_reports_tab
 from tabs.entry_analysis import render_entry_analysis_tab
@@ -18,27 +18,20 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-@st.cache_resource(show_spinner=False, ttl=3600)
-def get_data_loader():
-    """Inicializa y retorna una instancia cacheada del DataLoader."""
+# Alternativa sin cache_resource
+if 'data_loader' not in st.session_state:
     try:
-        loader = DataLoader()
-        # Agregar timeout a las verificaciones de conexión
-        loader.migraciones_db.command('ping', maxTimeMS=5000)
-        loader.expedientes_db.command('ping', maxTimeMS=5000)
-        return loader
+        st.session_state.data_loader = DataLoader()
     except Exception as e:
         st.error(f"Error al inicializar DataLoader: {str(e)}")
-        return None
+        st.session_state.data_loader = None
 
 def main():
     try:
-        # Inicializar servicios con manejo de memoria
-        with st.spinner('Cargando datos...'):
-            data_loader = get_data_loader()
-            if data_loader is None:
-                st.error("No se pudo inicializar la conexión a la base de datos.")
-                return
+        data_loader = st.session_state.data_loader
+        if data_loader is None:
+            st.error("No se pudo inicializar la conexión a la base de datos.")
+            return
 
         # Obtener credenciales de Google
         try:
@@ -49,7 +42,7 @@ def main():
 
         st.title("Gestión de Expedientes")
 
-        # Selección de módulo (directamente, sin mostrar últimas actualizaciones)
+        # Selección de módulo
         selected_module = st.sidebar.radio(
             "Selecciona un módulo",
             options=list(MODULES.keys()),
@@ -58,6 +51,7 @@ def main():
 
         # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':
+            # SPE siempre se carga fresco
             if google_credentials is None:
                 st.error("No se pueden cargar datos de SPE sin credenciales de Google.")
                 return
@@ -65,14 +59,23 @@ def main():
                 spe = SPEModule()
                 spe.render_module()
         else:
-            with st.spinner('Cargando datos del módulo...'):
-                data = data_loader.load_module_data(selected_module)
-                if data is None:
-                    st.error("No se encontraron datos para este módulo en la base de datos.")
-                    return
+            # Para otros módulos, verificar última actualización
+            collection_name = MONGODB_COLLECTIONS.get(selected_module)
+            if collection_name:
+                last_update = data_loader._get_collection_last_update(collection_name)
+                
+                with st.spinner('Cargando datos del módulo...'):
+                    data = data_loader.load_module_data(selected_module, last_update)
+                    if data is None:
+                        st.error("No se encontraron datos para este módulo en la base de datos.")
+                        return
+
+                # Mostrar última actualización
+                if last_update:
+                    st.sidebar.info(f"Última actualización: {last_update.strftime('%d/%m/%Y %H:%M')}")
 
             # Crear pestañas
-            tabs = st.tabs([
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
                 "Reporte de pendientes",
                 "Ingreso de Expedientes",
                 "Cierre de Expedientes",
@@ -80,19 +83,24 @@ def main():
                 "Reporte de Asignaciones",
                 "Ranking de Expedientes Trabajados"
             ])
-
+            
             # Renderizar cada pestaña
-            with tabs[0]:
+            with tab1:
                 render_pending_reports_tab(data, selected_module)
-            with tabs[1]:
+            
+            with tab2:
                 render_entry_analysis_tab(data)
-            with tabs[2]:
+            
+            with tab3:
                 render_closing_analysis_tab(data)
-            with tabs[3]:
+            
+            with tab4:
                 render_evaluator_report_tab(data)
-            with tabs[4]:
+            
+            with tab5:
                 render_assignment_report_tab(data)
-            with tabs[5]:
+            
+            with tab6:
                 rankings_collection = data_loader.get_rankings_collection()
                 ranking_report.render_ranking_report_tab(
                     data, 

@@ -27,18 +27,20 @@ class MongoUploader:
             print("Intentando conexión a MongoDB...")
             print(f"URI de conexión: {mongo_uri.replace(password, '****')}")
             
-            # Configuración corregida para cluster balanceado
+            # Configuración optimizada para mejor rendimiento
             self.client = MongoClient(
                 mongo_uri,
-                connectTimeoutMS=30000,
-                socketTimeoutMS=None,  # Sin límite de tiempo para operaciones
-                serverSelectionTimeoutMS=30000,
+                connectTimeoutMS=5000,
+                socketTimeoutMS=10000,
+                serverSelectionTimeoutMS=5000,
+                maxPoolSize=10,
+                minPoolSize=5,
+                maxIdleTimeMS=45000,
+                waitQueueTimeoutMS=5000,
+                appName='MigracionesApp',
+                compressors=['zlib'],
                 retryWrites=True,
-                retryReads=True,
-                maxPoolSize=None,  # Sin límite en el pool de conexiones
-                waitQueueTimeoutMS=30000,
-                appName='MigracionesApp',  # Identificador de la aplicación
-                compressors=['zlib']  # Usar compresión
+                retryReads=True
             )
             
             # Verificar conexión inmediatamente

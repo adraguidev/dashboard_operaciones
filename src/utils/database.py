@@ -28,13 +28,12 @@ def get_mongodb_connection():
         # Primero intenta desde secrets de Streamlit
         return MongoClient(st.secrets["connections"]["mongodb"]["uri"])
     except:
-        # Si no está en la nube, usa variables de entorno
+        # Si no está en Streamlit secrets, usa variables de entorno
         load_dotenv()
         mongo_uri = os.getenv('MONGODB_URI')
-        password = os.getenv('MONGODB_PASSWORD')
-        if not mongo_uri or not password:
-            raise ValueError("Credenciales de MongoDB no configuradas")
-        return MongoClient(mongo_uri.replace('<db_password>', password))
+        if not mongo_uri:
+            raise ValueError("No se encontró la URI de MongoDB en secrets ni en variables de entorno")
+        return MongoClient(mongo_uri)
 
 @st.cache_resource
 def init_connection():

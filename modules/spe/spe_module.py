@@ -21,6 +21,8 @@ from statsmodels.nonparametric.smoothers_lowess import lowess
 from prophet import Prophet
 from src.utils.excel_utils import create_excel_download
 from statsmodels.tsa.seasonal import seasonal_decompose
+import os
+from dotenv import load_dotenv
 
 class SPEModule:
     SCOPES = [
@@ -121,7 +123,16 @@ class SPEModule:
     @st.cache_resource
     def _init_mongodb_connection():
         """Inicializar conexión a MongoDB."""
-        return pymongo.MongoClient(st.secrets["connections"]["mongodb"]["uri"])
+        try:
+            # Primero intentar desde secrets de Streamlit
+            return pymongo.MongoClient(st.secrets["connections"]["mongodb"]["uri"])
+        except:
+            # Si no está en secrets, usar variables de entorno
+            load_dotenv()
+            mongo_uri = os.getenv('MONGODB_URI')
+            if not mongo_uri:
+                raise ValueError("No se encontró la URI de MongoDB en secrets ni en variables de entorno")
+            return pymongo.MongoClient(mongo_uri)
 
     def render_ranking_report(self, data, collection):
         """Renderizar pestaña de ranking de expedientes trabajados."""
@@ -1243,7 +1254,7 @@ class SPEModule:
             # Crear un nuevo DataFrame para el análisis mensual
             df_mensual = datos_anio.copy()
             
-            # Extraer año y mes una sola vez
+            # Extraer a��o y mes una sola vez
             df_mensual['año'] = df_mensual[self.columnas['FECHA_INGRESO']].dt.year
             df_mensual['mes'] = df_mensual[self.columnas['FECHA_INGRESO']].dt.month
             

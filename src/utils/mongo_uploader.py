@@ -10,22 +10,34 @@ import time
 
 class MongoUploader:
     def __init__(self, mongo_uri=None):
-        # Cargar variables de entorno
-        load_dotenv()
-        
-        if mongo_uri is None:
-            # Construir URI desde variables de entorno
-            base_uri = os.getenv('MONGODB_URI')
-            password = os.getenv('MONGODB_PASSWORD')
-            if not base_uri or not password:
-                raise ValueError("Variables de entorno MONGODB_URI y MONGODB_PASSWORD no configuradas")
-            
-            # Usar la URI directamente sin modificaciones
-            mongo_uri = base_uri
-
+        """
+        Inicializa el uploader de MongoDB.
+        Intenta usar primero los secrets de Streamlit, luego las variables de entorno.
+        """
         try:
+            # Si no se proporciona URI, intentar obtenerla de diferentes fuentes
+            if mongo_uri is None:
+                try:
+                    # Primero intentar desde secrets de Streamlit
+                    import streamlit as st
+                    mongo_uri = st.secrets["connections"]["mongodb"]["uri"]
+                    print("Usando URI de MongoDB desde Streamlit secrets")
+                except:
+                    # Si no está en secrets, cargar desde variables de entorno
+                    load_dotenv()
+                    mongo_uri = os.getenv('MONGODB_URI')
+                    if not mongo_uri:
+                        raise ValueError("No se encontró la URI de MongoDB en secrets ni en variables de entorno")
+                    print("Usando URI de MongoDB desde variables de entorno")
+
             print("Intentando conexión a MongoDB...")
-            print(f"URI de conexión: {mongo_uri.replace(password, '****')}")
+            # Ocultar la contraseña en el log
+            safe_uri = mongo_uri
+            if '@' in mongo_uri:
+                prefix, suffix = mongo_uri.split('@')
+                user_pass = prefix.split('://')[-1]
+                safe_uri = f"{prefix.split('://')[0]}://{user_pass.split(':')[0]}:****@{suffix}"
+            print(f"URI de conexión: {safe_uri}")
             
             # Configuración corregida para cluster balanceado
             self.client = MongoClient(

@@ -19,17 +19,20 @@ MONGODB_PASSWORD = os.getenv('MONGODB_PASSWORD')
 
 class DataLoader:
     def __init__(_self):
-        """Inicializa las conexiones a MongoDB usando los secrets de Streamlit."""
+        """Inicializa las conexiones a MongoDB usando los secrets de Streamlit o variables de entorno."""
         try:
             logger.info("Iniciando conexión a MongoDB...")
             # Primero intentar obtener la URI desde secrets de Streamlit
             try:
                 mongo_uri = st.secrets["connections"]["mongodb"]["uri"]
+                logger.info("Usando URI de MongoDB desde Streamlit secrets")
             except:
                 # Si no está en secrets, usar variables de entorno
-                if not MONGODB_URI:
+                load_dotenv()
+                mongo_uri = os.getenv('MONGODB_URI')
+                if not mongo_uri:
                     raise ValueError("No se encontró la URI de MongoDB en secrets ni en variables de entorno")
-                mongo_uri = MONGODB_URI
+                logger.info("Usando URI de MongoDB desde variables de entorno")
 
             _self.client = MongoClient(
                 mongo_uri,

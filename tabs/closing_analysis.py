@@ -9,9 +9,12 @@ def render_closing_analysis_tab(data: pd.DataFrame):
     try:
         st.header("🎯 Análisis de Cierre de Expedientes")
         
-        # Validar datos
-        if data is None or data.empty:
-            st.error("No hay datos disponibles para mostrar")
+        # Verificar que las columnas necesarias existen
+        required_columns = ['FechaPre', 'FechaExpendiente', 'ESTADO', 'Evaluado']
+        missing_columns = [col for col in required_columns if col not in data.columns]
+        
+        if missing_columns:
+            st.error(f"Faltan las siguientes columnas necesarias: {', '.join(missing_columns)}")
             return
 
         # Asegurar que las fechas son válidas
@@ -296,4 +299,5 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     except Exception as e:
-        st.error(f"Error al procesar la pestaña de cierre de expedientes: {e}") 
+        st.error(f"Error al procesar la pestaña de cierre de expedientes: {str(e)}")
+        print(f"Error detallado en closing_analysis: {str(e)}") 

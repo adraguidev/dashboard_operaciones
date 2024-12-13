@@ -42,13 +42,13 @@ MODULES_CONFIG: Dict[str, ModuleConfig] = {
     ),
     'PRR': ModuleConfig(
         name='PRR',
-        icon='📈',
+        icon='🔄',
         folder='descargas/PRR',
         inactive_evaluators=[]
     ),
     'CCM-ESP': ModuleConfig(
         name='CCM-ESP',
-        icon='📉',
+        icon='⭐',
         folder='descargas/CCM-ESP',
         inactive_evaluators=[
             "Mauricio Romero, Hugo",
@@ -65,7 +65,7 @@ MODULES_CONFIG: Dict[str, ModuleConfig] = {
     ),
     'CCM-LEY': ModuleConfig(
         name='CCM-LEY',
-        icon='📋',
+        icon='⚖️',
         folder='descargas/CCM-LEY',
         inactive_evaluators=[]
     ),
@@ -119,6 +119,6 @@ SPE_CONFIG = {
 
 # Configuración de seguridad
 try:
-    ADMIN_PASSWORD = st.secrets["admin"]["password"]
+    ADMIN_PASSWORD = st.secrets["passwords"]["admin_password"]
 except:
-    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'default_password')  # Usar variable de entorno o valor por defecto
+    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'default_password')

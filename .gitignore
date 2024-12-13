@@ -1,28 +1,81 @@
-# Archivos de configuración
+# Archivos de configuración y credenciales
 .env
 .streamlit/secrets.toml
 .credentials/
+*.config
+config.ini
 
-# Archivos de datos
+# Archivos de datos y descargas
 descargas/
+downloads/
 *.xlsx
+*.xls
 *.csv
+*.json
+*.pickle
 
-# Python
+# Archivos de caché y temporales
 __pycache__/
 *.py[cod]
 *$py.class
 .Python
+*.pyc
+.cache
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# Entornos virtuales
 env/
 venv/
 .env/
 .venv/
+ENV/
+env.bak/
+venv.bak/
 
-# IDE
-.vscode/
+# Logs y archivos de debug
+*.log
+logs/
+debug.log
+npm-debug.log*
+
+# IDEs y editores
 .idea/
+.vscode/
 *.swp
 *.swo
+*.swn
+*.bak
+*.sublime-workspace
+*.sublime-project
 
-# Logs
-*.log
+# Sistema operativo
+.DS_Store
+Thumbs.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos específicos de la aplicación
+consolidado_*.xlsx
+MATRIZ.xlsx
+ASIGNACIONES.xlsx
+*_CRUZADO.xlsx
+*_historical.json
+
+# Archivos de compilación y distribución
+dist/
+build/
+*.egg-info/
+*.egg
+*.manifest
+*.spec
+
+# Archivos temporales de Excel
+~$*.xlsx
+~$*.xls

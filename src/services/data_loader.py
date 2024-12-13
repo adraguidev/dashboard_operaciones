@@ -6,6 +6,7 @@ import os
 from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS
 from dotenv import load_dotenv
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,9 +37,15 @@ class DataLoader:
 
             _self.client = MongoClient(
                 mongo_uri,
-                connectTimeoutMS=30000,
-                socketTimeoutMS=None,
-                serverSelectionTimeoutMS=30000,
+                connectTimeoutMS=5000,
+                socketTimeoutMS=10000,
+                serverSelectionTimeoutMS=5000,
+                maxPoolSize=10,
+                minPoolSize=5,
+                maxIdleTimeMS=45000,
+                waitQueueTimeoutMS=5000,
+                appName='MigracionesApp',
+                compressors=['zlib'],
                 retryWrites=True,
                 retryReads=True
             )
@@ -56,31 +63,42 @@ class DataLoader:
         except Exception as e:
             logger.error(f"Error detallado de conexión: {str(e)}")
             st.error(f"Error al conectar con MongoDB: {str(e)}")
-            st.info("Verificando configuración...")
-            st.info("1. ¿La URI de MongoDB está configurada correctamente?")
-            st.info("2. ¿Tu IP está en la lista blanca de MongoDB Atlas?")
-            st.info("3. ¿Las credenciales son correctas?")
             raise
 
-    @st.cache_data(ttl=3600)
-    def load_module_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos consolidados desde migraciones_db."""
+    def _get_collection_last_update(_self, collection_name: str) -> datetime:
+        """Obtiene la última fecha de actualización de una colección."""
         try:
-            # SPE usa Google Sheets
+            latest_doc = _self.migraciones_db[collection_name].find_one(
+                {},
+                sort=[('FechaActualizacion', -1)],
+                projection={'FechaActualizacion': 1}
+            )
+            return latest_doc.get('FechaActualizacion') if latest_doc else None
+        except Exception as e:
+            print(f"Error al obtener última actualización: {str(e)}")
+            return None
+
+    @st.cache_data(ttl=None)  # Sin TTL, el cache se limpiará manualmente
+    def load_module_data(_self, module_name: str, last_update: datetime = None) -> pd.DataFrame:
+        """
+        Carga datos consolidados desde migraciones_db.
+        El parámetro last_update se usa como hash key para invalidar el cache.
+        """
+        try:
+            # SPE siempre se carga fresco (sin cache)
             if module_name == 'SPE':
                 return _self._load_spe_from_sheets()
             
+            print(f"Cargando datos para módulo: {module_name}")
+            start_time = time.time()
+
             # Procesamiento especial para CCM-LEY
             if module_name == 'CCM-LEY':
-                # Cargar datos de CCM y CCM-ESP
                 ccm_data = _self.load_module_data('CCM')
                 ccm_esp_data = _self.load_module_data('CCM-ESP')
                 
                 if ccm_data is not None and ccm_esp_data is not None:
-                    # Filtrar CCM-LEY: registros de CCM que no están en CCM-ESP
                     data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
-                    
-                    # Verificar si existe la columna TipoTramite y filtrar
                     if 'TipoTramite' in data.columns:
                         data = data[data['TipoTramite'] == 'LEY'].copy()
                     return data
@@ -92,63 +110,40 @@ class DataLoader:
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
-            # Obtener datos de migraciones_db
+            # Obtener datos con proyección optimizada
+            projection = {
+                "NumeroTramite": 1,
+                "EVALASIGN": 1,
+                "Evaluado": 1,
+                "ESTADO": 1,
+                "UltimaEtapa": 1,
+                "FechaExpendiente": 1,
+                "FechaPre": 1,
+                "FechaTramite": 1,
+                "FechaAsignacion": 1,
+                "FechaEtapaAprobacionMasivaFin": 1,
+                "FECHA DE TRABAJO": 1,
+                "TipoTramite": 1,
+                "Proceso": 1,
+                "Etapa": 1,
+                "Anio": 1,
+                "Mes": 1,
+                "_id": 0
+            }
+            
             collection = _self.migraciones_db[collection_name]
-            cursor = collection.find({}, {'_id': 0})
+            cursor = collection.find({}, projection)
             data = pd.DataFrame(list(cursor))
 
             if data.empty:
                 return None
 
-            # Convertir columnas de fecha - Modificado para manejar múltiples formatos
-            date_columns = [
-                'FechaExpendiente', 'FechaEtapaAprobacionMasivaFin', 
-                'FechaPre', 'FechaTramite', 'FechaAsignacion',
-                'FECHA DE TRABAJO'
-            ]
-            
-            for col in date_columns:
+            # Convertir fechas
+            for col in DATE_COLUMNS:
                 if col in data.columns:
-                    try:
-                        # Primero intentar con formato específico dd/mm/yyyy
-                        data[col] = pd.to_datetime(
-                            data[col], 
-                            format='%d/%m/%Y',
-                            errors='coerce'
-                        )
-                    except:
-                        try:
-                            # Si falla, intentar con dayfirst=True para formatos variados
-                            data[col] = pd.to_datetime(
-                                data[col], 
-                                dayfirst=True,
-                                errors='coerce'
-                            )
-                        except:
-                            pass
+                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
 
-                    # Si hay valores nulos, intentar otros formatos comunes
-                    if data[col].isna().any():
-                        mask = data[col].isna()
-                        try:
-                            # Intentar formato yyyy-mm-dd
-                            temp_dates = pd.to_datetime(
-                                data.loc[mask, col],
-                                format='%Y-%m-%d',
-                                errors='coerce'
-                            )
-                            data.loc[mask, col] = temp_dates
-                        except:
-                            pass
-
-                    # Asegurar que no tiene timezone
-                    if data[col].dtype == 'datetime64[ns]' and data[col].dt.tz is not None:
-                        data[col] = data[col].dt.tz_localize(None)
-
-            # Procesar datos específicos del módulo
-            if module_name == 'CCM-LEY':
-                data = _self._process_ccm_ley_data(data)
-            
+            print(f"Tiempo de carga para {module_name}: {time.time() - start_time:.2f} segundos")
             return data
 
         except Exception as e:

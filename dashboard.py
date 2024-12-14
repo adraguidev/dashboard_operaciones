@@ -24,63 +24,86 @@ st.set_page_config(
 # CSS personalizado para mejorar la interfaz
 st.markdown("""
 <style>
-    /* Reducir espacio superior general */
+    /* Eliminar todo el padding superior */
     .main > div:first-child {
-        padding-top: 0.5rem !important;
+        padding-top: 0 !important;
     }
     
-    /* Optimizar espacio del título */
+    /* Reducir espacio del contenedor principal */
     .main .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
     }
     
-    /* Ajustar el título */
+    /* Ajustar el título para que esté más arriba */
     h1 {
         margin: 0 !important;
         padding: 0 !important;
-        font-size: 1.8rem !important;
+        font-size: 1.5rem !important;
+        line-height: 1.2 !important;
     }
     
     /* Optimizar sidebar */
-    .css-1d391kg {
-        padding: 1rem 1rem !important;
+    section[data-testid="stSidebar"] {
+        width: 15rem !important;
+        min-width: 15rem !important;
+    }
+    
+    section[data-testid="stSidebar"] > div {
+        padding: 0.5rem !important;
     }
     
     /* Ajustar card del sidebar */
     .sidebar-card {
         background-color: white;
-        padding: 0.5rem !important;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        margin-bottom: 1rem;
+        padding: 0.3rem 0.5rem !important;
+        border-radius: 0.3rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        margin-bottom: 0.5rem;
     }
     
     .sidebar-card h3 {
         margin: 0 !important;
-        font-size: 1.2rem !important;
+        font-size: 1rem !important;
         color: #333;
     }
     
-    /* Ajustar radio buttons del sidebar */
-    .stRadio > label {
-        font-size: 0.9rem !important;
-        padding: 0.3rem 0 !important;
+    /* Compactar radio buttons del sidebar */
+    .stRadio > div {
+        gap: 0.2rem !important;
     }
     
-    .stRadio > div {
-        gap: 0.3rem !important;
+    .stRadio > label {
+        font-size: 0.85rem !important;
+        padding: 0.2rem 0 !important;
     }
     
     /* Ajustar mensajes de info/success en sidebar */
     .sidebar .stAlert {
-        padding: 0.5rem !important;
-        margin: 0.5rem 0 !important;
+        padding: 0.3rem !important;
+        margin: 0.3rem 0 !important;
+        font-size: 0.75rem !important;
     }
     
     .sidebar .stAlert > div {
-        padding: 0.5rem !important;
-        font-size: 0.8rem !important;
+        padding: 0.2rem !important;
+        min-height: unset !important;
+    }
+    
+    /* Reducir espacio de spinners y progress bars */
+    .stSpinner {
+        margin: 0.3rem 0 !important;
+    }
+    
+    .stProgress {
+        margin: 0.2rem 0 !important;
+    }
+    
+    /* Ajustar espacio entre elementos */
+    .element-container {
+        margin: 0.2rem 0 !important;
     }
     
     /* Animaciones y efectos */
@@ -263,9 +286,11 @@ st.markdown("""
 
 # Función para mostrar el header con información del usuario
 def show_header():
-    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-    st.title("📊 Gestión de Expedientes")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("""
+        <div style="margin-bottom: 0.5rem;">
+            <h1>📊 Gestión de Expedientes</h1>
+        </div>
+    """, unsafe_allow_html=True)
 
 # Función para verificar si necesitamos actualizar la data
 @st.cache_data(ttl=24*3600)  # Cache por 24 horas

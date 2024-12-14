@@ -403,6 +403,35 @@ def get_lima_datetime():
     lima_tz = pytz.timezone('America/Lima')
     return datetime.now(pytz.UTC).astimezone(lima_tz)
 
+# Función helper para mostrar spinner con progress bar
+def show_loading_progress(message, action, show_fade_in=True):
+    """
+    Muestra un spinner con barra de progreso mientras se ejecuta una acción.
+    
+    Args:
+        message: Mensaje a mostrar durante la carga
+        action: Función a ejecutar
+        show_fade_in: Si se debe mostrar el efecto fade-in
+    Returns:
+        El resultado de la acción ejecutada
+    """
+    with st.spinner(f'🔄 {message}...'):
+        progress_bar = st.progress(0)
+        for i in range(100):
+            time.sleep(0.01)
+            progress_bar.progress(i + 1)
+        
+        if show_fade_in:
+            st.markdown('<div class="fade-in">', unsafe_allow_html=True)
+        
+        result = action()
+        
+        if show_fade_in:
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        progress_bar.empty()
+        return result
+
 def main():
     try:
         data_loader = st.session_state.data_loader
@@ -416,8 +445,11 @@ def main():
 
         # Obtener credenciales de Google
         try:
-            with st.spinner('🔑 Verificando credenciales...'):
-                google_credentials = get_google_credentials()
+            google_credentials = show_loading_progress(
+                'Verificando credenciales',
+                get_google_credentials,
+                show_fade_in=False
+            )
         except Exception as e:
             st.warning(f"No se pudieron obtener las credenciales de Google. SPE podría no funcionar correctamente.")
             google_credentials = None
@@ -443,22 +475,21 @@ def main():
                 st.error("No se pueden cargar datos de SPE sin credenciales de Google.")
                 return
             
-            with st.spinner('🔄 Cargando módulo SPE...'):
-                progress_bar = st.progress(0)
-                for i in range(100):
-                    time.sleep(0.01)
-                    progress_bar.progress(i + 1)
-                spe = SPEModule()
-                st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-                spe.render_module()
-                st.markdown('</div>', unsafe_allow_html=True)
-                progress_bar.empty()
+            spe = show_loading_progress(
+                'Cargando módulo SPE',
+                lambda: SPEModule()
+            )
+            spe.render_module()
+            
         else:
             # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                with st.spinner(f'🔄 Cargando datos del módulo {MODULES[selected_module]}...'):
-                    data, update_time, _ = get_module_data(selected_module, collection_name)
+                data, update_time, _ = show_loading_progress(
+                    f'Cargando datos del módulo {MODULES[selected_module]}',
+                    lambda: get_module_data(selected_module, collection_name),
+                    show_fade_in=False
+                )
                 
                 if data is None:
                     st.error("No se encontraron datos para este módulo en la base de datos.")
@@ -481,47 +512,46 @@ def main():
                 "Ranking de Expedientes Trabajados"
             ])
             
-            # Renderizar cada pestaña con efecto fade-in
+            # Renderizar cada pestaña usando la función helper
             with tab1:
-                with st.spinner('🔄 Cargando reporte de pendientes...'):
-                    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-                    render_pending_reports_tab(data, selected_module)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                show_loading_progress(
+                    'Cargando reporte de pendientes',
+                    lambda: render_pending_reports_tab(data, selected_module)
+                )
             
             with tab2:
-                with st.spinner('🔄 Cargando análisis de ingresos...'):
-                    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-                    render_entry_analysis_tab(data)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                show_loading_progress(
+                    'Cargando análisis de ingresos',
+                    lambda: render_entry_analysis_tab(data)
+                )
             
             with tab3:
-                with st.spinner('🔄 Cargando análisis de cierres...'):
-                    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-                    render_closing_analysis_tab(data)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                show_loading_progress(
+                    'Cargando análisis de cierres',
+                    lambda: render_closing_analysis_tab(data)
+                )
             
             with tab4:
-                with st.spinner('🔄 Cargando reporte por evaluador...'):
-                    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-                    render_evaluator_report_tab(data)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                show_loading_progress(
+                    'Cargando reporte por evaluador',
+                    lambda: render_evaluator_report_tab(data)
+                )
             
             with tab5:
-                with st.spinner('🔄 Cargando reporte de asignaciones...'):
-                    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-                    render_assignment_report_tab(data)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                show_loading_progress(
+                    'Cargando reporte de asignaciones',
+                    lambda: render_assignment_report_tab(data)
+                )
             
             with tab6:
-                with st.spinner('🔄 Cargando ranking de expedientes...'):
-                    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-                    rankings_collection = data_loader.get_rankings_collection()
-                    ranking_report.render_ranking_report_tab(
+                show_loading_progress(
+                    'Cargando ranking de expedientes',
+                    lambda: ranking_report.render_ranking_report_tab(
                         data, 
                         selected_module, 
-                        rankings_collection
+                        data_loader.get_rankings_collection()
                     )
-                    st.markdown('</div>', unsafe_allow_html=True)
+                )
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

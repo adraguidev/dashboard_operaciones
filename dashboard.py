@@ -13,7 +13,7 @@ import time
 
 # Configuración de página
 st.set_page_config(
-    page_title="Gestión de Expedientesss",
+    page_title="Gestión de Expedientess",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"

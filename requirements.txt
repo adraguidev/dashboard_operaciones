@@ -31,9 +31,11 @@ pytz>=2023.3
 pyarrow>=14.0.1
 fastparquet>=2023.8.0
 
-
 # Optimizaciones de rendimiento
 psutil>=5.9.0
 fastparquet>=2023.8.0
 memory-profiler>=0.60.0
 psutil>=5.9.0
+
+# Nueva dependencia para manejo de estilos en consola
+rich>=13.7.0

@@ -10,6 +10,7 @@ import tabs.ranking_report as ranking_report
 from modules.spe.spe_module import SPEModule
 from src.utils.database import get_google_credentials
 import time
+from datetime import datetime, timedelta
 
 # Configuración de página
 st.set_page_config(
@@ -176,6 +177,35 @@ def show_header():
         </div>
         """, unsafe_allow_html=True)
 
+# Función para verificar si necesitamos actualizar la data
+@st.cache_data(ttl=24*3600)  # Cache por 24 horas
+def check_data_update_needed(collection_name, current_data_date):
+    """
+    Verifica si necesitamos actualizar la data comparando la fecha actual con la última actualización
+    """
+    data_loader = st.session_state.data_loader
+    last_update = data_loader._get_collection_last_update(collection_name)
+    
+    if last_update is None:
+        return True
+    
+    if current_data_date is None:
+        return True
+        
+    return last_update > current_data_date
+
+# Función cacheada para cargar datos del módulo
+@st.cache_data(ttl=24*3600)  # Cache por 24 horas
+def load_cached_module_data(selected_module, current_data_date):
+    data_loader = st.session_state.data_loader
+    return data_loader.load_module_data(selected_module, current_data_date)
+
+# Función cacheada para obtener última actualización
+@st.cache_data(ttl=300)  # Cache por 5 minutos
+def get_cached_last_update(collection_name):
+    data_loader = st.session_state.data_loader
+    return data_loader._get_collection_last_update(collection_name)
+
 # Alternativa sin cache_resource
 if 'data_loader' not in st.session_state:
     try:
@@ -191,6 +221,10 @@ def main():
         if data_loader is None:
             st.error("No se pudo inicializar la conexión a la base de datos.")
             return
+
+        # Inicializar la fecha de datos actual en session_state si no existe
+        if 'current_data_date' not in st.session_state:
+            st.session_state.current_data_date = None
 
         # Obtener credenciales de Google
         try:
@@ -235,26 +269,32 @@ def main():
                 st.markdown('</div>', unsafe_allow_html=True)
                 progress_bar.empty()
         else:
-            # Para otros módulos, verificar última actualización
+            # Para otros módulos, verificar si necesitamos actualizar
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                last_update = data_loader._get_collection_last_update(collection_name)
+                # Verificar si necesitamos actualizar la data
+                update_needed = check_data_update_needed(collection_name, st.session_state.current_data_date)
                 
-                with st.spinner(f'🔄 Cargando datos del módulo {MODULES[selected_module]}...'):
-                    progress_bar = st.progress(0)
-                    for i in range(100):
-                        time.sleep(0.01)
-                        progress_bar.progress(i + 1)
-                    data = data_loader.load_module_data(selected_module, last_update)
-                    progress_bar.empty()
-                    
-                    if data is None:
-                        st.error("No se encontraron datos para este módulo en la base de datos.")
-                        return
+                if update_needed:
+                    with st.spinner(f'🔄 Cargando nuevos datos del módulo {MODULES[selected_module]}...'):
+                        progress_bar = st.progress(0)
+                        for i in range(100):
+                            time.sleep(0.01)
+                            progress_bar.progress(i + 1)
+                        data = load_cached_module_data(selected_module, st.session_state.current_data_date)
+                        if data is not None:
+                            st.session_state.current_data_date = datetime.now()
+                        progress_bar.empty()
+                else:
+                    data = load_cached_module_data(selected_module, st.session_state.current_data_date)
+                
+                if data is None:
+                    st.error("No se encontraron datos para este módulo en la base de datos.")
+                    return
 
                 # Mostrar última actualización
-                if last_update:
-                    st.sidebar.info(f"Última actualización: {last_update.strftime('%d/%m/%Y %H:%M')}")
+                if st.session_state.current_data_date:
+                    st.sidebar.info(f"Datos actualizados el: {st.session_state.current_data_date.strftime('%d/%m/%Y %H:%M')}")
 
             # Crear pestañas
             tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([

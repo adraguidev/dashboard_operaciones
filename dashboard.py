@@ -67,22 +67,41 @@ st.markdown("""
     
     /* Estilo para las pestañas */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 2rem;
+        gap: 0.5rem !important;
         background-color: white;
         padding: 0.5rem;
         border-radius: 0.5rem;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        flex-wrap: wrap;
+        row-gap: 0.5rem;
     }
     
     .stTabs [data-baseweb="tab"] {
-        height: 3rem;
-        white-space: pre-wrap;
+        height: 2.5rem;
+        white-space: nowrap;
         background-color: transparent;
         border-radius: 4px;
         color: #0f1116;
-        font-size: 14px;
-        padding: 0 1.5rem !important;
+        font-size: 13px;
+        padding: 0 1rem !important;
         min-width: fit-content;
+        flex-grow: 1;
+        flex-basis: auto;
+        text-align: center;
+        max-width: 200px;
+    }
+    
+    /* Ajuste para pantallas pequeñas */
+    @media screen and (max-width: 768px) {
+        .stTabs [data-baseweb="tab"] {
+            font-size: 12px;
+            padding: 0 0.5rem !important;
+            height: 2.2rem;
+        }
+        
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.3rem !important;
+        }
     }
     
     .stTabs [data-baseweb="tab"]:hover {
@@ -185,18 +204,11 @@ st.markdown("""
 
 # Función para mostrar el header con información del usuario
 def show_header():
-    col1, col2 = st.columns([3,1])
+    col1, _ = st.columns([1,0.2])
     with col1:
         st.markdown('<div class="fade-in">', unsafe_allow_html=True)
         st.title("📊 Gestión de Expedientes")
         st.markdown('</div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown("""
-        <div class="stCard" style="text-align: right;">
-            <h4>Estado del Sistema</h4>
-            <p style="color: #00c853;">● En línea</p>
-        </div>
-        """, unsafe_allow_html=True)
 
 # Función para verificar si necesitamos actualizar la data
 @st.cache_data(ttl=24*3600)  # Cache por 24 horas

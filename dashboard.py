@@ -309,40 +309,50 @@ def show_header():
         </div>
     """, unsafe_allow_html=True)
 
-# Función para verificar última actualización (esta no se cachea para siempre verificar la DB)
+# Función para verificar última actualización (cacheada por 5 minutos para no consultar constantemente)
+@st.cache_data(ttl=300)
 def check_db_last_update(collection_name):
     """
     Verifica la última actualización en la base de datos.
-    Esta función no se cachea para siempre obtener el último estado de la DB.
+    Cacheado por 5 minutos para no consultar constantemente.
     """
     data_loader = st.session_state.data_loader
     return data_loader._get_collection_last_update(collection_name)
 
-# Función cacheada para cargar datos del módulo
+# Función cacheada para cargar datos del módulo y su timestamp
 @st.cache_data(ttl=24*3600)
-def load_module_data_cached(selected_module, collection_name, last_update_timestamp):
+def load_module_data_with_timestamp(selected_module, collection_name, last_update_in_db):
     """
-    Carga y cachea los datos del módulo.
-    El last_update_timestamp en los parámetros hace que se invalide el caché
-    cuando hay una nueva actualización en la DB.
+    Carga y cachea los datos del módulo junto con su timestamp.
+    El timestamp se mantiene consistente entre reruns.
     """
     data_loader = st.session_state.data_loader
-    data = data_loader.load_module_data(selected_module, last_update_timestamp)
+    data = data_loader.load_module_data(selected_module, last_update_in_db)
     
     if data is not None:
+        # Usar el timestamp de la DB para mantener consistencia
         lima_tz = pytz.timezone('America/Lima')
-        update_time = last_update_timestamp.astimezone(lima_tz) if last_update_timestamp else datetime.now(pytz.UTC).astimezone(lima_tz)
-        return data, update_time
-    return None, None
+        update_time = last_update_in_db.astimezone(lima_tz) if last_update_in_db else datetime.now(pytz.UTC).astimezone(lima_tz)
+        return {
+            'data': data,
+            'update_time': update_time,
+            'load_time': update_time
+        }
+    return None
 
-# Función para verificar la última actualización de la colección
-@st.cache_data(ttl=24*3600)
-def get_cached_last_update(collection_name):
+def get_module_data(selected_module, collection_name):
     """
-    Obtiene y cachea la fecha de última actualización de la colección
+    Función que maneja la lógica de verificación y carga de datos.
     """
-    data_loader = st.session_state.data_loader
-    return data_loader._get_collection_last_update(collection_name)
+    # Verificar última actualización en la DB (cacheado por 5 minutos)
+    last_update_in_db = check_db_last_update(collection_name)
+    
+    # Intentar cargar datos cacheados
+    cached_data = load_module_data_with_timestamp(selected_module, collection_name, last_update_in_db)
+    
+    if cached_data is not None:
+        return cached_data['data'], cached_data['update_time'], True
+    return None, None, False
 
 # Alternativa sin cache_resource
 if 'data_loader' not in st.session_state:
@@ -357,23 +367,6 @@ if 'data_loader' not in st.session_state:
 def get_lima_datetime():
     lima_tz = pytz.timezone('America/Lima')
     return datetime.now(pytz.UTC).astimezone(lima_tz)
-
-# Función para verificar y cargar datos del módulo
-@st.cache_data(ttl=24*3600)
-def get_module_data(selected_module, collection_name):
-    """
-    Función que maneja la lógica de verificación y carga de datos.
-    Verifica la DB antes de usar el caché.
-    """
-    # Siempre verificar la última actualización en la DB
-    last_update_in_db = check_db_last_update(collection_name)
-    
-    # Cargar datos (se usará caché si el last_update_in_db no ha cambiado)
-    data, update_time = load_module_data_cached(selected_module, collection_name, last_update_in_db)
-    
-    if data is not None:
-        return data, update_time, True
-    return None, None, False
 
 def main():
     try:
@@ -409,13 +402,6 @@ def main():
                 key="module_selector"
             )
 
-            # Mostrar última actualización
-            if 'update_time' in locals() and update_time:
-                st.markdown(
-                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
-                    unsafe_allow_html=True
-                )
-
         # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':
             if google_credentials is None:
@@ -437,19 +423,18 @@ def main():
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
                 with st.spinner(f'🔄 Cargando datos del módulo {MODULES[selected_module]}...'):
-                    # Cargar datos con caché unificado
-                    data, update_time, is_new_data = get_module_data(selected_module, collection_name)
+                    data, update_time, _ = get_module_data(selected_module, collection_name)
                 
                 if data is None:
                     st.error("No se encontraron datos para este módulo en la base de datos.")
                     return
 
-                # Mostrar última actualización con hora de Lima
+                # Mostrar última actualización
                 if update_time:
-                    if is_new_data:
-                        st.sidebar.success(f"Datos actualizados el: {update_time.strftime('%d/%m/%Y %H:%M')} (hora Lima)")
-                    else:
-                        st.sidebar.info(f"Usando datos del: {update_time.strftime('%d/%m/%Y %H:%M')} (hora Lima)")
+                    st.sidebar.markdown(
+                        f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
+                        unsafe_allow_html=True
+                    )
 
             # Crear pestañas
             tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([

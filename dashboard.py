@@ -24,52 +24,6 @@ st.set_page_config(
 # CSS personalizado para mejorar la interfaz
 st.markdown("""
 <style>
-    /* Forzar modo claro */
-    [data-testid="stAppViewContainer"], 
-    [data-testid="stHeader"],
-    [data-testid="stToolbar"],
-    [data-testid="stSidebar"] {
-        background-color: white !important;
-        color: #0f1116 !important;
-    }
-
-    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-        color: #0f1116 !important;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        color: #0f1116 !important;
-    }
-    
-    .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        color: white !important;
-    }
-    
-    /* Asegurar que las tablas y gráficos usen colores claros */
-    .dataframe {
-        color: #0f1116 !important;
-        background-color: white !important;
-    }
-    
-    .dataframe th {
-        background-color: #f8f9fa !important;
-        color: #0f1116 !important;
-    }
-    
-    .dataframe td {
-        color: #0f1116 !important;
-    }
-    
-    /* Asegurar que los widgets usen colores claros */
-    .stSelectbox [data-baseweb="select"] {
-        background-color: white !important;
-        color: #0f1116 !important;
-    }
-    
-    .stRadio label {
-        color: #0f1116 !important;
-    }
-    
     /* Eliminar todo el padding superior */
     .main > div:first-child {
         padding-top: 0 !important;

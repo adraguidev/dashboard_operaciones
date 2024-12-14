@@ -13,7 +13,7 @@ import time
 
 # Configuración de página
 st.set_page_config(
-    page_title="Gestión de Expedientess",
+    page_title="Dashboard USM",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"

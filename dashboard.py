@@ -11,6 +11,7 @@ from modules.spe.spe_module import SPEModule
 from src.utils.database import get_google_credentials
 import time
 from datetime import datetime, timedelta
+import pytz
 
 # Configuración de página
 st.set_page_config(
@@ -215,6 +216,11 @@ if 'data_loader' not in st.session_state:
         st.error(f"Error al inicializar DataLoader: {str(e)}")
         st.session_state.data_loader = None
 
+# Función para obtener la fecha y hora actual en Lima
+def get_lima_datetime():
+    lima_tz = pytz.timezone('America/Lima')
+    return datetime.now(pytz.UTC).astimezone(lima_tz)
+
 def main():
     try:
         data_loader = st.session_state.data_loader
@@ -283,7 +289,7 @@ def main():
                             progress_bar.progress(i + 1)
                         data = load_cached_module_data(selected_module, st.session_state.current_data_date)
                         if data is not None:
-                            st.session_state.current_data_date = datetime.now()
+                            st.session_state.current_data_date = get_lima_datetime()
                         progress_bar.empty()
                 else:
                     data = load_cached_module_data(selected_module, st.session_state.current_data_date)
@@ -292,9 +298,9 @@ def main():
                     st.error("No se encontraron datos para este módulo en la base de datos.")
                     return
 
-                # Mostrar última actualización
+                # Mostrar última actualización con hora de Lima
                 if st.session_state.current_data_date:
-                    st.sidebar.info(f"Datos actualizados el: {st.session_state.current_data_date.strftime('%d/%m/%Y %H:%M')}")
+                    st.sidebar.info(f"Datos actualizados el: {st.session_state.current_data_date.strftime('%d/%m/%Y %H:%M')} (hora Lima)")
 
             # Crear pestañas
             tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([

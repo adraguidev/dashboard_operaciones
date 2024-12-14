@@ -81,11 +81,31 @@ st.markdown("""
         border-radius: 4px;
         color: #0f1116;
         font-size: 14px;
+        padding: 0 1.5rem !important;
+        min-width: fit-content;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: rgba(255, 75, 75, 0.1);
     }
     
     .stTabs [aria-selected="true"] {
         background-color: #FF4B4B !important;
         color: white !important;
+        font-weight: 500;
+    }
+    
+    /* Contenedor de pestañas para asegurar espaciado correcto */
+    .stTabs {
+        background-color: white;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    /* Ajuste para el contenido de las pestañas */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 1rem 0.5rem;
     }
     
     /* Estilo para los botones */

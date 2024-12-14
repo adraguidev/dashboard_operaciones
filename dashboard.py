@@ -292,22 +292,31 @@ def show_header():
         </div>
     """, unsafe_allow_html=True)
 
-# Función para verificar si necesitamos actualizar la data
-@st.cache_data(ttl=24*3600)  # Cache por 24 horas
-def check_data_update_needed(collection_name, current_data_date):
+# Función para verificar última actualización (esta no se cachea para siempre verificar la DB)
+def check_db_last_update(collection_name):
     """
-    Verifica si necesitamos actualizar la data comparando la fecha actual con la última actualización
+    Verifica la última actualización en la base de datos.
+    Esta función no se cachea para siempre obtener el último estado de la DB.
     """
     data_loader = st.session_state.data_loader
-    last_update = data_loader._get_collection_last_update(collection_name)
+    return data_loader._get_collection_last_update(collection_name)
+
+# Función cacheada para cargar datos del módulo
+@st.cache_data(ttl=24*3600)
+def load_module_data_cached(selected_module, collection_name, last_update_timestamp):
+    """
+    Carga y cachea los datos del módulo.
+    El last_update_timestamp en los parámetros hace que se invalide el caché
+    cuando hay una nueva actualización en la DB.
+    """
+    data_loader = st.session_state.data_loader
+    data = data_loader.load_module_data(selected_module, last_update_timestamp)
     
-    if last_update is None:
-        return True
-    
-    if current_data_date is None:
-        return True
-        
-    return last_update > current_data_date
+    if data is not None:
+        lima_tz = pytz.timezone('America/Lima')
+        update_time = last_update_timestamp.astimezone(lima_tz) if last_update_timestamp else datetime.now(pytz.UTC).astimezone(lima_tz)
+        return data, update_time
+    return None, None
 
 # Función para verificar la última actualización de la colección
 @st.cache_data(ttl=24*3600)
@@ -317,21 +326,6 @@ def get_cached_last_update(collection_name):
     """
     data_loader = st.session_state.data_loader
     return data_loader._get_collection_last_update(collection_name)
-
-# Función cacheada para cargar datos del módulo y su fecha de actualización
-@st.cache_data(ttl=24*3600)
-def load_cached_module_data_with_date(selected_module, collection_name, last_update_in_db):
-    """
-    Carga los datos del módulo y retorna tanto los datos como la fecha de actualización
-    """
-    data_loader = st.session_state.data_loader
-    data = data_loader.load_module_data(selected_module, last_update_in_db)
-    
-    if data is not None:
-        lima_tz = pytz.timezone('America/Lima')
-        update_time = last_update_in_db.astimezone(lima_tz) if last_update_in_db else datetime.now(pytz.UTC).astimezone(lima_tz)
-        return data, update_time
-    return None, None
 
 # Alternativa sin cache_resource
 if 'data_loader' not in st.session_state:
@@ -351,18 +345,17 @@ def get_lima_datetime():
 @st.cache_data(ttl=24*3600)
 def get_module_data(selected_module, collection_name):
     """
-    Función que maneja toda la lógica de verificación y carga de datos,
-    cacheando el resultado completo para evitar recargas innecesarias
+    Función que maneja la lógica de verificación y carga de datos.
+    Verifica la DB antes de usar el caché.
     """
-    data_loader = st.session_state.data_loader
-    last_update_in_db = data_loader._get_collection_last_update(collection_name)
+    # Siempre verificar la última actualización en la DB
+    last_update_in_db = check_db_last_update(collection_name)
     
-    data = data_loader.load_module_data(selected_module, last_update_in_db)
+    # Cargar datos (se usará caché si el last_update_in_db no ha cambiado)
+    data, update_time = load_module_data_cached(selected_module, collection_name, last_update_in_db)
     
     if data is not None:
-        lima_tz = pytz.timezone('America/Lima')
-        update_time = last_update_in_db.astimezone(lima_tz) if last_update_in_db else datetime.now(pytz.UTC).astimezone(lima_tz)
-        return data, update_time, True  # True indica que son datos nuevos
+        return data, update_time, True
     return None, None, False
 
 def main():
@@ -397,7 +390,7 @@ def main():
             
             # Selección de módulo con estilo compacto
             selected_module = st.radio(
-                "",  # Quitamos el label porque ya está en el card
+                "",  # Quitamos el label porque ya est�� en el card
                 options=list(MODULES.keys()),
                 format_func=lambda x: MODULES[x],
                 key="module_selector"

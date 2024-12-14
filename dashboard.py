@@ -24,9 +24,14 @@ st.set_page_config(
 # CSS personalizado para mejorar la interfaz
 st.markdown("""
 <style>
-    /* Eliminar padding superior del contenedor principal */
+    /* Eliminar todo el padding superior */
+    .main > div:first-child {
+        padding-top: 0 !important;
+    }
+    
+    /* Reducir espacio del contenedor principal */
     .main .block-container {
-        padding-top: 0rem !important;
+        padding-top: 0.5rem !important;
         padding-bottom: 0.5rem !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
@@ -37,30 +42,7 @@ st.markdown("""
         margin: 0 !important;
         padding: 0 !important;
         font-size: 1.5rem !important;
-        line-height: 1 !important;
-        margin-bottom: 0.5rem !important;
-    }
-    
-    /* Eliminar espacio superior del contenedor principal */
-    .main > div:first-child {
-        padding-top: 0 !important;
-    }
-    
-    /* Ajustar espacio del header */
-    div[data-testid="stHeader"] {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-    }
-    
-    /* Reducir espacio del título */
-    .stMarkdown {
-        margin-top: 0 !important;
-    }
-    
-    /* Ajustar espacio entre elementos */
-    .element-container {
-        margin-top: 0.2rem !important;
-        margin-bottom: 0.2rem !important;
+        line-height: 1.2 !important;
     }
     
     /* Optimizar sidebar */
@@ -133,6 +115,11 @@ st.markdown("""
     }
     
     .stProgress {
+        margin: 0.2rem 0 !important;
+    }
+    
+    /* Ajustar espacio entre elementos */
+    .element-container {
         margin: 0.2rem 0 !important;
     }
     

@@ -12,47 +12,6 @@ from src.utils.database import get_google_credentials
 import time
 from datetime import datetime, timedelta
 import pytz
-import logging
-from typing import Optional, Tuple, Any, Callable
-from functools import wraps
-
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-class DashboardError(Exception):
-    """Clase base para errores específicos del dashboard"""
-    pass
-
-class DataLoadError(DashboardError):
-    """Error al cargar datos"""
-    pass
-
-class ConnectionError(DashboardError):
-    """Error de conexión"""
-    pass
-
-def safe_operation(operation_name: str):
-    """
-    Decorador para manejar errores de operaciones de manera segura.
-    Registra errores y muestra mensajes apropiados al usuario.
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except DashboardError as e:
-                logger.error(f"Error en {operation_name}: {str(e)}")
-                st.error(f"Error: {str(e)}")
-            except Exception as e:
-                logger.exception(f"Error inesperado en {operation_name}")
-                st.error(f"Error inesperado: {str(e)}")
-                if st.config.get_option('client.showErrorDetails'):
-                    st.exception(e)
-            return None
-        return wrapper
-    return decorator
 
 # Configuración de página
 st.set_page_config(
@@ -350,6 +309,16 @@ def show_header():
         </div>
     """, unsafe_allow_html=True)
 
+# Función para verificar última actualización (cacheada por 5 minutos para no consultar constantemente)
+@st.cache_data(ttl=300)
+def check_db_last_update(collection_name):
+    """
+    Verifica la última actualización en la base de datos.
+    Cacheado por 5 minutos para no consultar constantemente.
+    """
+    data_loader = st.session_state.data_loader
+    return data_loader._get_collection_last_update(collection_name)
+
 # Función para generar hash de datos
 def generate_data_hash(data):
     """
@@ -368,29 +337,29 @@ def generate_data_hash(data):
     return hashlib.md5(data_str.encode()).hexdigest()
 
 # Función cacheada para cargar datos del módulo y su timestamp
-@safe_operation("carga de datos del módulo")
+@st.cache_data(ttl=24*3600)
 def load_module_data_with_timestamp(selected_module, collection_name, last_update_in_db):
     """
     Carga y cachea los datos del módulo junto con su timestamp.
     Incluye un hash para detectar cambios reales en los datos.
     """
     data_loader = st.session_state.data_loader
-    try:
-        data = data_loader.load_module_data(selected_module, last_update_in_db)
+    data = data_loader.load_module_data(selected_module, last_update_in_db)
+    
+    if data is not None:
+        # Usar el timestamp de la DB para mantener consistencia
+        lima_tz = pytz.timezone('America/Lima')
+        update_time = last_update_in_db.astimezone(lima_tz) if last_update_in_db else datetime.now(pytz.UTC).astimezone(lima_tz)
         
-        if data is not None:
-            lima_tz = pytz.timezone('America/Lima')
-            update_time = last_update_in_db.astimezone(lima_tz) if last_update_in_db else datetime.now(pytz.UTC).astimezone(lima_tz)
-            data_hash = generate_data_hash(data)
-            
-            return {
-                'data': data,
-                'update_time': update_time,
-                'data_hash': data_hash,
-                'load_time': update_time
-            }
-    except Exception as e:
-        raise DataLoadError(f"No se pudieron cargar los datos para {selected_module}: {str(e)}")
+        # Generar hash de los datos
+        data_hash = generate_data_hash(data)
+        
+        return {
+            'data': data,
+            'update_time': update_time,
+            'data_hash': data_hash,
+            'load_time': update_time
+        }
     return None
 
 def get_module_data(selected_module, collection_name):
@@ -435,41 +404,38 @@ def get_lima_datetime():
     return datetime.now(pytz.UTC).astimezone(lima_tz)
 
 # Función helper para mostrar spinner con progress bar
-def show_loading_progress(message: str, action: Callable, show_fade_in: bool = True) -> Any:
+def show_loading_progress(message, action, show_fade_in=True):
     """
     Muestra un spinner con barra de progreso mientras se ejecuta una acción.
-    Maneja errores de manera segura.
+    
+    Args:
+        message: Mensaje a mostrar durante la carga
+        action: Función a ejecutar
+        show_fade_in: Si se debe mostrar el efecto fade-in
+    Returns:
+        El resultado de la acción ejecutada
     """
-    try:
-        with st.spinner(f'🔄 {message}...'):
-            progress_bar = st.progress(0)
-            for i in range(100):
-                time.sleep(0.01)
-                progress_bar.progress(i + 1)
-            
-            if show_fade_in:
-                st.markdown('<div class="fade-in">', unsafe_allow_html=True)
-            
-            result = action()
-            
-            if show_fade_in:
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            progress_bar.empty()
-            return result
-    except Exception as e:
-        logger.exception(f"Error en operación de carga: {message}")
-        st.error(f"Error durante {message}: {str(e)}")
-        return None
+    with st.spinner(f'🔄 {message}...'):
+        progress_bar = st.progress(0)
+        for i in range(100):
+            time.sleep(0.01)
+            progress_bar.progress(i + 1)
+        
+        if show_fade_in:
+            st.markdown('<div class="fade-in">', unsafe_allow_html=True)
+        
+        result = action()
+        
+        if show_fade_in:
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        progress_bar.empty()
+        return result
 
 def main():
-    """Función principal del dashboard"""
     try:
-        # Inicializar DataLoader si no existe
-        if 'data_loader' not in st.session_state:
-            st.session_state.data_loader = initialize_data_loader()
-        
-        if st.session_state.data_loader is None:
+        data_loader = st.session_state.data_loader
+        if data_loader is None:
             st.error("No se pudo inicializar la conexión a la base de datos.")
             return
 
@@ -588,10 +554,8 @@ def main():
                 )
 
     except Exception as e:
-        logger.exception("Error crítico en la aplicación")
         st.error(f"Error inesperado en la aplicación: {str(e)}")
-        if st.config.get_option('client.showErrorDetails'):
-            st.exception(e)
+        print(f"Error detallado: {str(e)}")
 
 if __name__ == "__main__":
     main()

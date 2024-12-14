@@ -49,30 +49,29 @@ st.markdown("""
     section[data-testid="stSidebar"] {
         width: 15rem !important;
         min-width: 15rem !important;
+        background-color: #f8f9fa;
     }
     
     section[data-testid="stSidebar"] > div {
         padding: 0.5rem !important;
     }
     
-    /* Ajustar card del sidebar */
-    .sidebar-card {
-        background-color: white;
-        padding: 0.3rem 0.5rem !important;
-        border-radius: 0.3rem;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    /* Estilo para el título de módulos */
+    .sidebar-title {
+        font-size: 0.9rem !important;
+        color: #6c757d;
+        font-weight: 600;
         margin-bottom: 0.5rem;
+        padding-left: 0.5rem;
     }
     
-    .sidebar-card h3 {
-        margin: 0 !important;
-        font-size: 1rem !important;
-        color: #333;
-    }
-    
-    /* Compactar radio buttons del sidebar */
+    /* Ajustar radio buttons del sidebar */
     .stRadio > div {
         gap: 0.2rem !important;
+        background-color: white;
+        padding: 0.5rem;
+        border-radius: 0.3rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     
     .stRadio > label {
@@ -80,16 +79,34 @@ st.markdown("""
         padding: 0.2rem 0 !important;
     }
     
+    /* Estilo para los radio buttons */
+    .stRadio [data-testid="stMarkdownContainer"] > p {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
     /* Ajustar mensajes de info/success en sidebar */
     .sidebar .stAlert {
-        padding: 0.3rem !important;
+        padding: 0.2rem !important;
         margin: 0.3rem 0 !important;
-        font-size: 0.75rem !important;
     }
     
     .sidebar .stAlert > div {
-        padding: 0.2rem !important;
+        padding: 0.2rem 0.4rem !important;
         min-height: unset !important;
+        font-size: 0.7rem !important;
+    }
+    
+    /* Estilo para el mensaje de actualización */
+    .update-info {
+        font-size: 0.7rem !important;
+        color: #6c757d;
+        padding: 0.2rem 0.4rem;
+        background-color: #e9ecef;
+        border-radius: 0.2rem;
+        margin-top: 0.3rem;
+        display: inline-block;
     }
     
     /* Reducir espacio de spinners y progress bars */
@@ -382,19 +399,22 @@ def main():
 
         # Contenedor para el sidebar con estilo
         with st.sidebar:
-            st.markdown("""
-            <div class="sidebar-card">
-                <h3>🎯 Módulos</h3>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown('<p class="sidebar-title">🎯 MÓDULOS</p>', unsafe_allow_html=True)
             
             # Selección de módulo con estilo compacto
             selected_module = st.radio(
-                "",  # Quitamos el label porque ya est�� en el card
+                "",
                 options=list(MODULES.keys()),
-                format_func=lambda x: MODULES[x],
+                format_func=lambda x: f"{get_module_icon(x)} {MODULES[x]}",
                 key="module_selector"
             )
+
+            # Mostrar última actualización
+            if 'update_time' in locals() and update_time:
+                st.markdown(
+                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
+                    unsafe_allow_html=True
+                )
 
         # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':
@@ -486,6 +506,18 @@ def main():
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")
         print(f"Error detallado: {str(e)}")
+
+# Función para obtener el ícono del módulo
+def get_module_icon(module_key):
+    icons = {
+        'CCM': '📋',
+        'PRR': '📊',
+        'CCM-ESP': '⭐',
+        'CCM-LEY': '⚖️',
+        'SOL': '🚀',
+        'SPE': '☀️'
+    }
+    return icons.get(module_key, '📌')
 
 if __name__ == "__main__":
     main()

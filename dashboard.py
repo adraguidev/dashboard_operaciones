@@ -405,7 +405,7 @@ def main():
             selected_module = st.radio(
                 "",
                 options=list(MODULES.keys()),
-                format_func=lambda x: f"{get_module_icon(x)} {MODULES[x]}",
+                format_func=lambda x: MODULES[x],
                 key="module_selector"
             )
 
@@ -506,18 +506,6 @@ def main():
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")
         print(f"Error detallado: {str(e)}")
-
-# Función para obtener el ícono del módulo
-def get_module_icon(module_key):
-    icons = {
-        'CCM': '📋',
-        'PRR': '📊',
-        'CCM-ESP': '⭐',
-        'CCM-LEY': '⚖️',
-        'SOL': '🚀',
-        'SPE': '☀️'
-    }
-    return icons.get(module_key, '📌')
 
 if __name__ == "__main__":
     main()

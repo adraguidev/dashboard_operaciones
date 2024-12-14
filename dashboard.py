@@ -195,17 +195,29 @@ def check_data_update_needed(collection_name, current_data_date):
         
     return last_update > current_data_date
 
-# Función cacheada para cargar datos del módulo
-@st.cache_data(ttl=24*3600)  # Cache por 24 horas
-def load_cached_module_data(selected_module, current_data_date):
-    data_loader = st.session_state.data_loader
-    return data_loader.load_module_data(selected_module, current_data_date)
-
-# Función cacheada para obtener última actualización
-@st.cache_data(ttl=300)  # Cache por 5 minutos
+# Función para verificar la última actualización de la colección
+@st.cache_data(ttl=24*3600)
 def get_cached_last_update(collection_name):
+    """
+    Obtiene y cachea la fecha de última actualización de la colección
+    """
     data_loader = st.session_state.data_loader
     return data_loader._get_collection_last_update(collection_name)
+
+# Función cacheada para cargar datos del módulo y su fecha de actualización
+@st.cache_data(ttl=24*3600)
+def load_cached_module_data_with_date(selected_module, collection_name, last_update_in_db):
+    """
+    Carga los datos del módulo y retorna tanto los datos como la fecha de actualización
+    """
+    data_loader = st.session_state.data_loader
+    data = data_loader.load_module_data(selected_module, last_update_in_db)
+    
+    if data is not None:
+        lima_tz = pytz.timezone('America/Lima')
+        update_time = last_update_in_db.astimezone(lima_tz) if last_update_in_db else datetime.now(pytz.UTC).astimezone(lima_tz)
+        return data, update_time
+    return None, None
 
 # Alternativa sin cache_resource
 if 'data_loader' not in st.session_state:
@@ -275,32 +287,54 @@ def main():
                 st.markdown('</div>', unsafe_allow_html=True)
                 progress_bar.empty()
         else:
-            # Para otros módulos, verificar si necesitamos actualizar
+            # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                # Verificar si necesitamos actualizar la data
-                update_needed = check_data_update_needed(collection_name, st.session_state.current_data_date)
+                # Verificar última actualización en la base de datos
+                last_update_in_db = get_cached_last_update(collection_name)
                 
-                if update_needed:
+                # Verificar si hay datos cacheados y su timestamp
+                if 'cached_data' not in st.session_state:
+                    st.session_state.cached_data = {}
+                
+                cache_key = f"{selected_module}_last_update"
+                cached_timestamp = st.session_state.cached_data.get(cache_key)
+                
+                # Determinar si necesitamos recargar los datos
+                need_reload = (
+                    cached_timestamp is None or  # Primera carga
+                    last_update_in_db is None or  # No hay información de última actualización
+                    (last_update_in_db and cached_timestamp and last_update_in_db > cached_timestamp)  # Hay nueva data
+                )
+                
+                if need_reload:
                     with st.spinner(f'🔄 Cargando nuevos datos del módulo {MODULES[selected_module]}...'):
                         progress_bar = st.progress(0)
                         for i in range(100):
                             time.sleep(0.01)
                             progress_bar.progress(i + 1)
-                        data = load_cached_module_data(selected_module, st.session_state.current_data_date)
-                        if data is not None:
-                            st.session_state.current_data_date = get_lima_datetime()
+                        
+                        # Cargar datos con caché
+                        data, update_time = load_cached_module_data_with_date(selected_module, collection_name, last_update_in_db)
                         progress_bar.empty()
+                        
+                        if data is not None:
+                            # Actualizar el timestamp en la caché
+                            st.session_state.cached_data[cache_key] = last_update_in_db or update_time
                 else:
-                    data = load_cached_module_data(selected_module, st.session_state.current_data_date)
+                    # Usar datos cacheados
+                    data, update_time = load_cached_module_data_with_date(selected_module, collection_name, last_update_in_db)
                 
                 if data is None:
                     st.error("No se encontraron datos para este módulo en la base de datos.")
                     return
 
                 # Mostrar última actualización con hora de Lima
-                if st.session_state.current_data_date:
-                    st.sidebar.info(f"Datos actualizados el: {st.session_state.current_data_date.strftime('%d/%m/%Y %H:%M')} (hora Lima)")
+                if update_time:
+                    if need_reload:
+                        st.sidebar.success(f"Datos actualizados el: {update_time.strftime('%d/%m/%Y %H:%M')} (hora Lima)")
+                    else:
+                        st.sidebar.info(f"Usando datos del: {update_time.strftime('%d/%m/%Y %H:%M')} (hora Lima)")
 
             # Crear pestañas
             tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([

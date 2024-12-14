@@ -347,6 +347,24 @@ def get_lima_datetime():
     lima_tz = pytz.timezone('America/Lima')
     return datetime.now(pytz.UTC).astimezone(lima_tz)
 
+# Función para verificar y cargar datos del módulo
+@st.cache_data(ttl=24*3600)
+def get_module_data(selected_module, collection_name):
+    """
+    Función que maneja toda la lógica de verificación y carga de datos,
+    cacheando el resultado completo para evitar recargas innecesarias
+    """
+    data_loader = st.session_state.data_loader
+    last_update_in_db = data_loader._get_collection_last_update(collection_name)
+    
+    data = data_loader.load_module_data(selected_module, last_update_in_db)
+    
+    if data is not None:
+        lima_tz = pytz.timezone('America/Lima')
+        update_time = last_update_in_db.astimezone(lima_tz) if last_update_in_db else datetime.now(pytz.UTC).astimezone(lima_tz)
+        return data, update_time, True  # True indica que son datos nuevos
+    return None, None, False
+
 def main():
     try:
         data_loader = st.session_state.data_loader
@@ -405,40 +423,9 @@ def main():
             # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                # Verificar última actualización en la base de datos
-                last_update_in_db = get_cached_last_update(collection_name)
-                
-                # Verificar si hay datos cacheados y su timestamp
-                if 'cached_data' not in st.session_state:
-                    st.session_state.cached_data = {}
-                
-                cache_key = f"{selected_module}_last_update"
-                cached_timestamp = st.session_state.cached_data.get(cache_key)
-                
-                # Determinar si necesitamos recargar los datos
-                need_reload = (
-                    cached_timestamp is None or  # Primera carga
-                    last_update_in_db is None or  # No hay información de última actualización
-                    (last_update_in_db and cached_timestamp and last_update_in_db > cached_timestamp)  # Hay nueva data
-                )
-                
-                if need_reload:
-                    with st.spinner(f'🔄 Cargando nuevos datos del módulo {MODULES[selected_module]}...'):
-                        progress_bar = st.progress(0)
-                        for i in range(100):
-                            time.sleep(0.01)
-                            progress_bar.progress(i + 1)
-                        
-                        # Cargar datos con caché
-                        data, update_time = load_cached_module_data_with_date(selected_module, collection_name, last_update_in_db)
-                        progress_bar.empty()
-                        
-                        if data is not None:
-                            # Actualizar el timestamp en la caché
-                            st.session_state.cached_data[cache_key] = last_update_in_db or update_time
-                else:
-                    # Usar datos cacheados
-                    data, update_time = load_cached_module_data_with_date(selected_module, collection_name, last_update_in_db)
+                with st.spinner(f'🔄 Cargando datos del módulo {MODULES[selected_module]}...'):
+                    # Cargar datos con caché unificado
+                    data, update_time, is_new_data = get_module_data(selected_module, collection_name)
                 
                 if data is None:
                     st.error("No se encontraron datos para este módulo en la base de datos.")
@@ -446,7 +433,7 @@ def main():
 
                 # Mostrar última actualización con hora de Lima
                 if update_time:
-                    if need_reload:
+                    if is_new_data:
                         st.sidebar.success(f"Datos actualizados el: {update_time.strftime('%d/%m/%Y %H:%M')} (hora Lima)")
                     else:
                         st.sidebar.info(f"Usando datos del: {update_time.strftime('%d/%m/%Y %H:%M')} (hora Lima)")

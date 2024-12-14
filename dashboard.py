@@ -319,12 +319,29 @@ def check_db_last_update(collection_name):
     data_loader = st.session_state.data_loader
     return data_loader._get_collection_last_update(collection_name)
 
+# Función para generar hash de datos
+def generate_data_hash(data):
+    """
+    Genera un hash único para los datos.
+    Esto nos ayuda a detectar cambios reales en los datos.
+    """
+    import hashlib
+    import json
+    
+    # Convertir DataFrame a string para hashear
+    if hasattr(data, 'to_json'):
+        data_str = data.to_json()
+    else:
+        data_str = json.dumps(str(data))
+    
+    return hashlib.md5(data_str.encode()).hexdigest()
+
 # Función cacheada para cargar datos del módulo y su timestamp
 @st.cache_data(ttl=24*3600)
 def load_module_data_with_timestamp(selected_module, collection_name, last_update_in_db):
     """
     Carga y cachea los datos del módulo junto con su timestamp.
-    El timestamp se mantiene consistente entre reruns.
+    Incluye un hash para detectar cambios reales en los datos.
     """
     data_loader = st.session_state.data_loader
     data = data_loader.load_module_data(selected_module, last_update_in_db)
@@ -333,9 +350,14 @@ def load_module_data_with_timestamp(selected_module, collection_name, last_updat
         # Usar el timestamp de la DB para mantener consistencia
         lima_tz = pytz.timezone('America/Lima')
         update_time = last_update_in_db.astimezone(lima_tz) if last_update_in_db else datetime.now(pytz.UTC).astimezone(lima_tz)
+        
+        # Generar hash de los datos
+        data_hash = generate_data_hash(data)
+        
         return {
             'data': data,
             'update_time': update_time,
+            'data_hash': data_hash,
             'load_time': update_time
         }
     return None
@@ -343,6 +365,7 @@ def load_module_data_with_timestamp(selected_module, collection_name, last_updat
 def get_module_data(selected_module, collection_name):
     """
     Función que maneja la lógica de verificación y carga de datos.
+    Ahora incluye verificación de hash para detectar cambios reales.
     """
     # Verificar última actualización en la DB (cacheado por 5 minutos)
     last_update_in_db = check_db_last_update(collection_name)
@@ -351,7 +374,19 @@ def get_module_data(selected_module, collection_name):
     cached_data = load_module_data_with_timestamp(selected_module, collection_name, last_update_in_db)
     
     if cached_data is not None:
-        return cached_data['data'], cached_data['update_time'], True
+        # Guardar el hash en session_state si no existe
+        cache_key = f"{selected_module}_data_hash"
+        previous_hash = st.session_state.get(cache_key)
+        current_hash = cached_data['data_hash']
+        
+        # Actualizar el hash en session_state
+        st.session_state[cache_key] = current_hash
+        
+        # Determinar si los datos realmente cambiaron
+        data_changed = previous_hash != current_hash if previous_hash else True
+        
+        return cached_data['data'], cached_data['update_time'], data_changed
+    
     return None, None, False
 
 # Alternativa sin cache_resource

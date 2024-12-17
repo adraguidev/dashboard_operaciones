@@ -32,7 +32,9 @@ st.markdown("""
     }
     
     section[data-testid="stSidebar"] > div {
-        padding: 1rem 0.5rem !important;
+        padding: 3rem 0.5rem 1rem 0.5rem !important;
+        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
+        position: relative;
     }
     
     /* Estilo para los botones principales */
@@ -157,7 +159,7 @@ st.markdown("""
     /* Ajustes para el sidebar colapsado */
     [data-testid="collapsedControl"] {
         display: block !important;
-        position: fixed !important;
+        position: absolute !important;
         top: 0.5rem !important;
         left: 0.5rem !important;
         background-color: white !important;

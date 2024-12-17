@@ -661,7 +661,7 @@ def main():
             if st.button("⚙️ Admin", key="btn_admin", use_container_width=True):
                 st.session_state.menu_admin = True
                 st.session_state.menu_dashboard = False
-                st.switch_page("pages/1_admin.py")
+                st.markdown('<meta http-equiv="refresh" content="0;url=/admin">', unsafe_allow_html=True)
             
             # Mostrar última actualización si está disponible
             if 'update_time' in locals():

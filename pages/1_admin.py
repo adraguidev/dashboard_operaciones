@@ -531,7 +531,7 @@ with st.sidebar:
     if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
         st.session_state.menu_dashboard = True
         st.session_state.menu_admin = False
-        st.switch_page("dashboard.py")
+        st.markdown('<meta http-equiv="refresh" content="0;url=/">', unsafe_allow_html=True)
     
     # Menú Admin
     if st.button("⚙️ Admin", key="btn_admin", use_container_width=True, type="primary"):

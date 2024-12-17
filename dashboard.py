@@ -285,12 +285,16 @@ def main():
             st.session_state.menu_dashboard = True
         if 'menu_admin' not in st.session_state:
             st.session_state.menu_admin = False
+        if 'selected_module' not in st.session_state:
+            st.session_state.selected_module = list(MODULES.keys())[0]
 
         # Contenedor para el sidebar con estilo
         with st.sidebar:
             # Menú Dashboard
             if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
                 st.session_state.menu_dashboard = not st.session_state.menu_dashboard
+                if not st.session_state.menu_dashboard and not st.session_state.menu_admin:
+                    st.session_state.menu_dashboard = True
                 st.session_state.menu_admin = False
             
             # Submódulos de Dashboard
@@ -304,11 +308,16 @@ def main():
                         key="module_selector",
                         label_visibility="collapsed"
                     )
+                    st.session_state.selected_module = selected_module
                     st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                selected_module = st.session_state.selected_module
             
             # Menú Admin
             if st.button("⚙️ Admin", key="btn_admin", use_container_width=True):
                 st.session_state.menu_admin = not st.session_state.menu_admin
+                if not st.session_state.menu_dashboard and not st.session_state.menu_admin:
+                    st.session_state.menu_admin = True
                 st.session_state.menu_dashboard = False
             
             # Submenú de Admin

@@ -24,6 +24,11 @@ st.set_page_config(
 # CSS personalizado para mejorar la interfaz
 st.markdown("""
 <style>
+    /* Ocultar el menú por defecto de Streamlit */
+    section[data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+    
     /* Estilo para el menú principal */
     .menu-title {
         color: #1f1f1f;
@@ -380,7 +385,7 @@ def main():
                 )
 
     except Exception as e:
-        st.error(f"Error inesperado en la aplicación: {str(e)}")
+        st.error(f"Error inesperado en la aplicaci��n: {str(e)}")
         print(f"Error detallado: {str(e)}")
 
 if __name__ == "__main__":

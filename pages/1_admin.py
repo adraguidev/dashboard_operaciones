@@ -14,6 +14,11 @@ st.set_page_config(
 # Estilos personalizados
 st.markdown("""
 <style>
+    /* Ocultar el menú por defecto de Streamlit */
+    section[data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+    
     /* Estilos para el menú de navegación principal */
     section[data-testid="stSidebar"] > div:first-child {
         padding-top: 0;

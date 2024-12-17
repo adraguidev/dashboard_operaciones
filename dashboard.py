@@ -289,13 +289,9 @@ def main():
         # Contenedor para el sidebar con estilo
         with st.sidebar:
             # Menú Dashboard
-            col1, col2 = st.columns([9,1])
-            with col1:
-                if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
-                    st.session_state.menu_dashboard = not st.session_state.menu_dashboard
-                    st.session_state.menu_admin = False
-            with col2:
-                st.markdown("▼" if st.session_state.menu_dashboard else "▶️")
+            if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
+                st.session_state.menu_dashboard = not st.session_state.menu_dashboard
+                st.session_state.menu_admin = False
             
             # Submódulos de Dashboard
             if st.session_state.menu_dashboard:
@@ -311,13 +307,9 @@ def main():
                     st.markdown('</div>', unsafe_allow_html=True)
             
             # Menú Admin
-            col3, col4 = st.columns([9,1])
-            with col3:
-                if st.button("⚙️ Admin", key="btn_admin", use_container_width=True):
-                    st.session_state.menu_admin = not st.session_state.menu_admin
-                    st.session_state.menu_dashboard = False
-            with col4:
-                st.markdown("▼" if st.session_state.menu_admin else "▶️")
+            if st.button("⚙️ Admin", key="btn_admin", use_container_width=True):
+                st.session_state.menu_admin = not st.session_state.menu_admin
+                st.session_state.menu_dashboard = False
             
             # Submenú de Admin
             if st.session_state.menu_admin:

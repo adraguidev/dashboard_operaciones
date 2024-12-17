@@ -526,82 +526,52 @@ def generate_data_hash(data):
     
     return hashlib.md5(data_str.encode()).hexdigest()
 
-# Optimización del estado global de la aplicación
-if 'app_state' not in st.session_state:
-    st.session_state.app_state = {
-        'menu_dashboard': True,
-        'menu_admin': False,
-        'selected_module': list(MODULES.keys())[0],
-        'data_hashes': {},  # Para tracking de cambios en datos
-        'last_manual_refresh': None,  # Timestamp de última actualización manual
-        'error_state': None  # Para manejo centralizado de errores
-    }
-
-# Función optimizada para caché permanente
-@st.cache_data(ttl=None, persist="disk", show_spinner=False)
+# Función cacheada para cargar datos del módulo y su timestamp
+@st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
 def load_module_data_with_timestamp(selected_module):
     """
     Carga y cachea los datos del módulo junto con su timestamp.
-    El caché es permanente y solo se invalida manualmente.
-    
-    Args:
-        selected_module: El módulo seleccionado para cargar datos
-        
-    Returns:
-        dict: Datos del módulo con metadata
+    El caché persiste en disco y solo se invalida manualmente desde el panel de control.
     """
-    try:
-        data_loader = st.session_state.data_loader
-        data = data_loader.load_module_data(selected_module)
+    # Verificar si hay una actualización forzada desde el panel de control
+    if st.session_state.get('force_refresh', False):
+        st.cache_data.clear()
+        st.session_state.force_refresh = False
+    
+    data_loader = st.session_state.data_loader
+    data = data_loader.load_module_data(selected_module)
+    
+    if data is not None:
+        update_time = get_current_time()
+        data_hash = generate_data_hash(data)
         
-        if data is not None:
-            current_time = get_current_time()
-            data_hash = generate_data_hash(data)
-            
-            # Actualizar el hash en el estado global
-            st.session_state.app_state['data_hashes'][selected_module] = data_hash
-            
-            return {
-                'data': data,
-                'update_time': current_time,
-                'data_hash': data_hash,
-                'load_success': True
-            }
-    except Exception as e:
-        st.session_state.app_state['error_state'] = str(e)
         return {
-            'data': None,
-            'update_time': None,
-            'data_hash': None,
-            'load_success': False,
-            'error': str(e)
+            'data': data,
+            'update_time': update_time,
+            'data_hash': data_hash,
+            'load_time': update_time
         }
+    return None
 
 def get_module_data(selected_module, collection_name):
     """
-    Función optimizada para obtener datos del módulo con manejo de errores mejorado.
+    Función que maneja la lógica de carga de datos.
     """
-    try:
-        # Intentar cargar datos cacheados
-        cached_data = load_module_data_with_timestamp(selected_module)
+    # Intentar cargar datos cacheados
+    cached_data = load_module_data_with_timestamp(selected_module)
+    
+    if cached_data is not None:
+        # Guardar el hash en session_state si no existe
+        cache_key = f"{selected_module}_data_hash"
+        previous_hash = st.session_state.get(cache_key)
+        current_hash = cached_data['data_hash']
         
-        if cached_data and cached_data['load_success']:
-            # Verificar si hay cambios comparando hashes
-            current_hash = cached_data['data_hash']
-            previous_hash = st.session_state.app_state['data_hashes'].get(selected_module)
-            
-            if previous_hash and current_hash != previous_hash:
-                st.warning('Se detectaron cambios en los datos. Puede ser necesario actualizar manualmente.')
-            
-            return cached_data['data'], cached_data['update_time'], False
+        # Actualizar el hash en session_state
+        st.session_state[cache_key] = current_hash
         
-        if cached_data and not cached_data['load_success']:
-            st.error(f"Error al cargar datos: {cached_data['error']}")
-            return None, None, False
-            
-    except Exception as e:
-        st.error(f"Error inesperado: {str(e)}")
-        return None, None, False
+        return cached_data['data'], cached_data['update_time'], False  # Siempre False porque no queremos recargar
+    
+    return None, None, False
 
 # Alternativa sin cache_resource
 if 'data_loader' not in st.session_state:
@@ -645,22 +615,6 @@ def show_loading_progress(message, action, show_fade_in=True):
         
         progress_bar.empty()
         return result
-
-# Función helper para limpiar caché manualmente
-def clear_module_cache(selected_module=None):
-    """
-    Limpia el caché de un módulo específico o de todos los módulos.
-    """
-    if selected_module:
-        # Limpiar caché específico del módulo
-        load_module_data_with_timestamp.clear()
-        st.session_state.app_state['data_hashes'].pop(selected_module, None)
-    else:
-        # Limpiar todo el caché
-        st.cache_data.clear()
-        st.session_state.app_state['data_hashes'] = {}
-    
-    st.session_state.app_state['last_manual_refresh'] = get_current_time()
 
 def main():
     try:

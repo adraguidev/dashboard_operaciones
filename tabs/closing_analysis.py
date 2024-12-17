@@ -17,17 +17,9 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             st.error(f"Faltan las siguientes columnas necesarias: {', '.join(missing_columns)}")
             return
 
-        # Convertir columnas categóricas a string para evitar problemas de comparación
-        categorical_columns = ['ESTADO', 'Evaluado', 'EVALASIGN']
-        for col in categorical_columns:
-            if col in data.columns and pd.api.types.is_categorical_dtype(data[col]):
-                data[col] = data[col].astype(str)
-
         # Asegurar que las fechas son válidas
         data['FechaPre'] = pd.to_datetime(data['FechaPre'], errors='coerce')
         data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], errors='coerce')
-        if 'FECHA DE TRABAJO' in data.columns:
-            data['FECHA DE TRABAJO'] = pd.to_datetime(data['FECHA DE TRABAJO'], errors='coerce')
         
         # Filtrar datos nulos
         data = data.dropna(subset=['FechaPre', 'FechaExpendiente'])
@@ -226,13 +218,12 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             "28+ días"
         ]
         
-        # Categorizar los tiempos de cierre con ordered=True
+        # Categorizar los tiempos de cierre
         cierre_data_range['CategoríaTiempo'] = pd.cut(
             cierre_data_range['TiempoCierre'],
             bins=bins,
             labels=labels,
-            include_lowest=True,
-            ordered=True  # Asegurar que las categorías están ordenadas
+            include_lowest=True
         )
 
         # Calcular distribución de tiempos

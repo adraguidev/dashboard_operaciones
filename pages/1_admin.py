@@ -16,7 +16,7 @@ st.markdown("""
 <style>
     /* Ajustes para el botón de colapso */
     [data-testid="collapsedControl"] {
-        position: absolute !important;
+        position: fixed !important;
         left: 0 !important;
         top: 0.5rem !important;
         background: white !important;
@@ -32,15 +32,12 @@ st.markdown("""
         margin: 0 !important;
         padding: 0 !important;
         cursor: pointer !important;
+        opacity: 1 !important;
+        visibility: visible !important;
     }
 
-    /* Contenedor del botón de colapso */
-    div:has(> [data-testid="collapsedControl"]) {
-        position: absolute !important;
-        width: 0 !important;
-        height: 0 !important;
-        padding: 0 !important;
-        margin: 0 !important;
+    section[data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="collapsedControl"] {
+        left: 220px !important;
     }
 
     /* Ajustes para el sidebar y su contenido */

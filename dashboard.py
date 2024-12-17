@@ -376,26 +376,34 @@ st.markdown("""
     }
     
     /* Estilo para el contenedor del botón admin */
-    .admin-button-container {
-        position: fixed;
-        bottom: 25px;
-        left: 15px;
-        z-index: 1000;
-        background: white;
-        border-radius: 50%;
-        width: 35px;
-        height: 35px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        cursor: pointer;
-        transition: all 0.3s ease;
+    div[data-testid="stSidebarNav"] {
+        background-color: transparent;
     }
     
-    .admin-button-container:hover {
+    .admin-button-container {
+        position: fixed;
+        bottom: 20px;
+        left: 15px;
+        z-index: 1000;
+    }
+    
+    .admin-button-container button {
+        background: white !important;
+        border-radius: 50% !important;
+        width: 35px !important;
+        height: 35px !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+        transition: all 0.3s ease !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    
+    .admin-button-container button:hover {
         transform: rotate(180deg);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
     }
     
     /* Estilo para el contenedor de la contraseña */
@@ -409,35 +417,14 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         z-index: 999;
         width: 250px;
-        animation: slideUp 0.3s ease;
     }
     
-    @keyframes slideUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    /* Estilo para el panel de control */
+    /* Estilos para el panel de control */
     .admin-panel {
         background: white;
         border-radius: 10px;
         padding: 20px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-    }
-    
-    .admin-panel h2 {
-        color: #1f1f1f;
-        font-size: 1.5rem;
-        margin-bottom: 20px;
-        border-bottom: 2px solid #f0f0f0;
-        padding-bottom: 10px;
+        margin: 10px;
     }
     
     .admin-section {
@@ -447,27 +434,51 @@ st.markdown("""
         margin-bottom: 15px;
     }
     
-    .admin-section h3 {
-        color: #2c3e50;
-        font-size: 1.2rem;
-        margin-bottom: 15px;
+    .admin-section button {
+        width: 100%;
+        margin: 5px 0;
     }
     
-    /* Estilo para los botones del panel */
-    .stButton>button {
+    /* Ajustes para los botones dentro del panel */
+    div[data-testid="stButton"] {
         width: 100%;
-        padding: 10px 15px;
-        border-radius: 5px;
+    }
+    
+    div[data-testid="stButton"] > button {
+        width: 100%;
         background-color: #FF4B4B;
         color: white;
         border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 5px;
         transition: all 0.3s ease;
     }
     
-    .stButton>button:hover {
+    div[data-testid="stButton"] > button:hover {
         background-color: #ff3333;
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    /* Ajustes para las métricas */
+    div[data-testid="stMetricValue"] {
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    /* Ajustes para los tabs */
+    div[data-testid="stTabs"] {
+        background: white;
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    button[data-testid="baseButton-secondary"] {
+        background-color: #6c757d !important;
+        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -582,7 +593,7 @@ def show_loading_progress(message, action, show_fade_in=True):
     Returns:
         El resultado de la acción ejecutada
     """
-    with st.spinner(f'��� {message}...'):
+    with st.spinner(f'���� {message}...'):
         progress_bar = st.progress(0)
         for i in range(100):
             time.sleep(0.01)

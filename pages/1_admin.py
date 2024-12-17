@@ -23,6 +23,16 @@ st.markdown("""
     
     section[data-testid="stSidebar"] > div {
         padding: 1rem 0.5rem !important;
+        position: relative !important;
+    }
+    
+    section[data-testid="stSidebar"] > div > div:first-child {
+        position: fixed !important;
+        width: 220px !important;
+        height: 100vh !important;
+        overflow-y: auto !important;
+        padding: 2.5rem 0.5rem 1rem 0.5rem !important;
+        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
     }
     
     /* Estilo para los botones principales */
@@ -133,24 +143,46 @@ st.markdown("""
     
     /* Ajustes para el sidebar colapsado */
     [data-testid="collapsedControl"] {
-        display: block !important;
-        color: #1f1f1f !important;
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        z-index: 999 !important;
+        background: white !important;
+        border-radius: 4px !important;
+        height: 2rem !important;
+        width: 2rem !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.2s !important;
+    }
+    
+    [data-testid="collapsedControl"]:hover {
+        background: #f8f9fa !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] {
         margin-left: -220px !important;
+        transition: margin-left 0.3s !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        margin-left: 0 !important;
+        transition: margin-left 0.3s !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
         margin-left: 0 !important;
         width: 100% !important;
-        transition: margin 0.3s, width 0.3s !important;
+        transition: margin-left 0.3s, width 0.3s !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
         margin-left: 220px !important;
         width: calc(100% - 220px) !important;
-        transition: margin 0.3s, width 0.3s !important;
+        transition: margin-left 0.3s, width 0.3s !important;
     }
     
     /* Estilos para las pestañas */
@@ -620,7 +652,7 @@ if check_password():
                         st.error(f"❌ Error de conexión: {str(e)}")
     
     with tab2:
-        st.header("Configuración del Sistema")
+        st.header("Configuraci��n del Sistema")
         
         # Configuración de módulos
         st.subheader("Módulos del Sistema")

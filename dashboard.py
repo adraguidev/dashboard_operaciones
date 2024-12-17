@@ -76,10 +76,38 @@ st.markdown("""
     .sidebar-bottom {
         position: fixed;
         bottom: 0;
-        padding: 1rem;
+        left: 0;
+        padding: 0.5rem;
         width: inherit;
         background: white;
-        border-top: 1px solid #e9ecef;
+        z-index: 1000;
+    }
+    
+    /* Estilo para el botón discreto de actualización */
+    .update-button {
+        opacity: 0.3;
+        transition: opacity 0.3s;
+        cursor: pointer;
+        position: fixed;
+        bottom: 10px;
+        left: 10px;
+        font-size: 1.2rem;
+    }
+    
+    .update-button:hover {
+        opacity: 1;
+    }
+    
+    /* Estilo para el expander de actualización */
+    div[data-testid="stExpander"] {
+        border: none !important;
+        box-shadow: none !important;
+        background-color: transparent !important;
+    }
+    
+    /* Ocultar el header del expander */
+    .streamlit-expanderHeader {
+        display: none;
     }
     
     /* Ajustar radio buttons del sidebar */
@@ -516,13 +544,17 @@ def main():
                     unsafe_allow_html=True
                 )
             
-            # Contenedor para el botón de actualización al fondo
+            # Contenedor para el botón de actualización discreto al fondo
             st.markdown('<div class="sidebar-bottom">', unsafe_allow_html=True)
-            with st.expander("actualizar datos manualmente", expanded=False):
-                password = st.text_input("Contraseña", type="password")
-                if st.button("Actualizar Datos"):
-                    if data_loader.force_data_refresh(password):
-                        st.rerun()
+            update_trigger = st.markdown('🔄', help="Actualizar datos")
+            if update_trigger:
+                with st.expander("", expanded=False):
+                    st.markdown("<div style='padding: 10px;'>", unsafe_allow_html=True)
+                    password = st.text_input("Contraseña", type="password")
+                    if st.button("Actualizar Datos"):
+                        if data_loader.force_data_refresh(password):
+                            st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         if selected_module != 'SPE':

@@ -610,95 +610,6 @@ def show_loading_progress(message, action, show_fade_in=True):
         progress_bar.empty()
         return result
 
-def render_admin_panel(data_loader):
-    """Renderiza el panel de control administrativo."""
-    st.markdown('<div class="admin-panel">', unsafe_allow_html=True)
-    st.markdown("## ⚙️ Panel de Control")
-    
-    # Secciones del panel
-    st.markdown('<div class="admin-section">', unsafe_allow_html=True)
-    st.markdown("### 🔄 Gestión de Datos")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### Actualización de Datos")
-        if st.button("Actualizar Base de Datos", key="admin_update"):
-            with st.spinner("Actualizando datos..."):
-                st.session_state.force_refresh = True
-                if data_loader.force_data_refresh("Ka260314!"):
-                    st.success("✅ Datos actualizados correctamente")
-                    time.sleep(1)
-                    st.rerun()
-    
-        st.markdown("#### Monitoreo de Conexiones")
-        if st.button("Verificar Conexiones"):
-            with st.spinner("Verificando conexiones..."):
-                try:
-                    data_loader.migraciones_db.command('ping')
-                    st.success("✅ Conexión a MongoDB activa")
-                except Exception as e:
-                    st.error(f"❌ Error de conexión: {str(e)}")
-    
-    with col2:
-        st.markdown("#### Estadísticas del Sistema")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.metric("Módulos Activos", 
-                     len(st.session_state.get('visible_modules', [])),
-                     help="Número de módulos habilitados")
-        with col_b:
-            st.metric("Caché", 
-                     f"{round(len(str(st.session_state)) / 1024, 1)}MB",
-                     help="Uso de memoria caché")
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="admin-section">', unsafe_allow_html=True)
-    st.markdown("### 📊 Configuración")
-    
-    # Tabs para la configuración
-    config_tab1, config_tab2 = st.tabs(["Módulos", "Sistema"])
-    
-    with config_tab1:
-        st.markdown("#### Módulos Visibles")
-        cols = st.columns(2)
-        for i, module in enumerate(MODULES.keys()):
-            with cols[i % 2]:
-                if st.checkbox(MODULES[module], 
-                             value=module in st.session_state.get('visible_modules', []),
-                             key=f"module_visibility_{module}"):
-                    if 'visible_modules' not in st.session_state:
-                        st.session_state.visible_modules = []
-                    if module not in st.session_state.visible_modules:
-                        st.session_state.visible_modules.append(module)
-                else:
-                    if module in st.session_state.get('visible_modules', []):
-                        st.session_state.visible_modules.remove(module)
-    
-    with config_tab2:
-        st.markdown("#### Mantenimiento")
-        if st.button("Limpiar Caché del Sistema", type="secondary"):
-            with st.spinner("Limpiando caché..."):
-                st.cache_data.clear()
-                st.success("✅ Caché limpiado correctamente")
-                time.sleep(1)
-                st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="admin-section">', unsafe_allow_html=True)
-    st.markdown("### 🔍 Diagnóstico")
-    
-    # Mostrar logs y errores recientes
-    with st.expander("Logs del Sistema", expanded=False):
-        st.code(f"""
-[INFO] Sistema iniciado: {get_current_time().strftime("%d/%m/%Y %H:%M")}
-[INFO] Módulos activos: {len(st.session_state.get('visible_modules', []))}
-[INFO] Memoria caché: {round(len(str(st.session_state)) / 1024, 2)}MB
-[INFO] Última actualización: {get_current_time().strftime("%d/%m/%Y %H:%M")}
-[INFO] Estado de conexión: Activa
-        """)
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
 def main():
     try:
         data_loader = st.session_state.data_loader
@@ -742,38 +653,6 @@ def main():
                     f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
                     unsafe_allow_html=True
                 )
-            
-            # Contenedor para el botón admin al final del sidebar
-            st.markdown('<div style="flex-grow: 1; min-height: 50vh;"></div>', unsafe_allow_html=True)
-            
-            # Botón discreto para Panel de Control
-            st.markdown('<div class="admin-button-container">', unsafe_allow_html=True)
-            if st.button("⚙️", help="Panel de Control", key="admin_button"):
-                # Toggle del estado del panel
-                if 'show_admin' in st.session_state:
-                    st.session_state.show_admin = not st.session_state.show_admin
-                else:
-                    st.session_state.show_admin = True
-                # Limpiar autenticación al ocultar
-                if not st.session_state.show_admin:
-                    st.session_state.admin_authenticated = False
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Si se activa el panel de control, pedir contraseña
-            if st.session_state.get('show_admin', False):
-                st.markdown('<div class="password-container">', unsafe_allow_html=True)
-                st.markdown("🔐 Acceso Administrativo", help="Ingrese la contraseña para acceder al panel de control")
-                password = st.text_input("", type="password", key="admin_password", placeholder="Contraseña")
-                if password == "Ka260314!":
-                    st.session_state.admin_authenticated = True
-                elif password:
-                    st.error("Contraseña incorrecta")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-        # Si está autenticado como admin y el panel está activo, mostrar el panel
-        if st.session_state.get('admin_authenticated', False) and st.session_state.get('show_admin', False):
-            render_admin_panel(data_loader)
-            return
 
         # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':

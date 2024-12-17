@@ -16,24 +16,31 @@ st.markdown("""
 <style>
     /* Ajustes para el botón de colapso */
     [data-testid="collapsedControl"] {
-        position: fixed !important;
-        left: 220px !important;
+        position: absolute !important;
+        left: 0 !important;
         top: 0.5rem !important;
         background: white !important;
-        border-radius: 50% !important;
-        width: 32px !important;
-        height: 32px !important;
+        border-radius: 4px !important;
+        width: 24px !important;
+        height: 24px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         z-index: 999 !important;
         border: 1px solid #e9ecef !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
-        transition: left 0.3s !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        cursor: pointer !important;
     }
 
-    section[data-testid="stSidebar"][aria-expanded="false"] [data-testid="collapsedControl"] {
-        left: 0 !important;
+    /* Contenedor del botón de colapso */
+    div:has(> [data-testid="collapsedControl"]) {
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }
 
     /* Ajustes para el sidebar y su contenido */
@@ -49,8 +56,8 @@ st.markdown("""
     }
 
     section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
-        margin-left: 0 !important;
-        width: 100% !important;
+        margin-left: 2rem !important;
+        width: calc(100% - 2rem) !important;
         transition: margin 0.3s, width 0.3s !important;
     }
 

@@ -502,6 +502,78 @@ def show_loading_progress(message, action, show_fade_in=True):
         progress_bar.empty()
         return result
 
+def render_admin_panel(data_loader):
+    """Renderiza el panel de control administrativo."""
+    st.markdown("## ⚙️ Panel de Control")
+    
+    # Secciones del panel
+    st.markdown("### 🔄 Gestión de Datos")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### Actualización de Datos")
+        if st.button("Actualizar Base de Datos", key="admin_update"):
+            if data_loader.force_data_refresh("Ka260314!"):
+                st.success("✅ Datos actualizados correctamente")
+                st.rerun()
+    
+        st.markdown("#### Monitoreo de Conexiones")
+        if st.button("Verificar Estado de Conexiones"):
+            try:
+                data_loader.migraciones_db.command('ping')
+                st.success("✅ Conexión a MongoDB activa")
+            except Exception as e:
+                st.error(f"❌ Error de conexión: {str(e)}")
+    
+    with col2:
+        st.markdown("#### Estadísticas del Sistema")
+        # Mostrar estadísticas de caché
+        st.metric("Módulos en Caché", len(st.session_state))
+        st.metric("Última Actualización", 
+                 get_current_time().strftime("%d/%m/%Y %H:%M"))
+    
+    st.markdown("---")
+    st.markdown("### 📊 Configuración de Visualización")
+    
+    col3, col4 = st.columns(2)
+    with col3:
+        st.markdown("#### Módulos Visibles")
+        # Permitir habilitar/deshabilitar módulos
+        if 'visible_modules' not in st.session_state:
+            st.session_state.visible_modules = list(MODULES.keys())
+        
+        for module in MODULES.keys():
+            if st.checkbox(MODULES[module], 
+                         value=module in st.session_state.visible_modules,
+                         key=f"module_visibility_{module}"):
+                if module not in st.session_state.visible_modules:
+                    st.session_state.visible_modules.append(module)
+            else:
+                if module in st.session_state.visible_modules:
+                    st.session_state.visible_modules.remove(module)
+    
+    with col4:
+        st.markdown("#### Configuración de Caché")
+        if st.button("Limpiar Caché"):
+            st.cache_data.clear()
+            st.success("✅ Caché limpiado correctamente")
+            st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### 🔍 Diagnóstico del Sistema")
+    
+    # Mostrar logs y errores recientes
+    with st.expander("Logs del Sistema"):
+        st.code("""
+        [INFO] Última conexión exitosa: {time}
+        [INFO] Total de consultas realizadas: {queries}
+        [INFO] Uso de memoria caché: {cache_size}MB
+        """.format(
+            time=get_current_time().strftime("%d/%m/%Y %H:%M"),
+            queries=len(st.session_state),
+            cache_size=round(len(str(st.session_state)) / 1024, 2)
+        ))
+
 def main():
     try:
         data_loader = st.session_state.data_loader
@@ -531,13 +603,30 @@ def main():
         with st.sidebar:
             st.markdown('<p class="sidebar-title">🎯 MÓDULOS</p>', unsafe_allow_html=True)
             
+            # Botón discreto para Panel de Control
+            if st.button("⚙️", help="Panel de Control"):
+                st.session_state.show_admin = not st.session_state.get('show_admin', False)
+            
+            # Si se activa el panel de control, pedir contraseña
+            if st.session_state.get('show_admin', False):
+                password = st.text_input("Contraseña", type="password", key="admin_password")
+                if password == "Ka260314!":
+                    st.session_state.admin_authenticated = True
+                elif password:
+                    st.error("Contraseña incorrecta")
+            
             # Selección de módulo con estilo compacto
             selected_module = st.radio(
                 "",
-                options=list(MODULES.keys()),
+                options=st.session_state.get('visible_modules', list(MODULES.keys())),
                 format_func=lambda x: MODULES[x],
                 key="module_selector"
             )
+
+        # Si está autenticado como admin y el panel está activo, mostrar el panel
+        if st.session_state.get('admin_authenticated', False) and st.session_state.get('show_admin', False):
+            render_admin_panel(data_loader)
+            return
 
         # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':

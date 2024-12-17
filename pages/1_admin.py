@@ -527,6 +527,59 @@ st.markdown("""
         border-color: #e9ecef;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
+    
+    /* Ajustes para el botón de colapso */
+    button[kind="secondary"][data-testid="baseButton-secondary"] {
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        background-color: white !important;
+        border-radius: 4px !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        z-index: 999 !important;
+        height: 2rem !important;
+        width: 2rem !important;
+        padding: 0.2rem !important;
+        transition: all 0.2s !important;
+        margin: 0 !important;
+    }
+    
+    button[kind="secondary"][data-testid="baseButton-secondary"]:hover {
+        background-color: #f8f9fa !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
+    
+    /* Transiciones del sidebar */
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        margin-left: -220px !important;
+        transition: margin-left 0.3s !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        margin-left: 0 !important;
+        transition: margin-left 0.3s !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
+        margin-left: 0 !important;
+        width: 100% !important;
+        transition: margin 0.3s, width 0.3s !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
+        margin-left: 220px !important;
+        width: calc(100% - 220px) !important;
+        transition: margin 0.3s, width 0.3s !important;
+    }
+    
+    /* Ocultar elementos específicos de Streamlit */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    
+    #MainMenu {
+        display: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 

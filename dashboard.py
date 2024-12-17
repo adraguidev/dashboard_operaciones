@@ -32,7 +32,7 @@ st.markdown("""
     }
     
     section[data-testid="stSidebar"] > div {
-        padding-top: 3rem !important;
+        padding-top: 5rem !important;
         background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
     }
     
@@ -109,7 +109,7 @@ st.markdown("""
     }
     
     div[data-testid="collapsedControl"] {
-        display: none !important;
+        display: block !important;
     }
     
     #MainMenu {
@@ -118,7 +118,7 @@ st.markdown("""
     
     /* Ocultar elementos del sidebar por defecto */
     .st-emotion-cache-1rtdyuf {
-        display: none !important;
+        display: block !important;
     }
     
     .st-emotion-cache-h5rgaw {
@@ -258,23 +258,24 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(255,75,75,0.3);
     }
     
-    /* Botón de colapso del sidebar siempre visible */
-    [data-testid="collapsedControl"] {
+    /* Botón de colapso del sidebar */
+    button[data-testid="collapsedControl"] {
         display: block !important;
         position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
+        top: 0.75rem !important;
+        left: 0.75rem !important;
         background-color: white !important;
         border-radius: 4px !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
         z-index: 999 !important;
-        height: 2rem !important;
-        width: 2rem !important;
-        padding: 0.2rem !important;
+        height: 2.5rem !important;
+        width: 2.5rem !important;
+        padding: 0.5rem !important;
         transition: all 0.2s !important;
+        border: 1px solid #dee2e6 !important;
     }
     
-    [data-testid="collapsedControl"]:hover {
+    button[data-testid="collapsedControl"]:hover {
         background-color: #f8f9fa !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }

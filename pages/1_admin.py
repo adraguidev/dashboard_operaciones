@@ -22,9 +22,7 @@ st.markdown("""
     }
     
     section[data-testid="stSidebar"] > div {
-        padding: 3rem 0.5rem 1rem 0.5rem !important;
-        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
-        position: relative;
+        padding: 1rem 0.5rem !important;
     }
     
     /* Estilo para los botones principales */
@@ -135,49 +133,24 @@ st.markdown("""
     
     /* Ajustes para el sidebar colapsado */
     [data-testid="collapsedControl"] {
-        position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
-        background: white !important;
-        border: 1px solid #dee2e6 !important;
-        border-radius: 4px !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        height: 2rem !important;
-        width: 2rem !important;
-        transition: background 0.2s !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-    }
-    
-    [data-testid="collapsedControl"]:hover {
-        background: #f8f9fa !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-    }
-    
-    /* Ajustes para el sidebar */
-    section[data-testid="stSidebar"] {
-        transition: margin 0.3s ease-in-out !important;
+        display: block !important;
+        color: #1f1f1f !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] {
-        margin-left: -21rem !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="true"] {
-        margin-left: 0 !important;
-    }
-    
-    /* Ajustes para el contenido principal */
-    section[data-testid="stContent"] {
-        transition: margin 0.3s ease-in-out !important;
+        margin-left: -220px !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
         margin-left: 0 !important;
+        width: 100% !important;
+        transition: margin 0.3s, width 0.3s !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
-        margin-left: 21rem !important;
+        margin-left: 220px !important;
+        width: calc(100% - 220px) !important;
+        transition: margin 0.3s, width 0.3s !important;
     }
     
     /* Estilos para las pestañas */
@@ -259,6 +232,27 @@ st.markdown("""
     .stTabs button[kind="primary"]:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 6px rgba(255,75,75,0.3);
+    }
+    
+    /* Botón de colapso del sidebar siempre visible */
+    [data-testid="collapsedControl"] {
+        display: block !important;
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        background-color: white !important;
+        border-radius: 4px !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        z-index: 999 !important;
+        height: 2rem !important;
+        width: 2rem !important;
+        padding: 0.2rem !important;
+        transition: all 0.2s !important;
+    }
+    
+    [data-testid="collapsedControl"]:hover {
+        background-color: #f8f9fa !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }
     
     /* Estilos globales */

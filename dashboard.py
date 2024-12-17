@@ -692,8 +692,10 @@ def main():
         # Contenedor para el sidebar con estilo
         with st.sidebar:
             # Menú Dashboard
-            if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True, type="primary"):
-                st.session_state.menu_dashboard = True
+            if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
+                st.session_state.menu_dashboard = not st.session_state.menu_dashboard
+                if not st.session_state.menu_dashboard and not st.session_state.menu_admin:
+                    st.session_state.menu_dashboard = True
                 st.session_state.menu_admin = False
             
             # Submódulos de Dashboard
@@ -714,16 +716,10 @@ def main():
             
             # Menú Admin
             if st.button("⚙️ Admin", key="btn_admin", use_container_width=True):
-                st.session_state.menu_admin = True
+                st.session_state.menu_admin = not st.session_state.menu_admin
+                if not st.session_state.menu_dashboard and not st.session_state.menu_admin:
+                    st.session_state.menu_admin = True
                 st.session_state.menu_dashboard = False
-                st.switch_page("pages/1_admin.py")
-            
-            # Mostrar última actualización si está disponible
-            if 'update_time' in locals():
-                st.markdown(
-                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
-                    unsafe_allow_html=True
-                )
 
         # Inicializar la fecha de datos actual en session_state si no existe
         if 'current_data_date' not in st.session_state:

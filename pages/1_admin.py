@@ -3,11 +3,6 @@ import time
 from datetime import datetime
 import pytz
 from src.services.data_loader import DataLoader
-from src.services.system_monitor import SystemMonitor
-from src.services.report_generator import ReportGenerator
-import os
-import numpy as np
-import pandas as pd
 
 # Configuración de la página
 st.set_page_config(
@@ -594,13 +589,10 @@ if check_password():
     data_loader = st.session_state.data_loader
     
     # Crear tabs para diferentes secciones
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "🔄 Gestión de Datos",
-        "📊 Monitoreo de Rendimiento",
-        "📝 Logs Avanzados",
-        "💾 Optimización",
-        "📈 Reportes",
-        "🔧 Mantenimiento"
+        "⚙️ Configuración",
+        "📊 Monitoreo"
     ])
     
     with tab1:
@@ -627,6 +619,9 @@ if check_password():
                     except Exception as e:
                         st.error(f"❌ Error de conexión: {str(e)}")
     
+    with tab2:
+        st.header("Configuración del Sistema")
+        
         # Configuración de módulos
         st.subheader("Módulos del Sistema")
         from config.settings import MODULES
@@ -647,149 +642,51 @@ if check_password():
                 else:
                     if module in st.session_state.visible_modules:
                         st.session_state.visible_modules.remove(module)
-    
-    with tab2:
-        st.header("📊 Monitoreo de Rendimiento")
         
-        # Métricas en tiempo real
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Tiempo de Respuesta", "120ms", "↓ 15ms")
-        with col2:
-            st.metric("Uso de CPU", "45%", "↑ 10%")
-        with col3:
-            st.metric("Memoria RAM", "2.1GB", "↑ 0.3GB")
-        
-        # Gráfico de rendimiento
-        st.subheader("Rendimiento del Sistema")
-        
-        # Datos de ejemplo para el gráfico
-        dates = pd.date_range(start='2024-01-01', end='2024-01-07', freq='D')
-        metrics = {
-            'Tiempo de Respuesta (ms)': np.random.randint(100, 150, size=len(dates)),
-            'Uso de CPU (%)': np.random.randint(30, 60, size=len(dates)),
-            'Memoria (GB)': np.random.uniform(1.8, 2.5, size=len(dates))
-        }
-        df = pd.DataFrame(metrics, index=dates)
-        st.line_chart(df)
-        
-        # Estadísticas por módulo
-        st.subheader("Rendimiento por Módulo")
-        module_stats = pd.DataFrame({
-            'Módulo': list(MODULES.values()),
-            'Tiempo Promedio': np.random.randint(50, 200, size=len(MODULES)),
-            'Consultas/min': np.random.randint(10, 100, size=len(MODULES))
-        })
-        st.dataframe(module_stats, hide_index=True)
+        # Gestión de caché
+        st.subheader("Gestión de Caché")
+        if st.button("🗑️ Limpiar Caché del Sistema", type="secondary", use_container_width=True):
+            with st.spinner("Limpiando caché..."):
+                st.cache_data.clear()
+                st.success("✅ Caché limpiado correctamente")
+                time.sleep(1)
+                st.rerun()
     
     with tab3:
-        st.header("📝 Logs Avanzados")
+        st.header("Monitoreo del Sistema")
         
-        # Filtros de logs
+        # Métricas del sistema
         col1, col2, col3 = st.columns(3)
+        
         with col1:
-            log_type = st.selectbox("Tipo de Log", ["Todos", "Error", "Warning", "Info", "Debug"])
+            st.metric(
+                "Módulos Activos",
+                len(st.session_state.get('visible_modules', [])),
+                help="Número de módulos habilitados"
+            )
+        
         with col2:
-            log_module = st.selectbox("Módulo", ["Todos"] + list(MODULES.values()))
+            st.metric(
+                "Uso de Caché",
+                f"{round(len(str(st.session_state)) / 1024, 1)}MB",
+                help="Memoria utilizada por el caché"
+            )
+        
         with col3:
-            log_date = st.date_input("Fecha")
+            lima_tz = pytz.timezone('America/Lima')
+            current_time = datetime.now(pytz.UTC).astimezone(lima_tz)
+            st.metric(
+                "Última Actualización",
+                current_time.strftime("%d/%m/%Y %H:%M"),
+                help="Hora de la última actualización"
+            )
         
-        # Tabla de logs
-        log_data = pd.DataFrame({
-            'Timestamp': pd.date_range(start='2024-01-07', periods=10, freq='H'),
-            'Tipo': np.random.choice(['Error', 'Warning', 'Info', 'Debug'], size=10),
-            'Módulo': np.random.choice(list(MODULES.values()), size=10),
-            'Mensaje': [f"Mensaje de log #{i}" for i in range(10)]
-        })
-        st.dataframe(log_data, hide_index=True)
-        
-        # Acciones de logs
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button("📥 Exportar Logs", data="", key="export_logs")
-        with col2:
-            st.button("🗑️ Limpiar Logs Antiguos", key="clear_logs")
-    
-    with tab4:
-        st.header("💾 Optimización de Datos")
-        
-        # Uso de almacenamiento
-        st.subheader("Uso de Almacenamiento")
-        storage_data = pd.DataFrame({
-            'Colección': list(MODULES.values()),
-            'Tamaño': np.random.uniform(0.5, 5, size=len(MODULES)),
-            'Documentos': np.random.randint(1000, 10000, size=len(MODULES))
-        })
-        st.dataframe(storage_data, hide_index=True)
-        
-        # Acciones de optimización
-        col1, col2 = st.columns(2)
-        with col1:
-            st.button("🗑️ Limpiar Datos Antiguos", key="clean_old_data")
-        with col2:
-            st.button("🔄 Reindexar Colecciones", key="reindex_collections")
-        
-        # Configuración de retención
-        st.subheader("Política de Retención")
-        retention_days = st.slider("Días de retención de datos", 30, 365, 180)
-        st.button("💾 Guardar Configuración", key="save_retention")
-    
-    with tab5:
-        st.header("📈 Reportes del Sistema")
-        
-        # Generación de reportes
-        st.subheader("Generar Reporte")
-        col1, col2 = st.columns(2)
-        with col1:
-            report_type = st.selectbox("Tipo de Reporte", [
-                "Rendimiento del Sistema",
-                "Uso por Módulo",
-                "Errores y Advertencias",
-                "Estadísticas de Uso",
-                "Métricas de Base de Datos"
-            ])
-        with col2:
-            report_format = st.selectbox("Formato", ["PDF", "Excel", "CSV"])
-        
-        st.button("📊 Generar Reporte", key="generate_report")
-        
-        # Reportes programados
-        st.subheader("Reportes Programados")
-        scheduled_reports = pd.DataFrame({
-            'Reporte': ["Rendimiento Diario", "Errores Semanales", "Uso Mensual"],
-            'Frecuencia': ["Diario", "Semanal", "Mensual"],
-            'Último Envío': pd.date_range(start='2024-01-01', periods=3, freq='D'),
-            'Estado': ["Activo", "Activo", "Pausado"]
-        })
-        st.dataframe(scheduled_reports, hide_index=True)
-    
-    with tab6:
-        st.header("🔧 Mantenimiento")
-        
-        # Estado del sistema
-        st.subheader("Estado del Sistema")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Uptime", "5d 12h", "")
-        with col2:
-            st.metric("Versión", "1.0.0", "")
-        with col3:
-            st.metric("Estado", "Operativo", "")
-        
-        # Tareas de mantenimiento
-        st.subheader("Tareas de Mantenimiento")
-        maintenance_tasks = {
-            "Limpieza de Caché": st.button("🗑️ Ejecutar", key="clean_cache"),
-            "Verificación de Integridad": st.button("🔍 Ejecutar", key="check_integrity"),
-            "Optimización de Índices": st.button("🔄 Ejecutar", key="optimize_indexes"),
-            "Backup de Configuración": st.button("💾 Ejecutar", key="backup_config")
-        }
-        
-        # Historial de mantenimiento
-        st.subheader("Historial de Mantenimiento")
-        maintenance_history = pd.DataFrame({
-            'Tarea': ["Limpieza de Caché", "Backup", "Optimización"],
-            'Fecha': pd.date_range(start='2024-01-01', periods=3, freq='D'),
-            'Estado': ["Completado", "Completado", "En Progreso"]
-        })
-        st.dataframe(maintenance_history, hide_index=True)
+        # Logs del sistema
+        st.subheader("Logs del Sistema")
+        with st.expander("Ver logs", expanded=True):
+            st.code(f"""
+[INFO] Sistema iniciado: {current_time.strftime("%d/%m/%Y %H:%M")}
+[INFO] Módulos activos: {len(st.session_state.get('visible_modules', []))}
+[INFO] Memoria caché: {round(len(str(st.session_state)) / 1024, 2)}MB
+[INFO] Estado de conexión: Activa
+            """) 

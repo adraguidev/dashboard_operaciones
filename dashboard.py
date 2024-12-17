@@ -299,7 +299,6 @@ st.markdown("""
         background-color: var(--sidebar-color);
         border-right: 1px solid rgba(0,0,0,0.1);
         box-shadow: 2px 0 5px rgba(0,0,0,0.05);
-        margin-top: 2.5rem !important;
     }
     
     /* Contenedor principal */
@@ -444,7 +443,7 @@ st.markdown("""
     
     /* Ajustes para el sidebar */
     section[data-testid="stSidebar"] > div {
-        padding-top: 0.5rem !important;
+        padding-top: 1.5rem !important;
         background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
     }
     
@@ -482,74 +481,6 @@ st.markdown("""
         background: white;
         border-color: #e9ecef;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
-    
-    /* Ajustes para el sidebar y botón de colapso */
-    section[data-testid="stSidebar"] {
-        background-color: var(--sidebar-color);
-        border-right: 1px solid rgba(0,0,0,0.1);
-        box-shadow: 2px 0 5px rgba(0,0,0,0.05);
-        margin-top: 2.5rem !important;
-    }
-    
-    section[data-testid="stSidebar"] > div {
-        padding-top: 0.5rem !important;
-        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
-    }
-    
-    /* Botón de colapso del sidebar */
-    button[kind="secondary"][data-testid="baseButton-secondary"] {
-        display: block !important;
-        position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
-        background-color: white !important;
-        border-radius: 4px !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        z-index: 999 !important;
-        height: 2rem !important;
-        width: 2rem !important;
-        padding: 0.2rem !important;
-        transition: all 0.2s !important;
-    }
-    
-    button[kind="secondary"][data-testid="baseButton-secondary"]:hover {
-        background-color: #f8f9fa !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-    }
-    
-    /* Ajustes para el sidebar colapsado */
-    section[data-testid="stSidebar"][aria-expanded="false"] {
-        margin-left: -220px !important;
-        margin-top: 2.5rem !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
-        margin-left: 0 !important;
-        width: 100% !important;
-        transition: margin 0.3s, width 0.3s !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
-        margin-left: 220px !important;
-        width: calc(100% - 220px) !important;
-        transition: margin 0.3s, width 0.3s !important;
-    }
-    
-    /* Mostrar el botón de colapso */
-    [data-testid="collapsedControl"] {
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-    }
-    
-    /* Ocultar elementos específicos de Streamlit */
-    header[data-testid="stHeader"] {
-        display: none !important;
-    }
-    
-    #MainMenu {
-        display: none !important;
     }
 </style>
 """, unsafe_allow_html=True)

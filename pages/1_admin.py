@@ -16,15 +16,13 @@ st.markdown("""
 <style>
     /* Estilos para el sidebar y menú */
     section[data-testid="stSidebar"] {
-        background-color: var(--sidebar-color);
-        border-right: 1px solid rgba(0,0,0,0.1);
-        box-shadow: 2px 0 5px rgba(0,0,0,0.05);
-        margin-top: 2.5rem !important;
+        background-color: #f8f9fa;
+        min-width: 220px !important;
+        max-width: 220px !important;
     }
     
     section[data-testid="stSidebar"] > div {
-        padding-top: 0.5rem !important;
-        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
+        padding: 1rem 0.5rem !important;
     }
     
     /* Estilo para los botones principales */
@@ -136,13 +134,11 @@ st.markdown("""
     /* Ajustes para el sidebar colapsado */
     [data-testid="collapsedControl"] {
         display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
+        color: #1f1f1f !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] {
         margin-left: -220px !important;
-        margin-top: 2.5rem !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
@@ -239,7 +235,7 @@ st.markdown("""
     }
     
     /* Botón de colapso del sidebar siempre visible */
-    button[kind="secondary"][data-testid="baseButton-secondary"] {
+    [data-testid="collapsedControl"] {
         display: block !important;
         position: fixed !important;
         top: 0.5rem !important;
@@ -254,7 +250,7 @@ st.markdown("""
         transition: all 0.2s !important;
     }
     
-    button[kind="secondary"][data-testid="baseButton-secondary"]:hover {
+    [data-testid="collapsedControl"]:hover {
         background-color: #f8f9fa !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }

@@ -37,23 +37,48 @@ st.markdown("""
         padding-right: 1rem !important;
     }
     
-    /* Ajustar el título para que esté más arriba */
-    h1 {
-        margin: 0 !important;
-        padding: 0 !important;
-        font-size: 1.5rem !important;
-        line-height: 1.2 !important;
-    }
-    
-    /* Optimizar sidebar */
-    section[data-testid="stSidebar"] {
-        width: 15rem !important;
-        min-width: 15rem !important;
+    /* Estilos para el menú de navegación principal */
+    section[data-testid="stSidebar"] > div:first-child {
+        padding-top: 0;
         background-color: #f8f9fa;
     }
     
-    section[data-testid="stSidebar"] > div {
-        padding: 0.5rem !important;
+    /* Contenedor del menú principal */
+    .main-nav {
+        background: linear-gradient(to right, #FF4B4B, #ff6b6b);
+        margin: -1rem -1rem 1rem -1rem;
+        padding: 2rem 1rem 1rem 1rem;
+    }
+    
+    /* Estilo para los enlaces del menú */
+    .nav-link {
+        color: white !important;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        margin: 0.2rem 0;
+        border-radius: 5px;
+        transition: all 0.2s;
+        display: inline-block;
+        width: auto;
+        text-align: center;
+        font-weight: 500;
+        background: rgba(255,255,255,0.1);
+    }
+    
+    .nav-link:hover {
+        background: rgba(255,255,255,0.2);
+        transform: translateX(5px);
+    }
+    
+    .nav-link.active {
+        background: white;
+        color: #FF4B4B !important;
+        font-weight: 600;
+    }
+    
+    /* Ajustes para el contenido del sidebar */
+    .sidebar-content {
+        margin-top: 1rem;
     }
     
     /* Estilo para el título de módulos */
@@ -61,91 +86,13 @@ st.markdown("""
         font-size: 1.5rem !important;
         color: #1f1f1f;
         font-weight: 600;
-        margin-bottom: 1rem;
+        margin: 1rem 0;
         padding-left: 0.5rem;
     }
     
-    /* Estilo para el expander de actualización */
-    .small-expander {
-        font-size: 0.8rem !important;
-        color: #6c757d;
-        margin-top: auto;
-    }
-    
-    /* Contenedor para empujar contenido al fondo */
-    .sidebar-bottom {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        padding: 0.5rem;
-        width: inherit;
-        background: white;
-        z-index: 1000;
-    }
-    
-    /* Estilo para el botón discreto de actualización */
-    .update-button {
-        opacity: 0.3;
-        transition: opacity 0.3s;
-        cursor: pointer;
-        position: fixed;
-        bottom: 10px;
-        left: 10px;
-        font-size: 1.2rem;
-    }
-    
-    .update-button:hover {
-        opacity: 1;
-    }
-    
-    /* Estilo para el expander de actualización */
-    div[data-testid="stExpander"] {
-        border: none !important;
-        box-shadow: none !important;
-        background-color: transparent !important;
-    }
-    
-    /* Ocultar el header del expander */
-    .streamlit-expanderHeader {
-        display: none;
-    }
-    
-    /* Ajustar radio buttons del sidebar */
-    .stRadio > div {
-        gap: 0.2rem !important;
-        background-color: white;
-        padding: 0.5rem;
-        border-radius: 0.3rem;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    }
-    
-    .stRadio > label {
-        font-size: 0.85rem !important;
-        padding: 0.2rem 0 !important;
-    }
-    
-    /* Estilo para los radio buttons */
-    .stRadio [data-testid="stMarkdownContainer"] > p {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    
-    /* Ajustar mensajes de info/success en sidebar */
-    .sidebar .stAlert {
-        padding: 0.2rem !important;
-        margin: 0.3rem 0 !important;
-    }
-    
-    .sidebar .stAlert > div {
-        padding: 0.2rem 0.4rem !important;
-        min-height: unset !important;
-        font-size: 0.7rem !important;
-    }
-    
-    /* Estilo para el mensaje de actualización */
+    /* Estilo para la información de actualización */
     .update-info {
-        font-size: 0.7rem !important;
+        font-size: 0.8rem !important;
         color: #6c757d;
         padding: 0.2rem 0.4rem;
         background-color: #e9ecef;
@@ -153,334 +100,12 @@ st.markdown("""
         margin-top: 0.3rem;
         display: inline-block;
     }
-    
-    /* Reducir espacio de spinners y progress bars */
-    .stSpinner {
-        margin: 0.3rem 0 !important;
-    }
-    
-    .stProgress {
-        margin: 0.2rem 0 !important;
-    }
-    
-    /* Ajustar espacio entre elementos */
-    .element-container {
-        margin: 0.2rem 0 !important;
-    }
-    
-    /* Animaciones y efectos */
-    .fade-in {
-        animation: fadeIn 0.5s ease-in;
-    }
-    @keyframes fadeIn {
-        0% { opacity: 0; }
-        100% { opacity: 1; }
-    }
-    
-    /* Personalización de la barra de progreso */
-    .stProgress > div > div > div > div {
-        background-color: #FF4B4B;
-    }
-    
-    /* Estilos para spinners y loaders */
-    .loading-spinner {
-        text-align: center;
-        padding: 20px;
-    }
-    
-    /* Mejoras visuales generales */
-    .main {
-        background-color: #f8f9fa;
-    }
-    
-    /* Estilo para el sidebar */
-    .css-1d391kg {
-        background-color: #ffffff;
-        border-right: 1px solid #e9ecef;
-        padding: 2rem 1rem;
-    }
-    
-    /* Estilo para las tarjetas */
-    .stCard {
-        background-color: white;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
-    }
-    
-    /* Estilo para las pestañas */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem !important;
-        background-color: white;
-        padding: 0.5rem;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        flex-wrap: wrap;
-        row-gap: 0.5rem;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 2.5rem;
-        white-space: nowrap;
-        background-color: transparent;
-        border-radius: 4px;
-        color: #0f1116;
-        font-size: 13px;
-        padding: 0 1rem !important;
-        min-width: fit-content;
-        flex-grow: 1;
-        flex-basis: auto;
-        text-align: center;
-        max-width: 200px;
-    }
-    
-    /* Ajuste para pantallas pequeñas */
-    @media screen and (max-width: 768px) {
-        .stTabs [data-baseweb="tab"] {
-            font-size: 12px;
-            padding: 0 0.5rem !important;
-            height: 2.2rem;
-        }
-        
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 0.3rem !important;
-        }
-    }
-    
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: rgba(255, 75, 75, 0.1);
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #FF4B4B !important;
-        color: white !important;
-        font-weight: 500;
-    }
-    
-    /* Contenedor de pestañas para asegurar espaciado correcto */
-    .stTabs {
-        background-color: white;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    
-    /* Ajuste para el contenido de las pestañas */
-    .stTabs [data-baseweb="tab-panel"] {
-        padding: 1rem 0.5rem;
-    }
-    
-    /* Estilo para los botones */
-    .stButton>button {
-        background-color: #FF4B4B;
-        color: white;
-        border: none;
-        padding: 0.5rem 1rem;
-        border-radius: 0.3rem;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-    
-    .stButton>button:hover {
-        background-color: #ff3333;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    
-    /* Estilo para métricas */
-    [data-testid="stMetricValue"] {
-        font-size: 1.8rem;
-        color: #FF4B4B;
-        font-weight: bold;
-    }
-    
-    /* Estilo para selectbox */
-    .stSelectbox [data-baseweb="select"] {
-        border-radius: 0.3rem;
-    }
-    
-    /* Estilo para dataframes */
-    .dataframe {
-        border: none !important;
-        border-radius: 0.5rem;
-        overflow: hidden;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    
-    .dataframe th {
-        background-color: #f8f9fa;
-        padding: 0.75rem !important;
-        font-weight: 600;
-    }
-    
-    .dataframe td {
-        padding: 0.75rem !important;
-    }
-    
-    /* Estilo para tooltips */
-    .tooltip {
-        position: relative;
-        display: inline-block;
-    }
-    
-    .tooltip .tooltiptext {
-        visibility: hidden;
-        background-color: #333;
-        color: white;
-        text-align: center;
-        padding: 5px;
-        border-radius: 6px;
-        position: absolute;
-        z-index: 1;
-        bottom: 125%;
-        left: 50%;
-        transform: translateX(-50%);
-        opacity: 0;
-        transition: opacity 0.3s;
-    }
-    
-    .tooltip:hover .tooltiptext {
-        visibility: visible;
-        opacity: 1;
-    }
-    
-    /* Estilo para el botón discreto de actualización */
-    .update-icon {
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        opacity: 0.3;
-        font-size: 0.9rem;
-        z-index: 1000;
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 5px;
-        transition: opacity 0.3s;
-    }
-    
-    .update-icon:hover {
-        opacity: 1;
-    }
-    
-    /* Estilo para el contenedor de actualización */
-    .update-container {
-        position: fixed;
-        bottom: 60px;
-        left: 10px;
-        background: white;
-        padding: 10px;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        z-index: 999;
-    }
-    
-    /* Estilo para el contenedor del botón admin */
-    div[data-testid="stSidebarNav"] {
-        background-color: transparent;
-    }
-    
-    .admin-button-container {
-        position: fixed;
-        bottom: 20px;
-        left: 15px;
-        z-index: 1000;
-    }
-    
-    .admin-button-container button {
-        background: white !important;
-        border-radius: 50% !important;
-        width: 35px !important;
-        height: 35px !important;
-        padding: 0 !important;
-        border: none !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
-        transition: all 0.3s ease !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-    
-    .admin-button-container button:hover {
-        transform: rotate(180deg);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
-    }
-    
-    /* Estilo para el contenedor de la contraseña */
-    .password-container {
-        position: fixed;
-        bottom: 70px;
-        left: 15px;
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        z-index: 999;
-        width: 250px;
-    }
-    
-    /* Estilos para el panel de control */
-    .admin-panel {
-        background: white;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 10px;
-    }
-    
-    .admin-section {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 15px;
-    }
-    
-    .admin-section button {
-        width: 100%;
-        margin: 5px 0;
-    }
-    
-    /* Ajustes para los botones dentro del panel */
-    div[data-testid="stButton"] {
-        width: 100%;
-    }
-    
-    div[data-testid="stButton"] > button {
-        width: 100%;
-        background-color: #FF4B4B;
-        color: white;
-        border: none;
-        padding: 0.5rem 1rem;
-        border-radius: 5px;
-        transition: all 0.3s ease;
-    }
-    
-    div[data-testid="stButton"] > button:hover {
-        background-color: #ff3333;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    
-    /* Ajustes para las métricas */
-    div[data-testid="stMetricValue"] {
-        background: white;
-        padding: 10px;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    
-    /* Ajustes para los tabs */
-    div[data-testid="stTabs"] {
-        background: white;
-        padding: 10px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    
-    button[data-testid="baseButton-secondary"] {
-        background-color: #6c757d !important;
-        color: white !important;
-    }
 </style>
+
+<div class="main-nav">
+    <a href="/" class="nav-link active">📊 Dashboard</a>
+    <a href="/admin" class="nav-link">⚙️ Admin</a>
+</div>
 """, unsafe_allow_html=True)
 
 # Función para mostrar el header con información del usuario

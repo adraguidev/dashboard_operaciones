@@ -11,6 +11,71 @@ st.set_page_config(
     layout="wide",
 )
 
+# Estilos personalizados
+st.markdown("""
+<style>
+    /* Estilos para el menú de navegación principal */
+    section[data-testid="stSidebar"] > div:first-child {
+        padding-top: 0;
+        background-color: #f8f9fa;
+    }
+    
+    /* Contenedor del menú principal */
+    .main-nav {
+        background: linear-gradient(to right, #FF4B4B, #ff6b6b);
+        margin: -1rem -1rem 1rem -1rem;
+        padding: 2rem 1rem 1rem 1rem;
+    }
+    
+    /* Estilo para los enlaces del menú */
+    .nav-link {
+        color: white !important;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        margin: 0.2rem 0;
+        border-radius: 5px;
+        transition: all 0.2s;
+        display: inline-block;
+        width: auto;
+        text-align: center;
+        font-weight: 500;
+        background: rgba(255,255,255,0.1);
+    }
+    
+    .nav-link:hover {
+        background: rgba(255,255,255,0.2);
+        transform: translateX(5px);
+    }
+    
+    .nav-link.active {
+        background: white;
+        color: #FF4B4B !important;
+        font-weight: 600;
+    }
+    
+    /* Ajustes para el contenido del sidebar */
+    .sidebar-content {
+        margin-top: 1rem;
+    }
+    
+    /* Ocultar elementos por defecto de Streamlit */
+    #MainMenu, header {display: none;}
+    
+    /* Estilo para el título de la página */
+    h1 {
+        color: #1f1f1f;
+        font-size: 2rem !important;
+        font-weight: 600;
+        margin-bottom: 2rem !important;
+    }
+</style>
+
+<div class="main-nav">
+    <a href="/" class="nav-link">📊 Dashboard</a>
+    <a href="/admin" class="nav-link active">⚙️ Admin</a>
+</div>
+""", unsafe_allow_html=True)
+
 # Función para verificar la contraseña
 def check_password():
     """Retorna `True` si el usuario tiene la contraseña correcta."""

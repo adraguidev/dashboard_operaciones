@@ -32,7 +32,8 @@ st.markdown("""
     }
     
     section[data-testid="stSidebar"] > div {
-        padding: 1rem 0.5rem !important;
+        padding-top: 3rem !important;
+        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
     }
     
     /* Estilo para los botones principales */

@@ -179,36 +179,67 @@ st.markdown("""
     /* Estilos para las pestañas */
     .stTabs {
         background-color: white;
-        padding: 0.5rem;
+        padding: 1rem;
         border-radius: 0.5rem;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
     
     .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
+        gap: 3px;
         background-color: #f8f9fa;
-        padding: 0.5rem;
+        padding: 0.75rem;
         border-radius: 0.5rem;
     }
     
     .stTabs [data-baseweb="tab"] {
-        height: 2.5rem;
+        height: 3rem;
         background-color: white;
         border-radius: 4px;
         color: #1f1f1f;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
+        font-weight: 500;
         border: none;
+        padding: 0 1.5rem;
         transition: all 0.2s;
     }
     
     .stTabs [data-baseweb="tab"]:hover {
         background-color: #fff3f3;
         color: #FF4B4B;
+        transform: translateY(-1px);
     }
     
     .stTabs [aria-selected="true"] {
-        background-color: #FF4B4B !important;
+        background: linear-gradient(90deg, #FF4B4B 0%, #ff6b6b 100%) !important;
         color: white !important;
+        font-weight: 600 !important;
+        box-shadow: 0 2px 4px rgba(255,75,75,0.2) !important;
+    }
+    
+    /* Contenido de las pestañas */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 1.5rem 0.5rem;
+    }
+    
+    /* Estilo para los botones dentro de las pestañas */
+    .stTabs button {
+        border-radius: 4px;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    
+    .stTabs button[kind="primary"] {
+        background: linear-gradient(90deg, #FF4B4B 0%, #ff6b6b 100%);
+        border: none;
+        color: white;
+        box-shadow: 0 2px 4px rgba(255,75,75,0.2);
+    }
+    
+    .stTabs button[kind="primary"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(255,75,75,0.3);
     }
     
     /* Botón de colapso del sidebar siempre visible */

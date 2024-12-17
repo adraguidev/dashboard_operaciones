@@ -19,20 +19,16 @@ st.markdown("""
         background-color: #f8f9fa;
         min-width: 220px !important;
         max-width: 220px !important;
-    }
-    
-    section[data-testid="stSidebar"] > div {
-        padding: 1rem 0.5rem !important;
         position: relative !important;
     }
     
-    section[data-testid="stSidebar"] > div > div:first-child {
-        position: fixed !important;
-        width: 220px !important;
-        height: 100vh !important;
-        overflow-y: auto !important;
+    section[data-testid="stSidebar"] > div {
         padding: 2.5rem 0.5rem 1rem 0.5rem !important;
         background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
+        height: 100vh !important;
+        overflow-y: auto !important;
+        position: fixed !important;
+        width: 220px !important;
     }
     
     /* Estilo para los botones principales */
@@ -87,6 +83,7 @@ st.markdown("""
     section[data-testid="stSidebarContent"] {
         padding-top: 0 !important;
         height: calc(100vh - 2rem) !important;
+        overflow: hidden !important;
     }
     
     /* Ocultar elementos específicos de Streamlit */
@@ -146,7 +143,7 @@ st.markdown("""
         position: fixed !important;
         top: 0.5rem !important;
         left: 0.5rem !important;
-        z-index: 999 !important;
+        z-index: 1 !important;
         background: white !important;
         border-radius: 4px !important;
         height: 2rem !important;
@@ -175,14 +172,12 @@ st.markdown("""
     
     section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
         margin-left: 0 !important;
-        width: 100% !important;
-        transition: margin-left 0.3s, width 0.3s !important;
+        transition: margin-left 0.3s !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
         margin-left: 220px !important;
-        width: calc(100% - 220px) !important;
-        transition: margin-left 0.3s, width 0.3s !important;
+        transition: margin-left 0.3s !important;
     }
     
     /* Estilos para las pestañas */
@@ -652,7 +647,7 @@ if check_password():
                         st.error(f"❌ Error de conexión: {str(e)}")
     
     with tab2:
-        st.header("Configuraci��n del Sistema")
+        st.header("Configuración del Sistema")
         
         # Configuración de módulos
         st.subheader("Módulos del Sistema")

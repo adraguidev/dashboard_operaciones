@@ -262,6 +262,142 @@ st.markdown("""
         background-color: #f8f9fa !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }
+    
+    /* Estilos globales */
+    :root {
+        --primary-color: #FF4B4B;
+        --primary-color-hover: #ff6b6b;
+        --background-color: #f8f9fa;
+        --text-color: #1f1f1f;
+        --border-radius: 0.5rem;
+        --transition-speed: 0.2s;
+    }
+    
+    /* Estilos base */
+    .stApp {
+        background-color: var(--background-color);
+    }
+    
+    /* Estilos para cards */
+    .stCard {
+        background-color: white;
+        padding: 1rem;
+        border-radius: var(--border-radius);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+    }
+    
+    /* Estilos para métricas */
+    [data-testid="stMetric"] {
+        background-color: white;
+        padding: 1rem;
+        border-radius: var(--border-radius);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    [data-testid="stMetricValue"] {
+        color: var(--primary-color) !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Estilos para botones */
+    .stButton button {
+        border-radius: var(--border-radius);
+        font-weight: 500;
+        transition: all var(--transition-speed);
+    }
+    
+    .stButton button[kind="primary"] {
+        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-hover) 100%);
+        border: none;
+        color: white;
+        box-shadow: 0 2px 4px rgba(255,75,75,0.2);
+    }
+    
+    .stButton button[kind="primary"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(255,75,75,0.3);
+    }
+    
+    /* Estilos para selectores */
+    .stSelectbox select {
+        border-radius: var(--border-radius);
+    }
+    
+    /* Estilos para inputs */
+    .stTextInput input {
+        border-radius: var(--border-radius);
+    }
+    
+    /* Estilos para radio buttons */
+    .stRadio > div {
+        background-color: white;
+        padding: 0.5rem;
+        border-radius: var(--border-radius);
+    }
+    
+    /* Estilos para expanders */
+    .streamlit-expanderHeader {
+        background-color: white;
+        border-radius: var(--border-radius);
+        border: none !important;
+    }
+    
+    /* Estilos para dataframes */
+    .stDataFrame {
+        background-color: white;
+        padding: 1rem;
+        border-radius: var(--border-radius);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    /* Estilos para tooltips */
+    .tooltip {
+        position: relative;
+        display: inline-block;
+    }
+    
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        background-color: #333;
+        color: white;
+        text-align: center;
+        padding: 0.5rem;
+        border-radius: 0.25rem;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity var(--transition-speed);
+    }
+    
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+    
+    /* Estilos para headers */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--text-color);
+        font-weight: 600;
+    }
+    
+    h1 {
+        font-size: 2rem !important;
+        margin-bottom: 2rem !important;
+    }
+    
+    h2 {
+        font-size: 1.5rem !important;
+        margin-bottom: 1.5rem !important;
+    }
+    
+    h3 {
+        font-size: 1.25rem !important;
+        margin-bottom: 1rem !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 

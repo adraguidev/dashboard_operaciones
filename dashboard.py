@@ -58,6 +58,24 @@ st.markdown("""
         display: none !important;
     }
     
+    /* Ocultar textos de páginas en el sidebar */
+    section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+    
+    .st-emotion-cache-eczf16 {
+        display: none !important;
+    }
+    
+    .st-emotion-cache-r421ms {
+        display: none !important;
+    }
+    
+    /* Ocultar contenedor de navegación */
+    .st-emotion-cache-1k5e5jk {
+        display: none !important;
+    }
+    
     /* Ajustar el padding superior del sidebar */
     section[data-testid="stSidebar"] > div {
         padding-top: 0rem !important;

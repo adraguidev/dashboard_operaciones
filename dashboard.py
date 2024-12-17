@@ -110,7 +110,7 @@ st.markdown("""
     }
     
     div[data-testid="collapsedControl"] {
-        display: block !important;
+        display: none !important;
     }
     
     #MainMenu {
@@ -158,43 +158,57 @@ st.markdown("""
     
     /* Ajustes para el sidebar colapsado */
     [data-testid="collapsedControl"] {
-        display: block !important;
-        position: absolute !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
-        background-color: white !important;
-        border-radius: 4px !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        z-index: 999999 !important;
-        height: 2rem !important;
-        width: 2rem !important;
-        padding: 0.2rem !important;
-        transition: none !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        pointer-events: auto !important;
+        display: none !important;
     }
     
-    [data-testid="collapsedControl"]:hover {
-        background-color: #f8f9fa !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    /* Nuestro botón personalizado para el sidebar */
+    #custom-sidebar-toggle {
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        width: 2rem !important;
+        height: 2rem !important;
+        background: white !important;
+        border: 1px solid #dee2e6 !important;
+        border-radius: 4px !important;
+        cursor: pointer !important;
+        z-index: 999999 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        transition: background 0.2s !important;
+    }
+    
+    #custom-sidebar-toggle:hover {
+        background: #f8f9fa !important;
+    }
+    
+    /* Ajustes para el sidebar */
+    section[data-testid="stSidebar"] {
+        margin-left: 0 !important;
+        transition: transform 0.3s ease-in-out !important;
+        transform: none !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] {
-        margin-left: -220px !important;
-        transition: margin 0.3s !important;
+        transform: translateX(-100%) !important;
+        margin-left: 0 !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        transform: translateX(0) !important;
+        margin-left: 0 !important;
+    }
+    
+    /* Ajustes para el contenido principal */
+    section[data-testid="stContent"] {
+        margin-left: 220px !important;
+        transition: margin-left 0.3s ease-in-out !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
         margin-left: 0 !important;
-        width: 100% !important;
-        transition: margin 0.3s, width 0.3s !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
-        margin-left: 220px !important;
-        width: calc(100% - 220px) !important;
-        transition: margin 0.3s, width 0.3s !important;
     }
     
     /* Estilos para las pestañas */

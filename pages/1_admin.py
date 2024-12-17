@@ -19,10 +19,17 @@ st.markdown("""
         background-color: #f8f9fa;
         min-width: 220px !important;
         max-width: 220px !important;
+        position: relative;
     }
     
     section[data-testid="stSidebar"] > div {
-        padding: 1rem 0.5rem !important;
+        padding-top: 3rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
+        height: 100vh;
+        position: fixed;
+        width: 220px;
     }
     
     /* Estilo para los botones principales */
@@ -134,7 +141,18 @@ st.markdown("""
     /* Ajustes para el sidebar colapsado */
     [data-testid="collapsedControl"] {
         display: block !important;
-        color: #1f1f1f !important;
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        background-color: white !important;
+        border-radius: 4px !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        z-index: 999 !important;
+        height: 2rem !important;
+        width: 2rem !important;
+        padding: 0.2rem !important;
+        transition: all 0.2s !important;
+        margin: 0 !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] {

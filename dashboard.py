@@ -527,10 +527,11 @@ def generate_data_hash(data):
     return hashlib.md5(data_str.encode()).hexdigest()
 
 # Función cacheada para cargar datos del módulo y su timestamp
-@st.cache_data
+@st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
 def load_module_data_with_timestamp(selected_module):
     """
     Carga y cachea los datos del módulo junto con su timestamp.
+    El caché persiste en disco y solo se invalida manualmente desde el panel de control.
     """
     # Verificar si hay una actualización forzada desde el panel de control
     if st.session_state.get('force_refresh', False):
@@ -568,10 +569,7 @@ def get_module_data(selected_module, collection_name):
         # Actualizar el hash en session_state
         st.session_state[cache_key] = current_hash
         
-        # Determinar si los datos realmente cambiaron
-        data_changed = previous_hash != current_hash if previous_hash else True
-        
-        return cached_data['data'], cached_data['update_time'], data_changed
+        return cached_data['data'], cached_data['update_time'], False  # Siempre False porque no queremos recargar
     
     return None, None, False
 

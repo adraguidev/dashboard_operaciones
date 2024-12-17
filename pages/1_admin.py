@@ -593,6 +593,29 @@ if check_password():
     
     data_loader = st.session_state.data_loader
     
+    # Inicializar system_monitor si no existe
+    if 'system_monitor' not in st.session_state:
+        st.session_state.system_monitor = SystemMonitor(st.session_state.data_loader.migraciones_db)
+
+    # Inicializar report_generator si no existe
+    if 'report_generator' not in st.session_state:
+        st.session_state.report_generator = ReportGenerator(st.session_state.system_monitor)
+
+    # Función para actualizar métricas
+    def update_metrics():
+        metrics = st.session_state.system_monitor.get_system_metrics()
+        mongo_stats = st.session_state.system_monitor.get_mongodb_stats()
+        
+        return metrics, mongo_stats
+
+    # Función para formatear bytes
+    def format_size(size_bytes):
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} TB"
+
     # Crear tabs para diferentes secciones
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🔄 Gestión de Datos",
@@ -651,36 +674,105 @@ if check_password():
     with tab2:
         st.header("📊 Monitoreo de Rendimiento")
         
-        # Métricas en tiempo real
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Tiempo de Respuesta", "120ms", "↓ 15ms")
-        with col2:
-            st.metric("Uso de CPU", "45%", "↑ 10%")
-        with col3:
-            st.metric("Memoria RAM", "2.1GB", "↑ 0.3GB")
+        # Contenedor para métricas en tiempo real
+        metrics_container = st.container()
         
-        # Gráfico de rendimiento
-        st.subheader("Rendimiento del Sistema")
-        
-        # Datos de ejemplo para el gráfico
-        dates = pd.date_range(start='2024-01-01', end='2024-01-07', freq='D')
-        metrics = {
-            'Tiempo de Respuesta (ms)': np.random.randint(100, 150, size=len(dates)),
-            'Uso de CPU (%)': np.random.randint(30, 60, size=len(dates)),
-            'Memoria (GB)': np.random.uniform(1.8, 2.5, size=len(dates))
-        }
-        df = pd.DataFrame(metrics, index=dates)
-        st.line_chart(df)
-        
-        # Estadísticas por módulo
-        st.subheader("Rendimiento por Módulo")
-        module_stats = pd.DataFrame({
-            'Módulo': list(MODULES.values()),
-            'Tiempo Promedio': np.random.randint(50, 200, size=len(MODULES)),
-            'Consultas/min': np.random.randint(10, 100, size=len(MODULES))
-        })
-        st.dataframe(module_stats, hide_index=True)
+        with metrics_container:
+            # Obtener métricas actualizadas
+            metrics, mongo_stats = update_metrics()
+            
+            # Métricas del sistema
+            st.subheader("Métricas del Sistema")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "CPU",
+                    f"{metrics.get('cpu_usage', 0):.1f}%",
+                    delta=None,
+                    help="Uso actual de CPU"
+                )
+            
+            with col2:
+                memory_used = metrics.get('memory_used', 0)
+                memory_total = metrics.get('memory_total', 1)
+                st.metric(
+                    "Memoria",
+                    f"{memory_used:.1f}GB / {memory_total:.1f}GB",
+                    f"{metrics.get('memory_percent', 0):.1f}%",
+                    help="Uso de memoria RAM"
+                )
+            
+            with col3:
+                disk_used = metrics.get('disk_used', 0)
+                disk_total = metrics.get('disk_total', 1)
+                st.metric(
+                    "Disco",
+                    f"{disk_used:.1f}GB / {disk_total:.1f}GB",
+                    f"{metrics.get('disk_percent', 0):.1f}%",
+                    help="Uso de disco"
+                )
+            
+            # Métricas de MongoDB
+            if mongo_stats:
+                st.subheader("MongoDB Stats")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        "Conexiones",
+                        mongo_stats.get('connections', {}).get('current', 0),
+                        help="Conexiones activas a MongoDB"
+                    )
+                
+                with col2:
+                    operations = sum(mongo_stats.get('opcounters', {}).values())
+                    st.metric(
+                        "Operaciones",
+                        f"{operations:,}",
+                        help="Total de operaciones realizadas"
+                    )
+                
+                with col3:
+                    mem_usage = mongo_stats.get('mem_usage', 0)
+                    st.metric(
+                        "Memoria MongoDB",
+                        f"{mem_usage} MB",
+                        help="Uso de memoria por MongoDB"
+                    )
+            
+            # Estadísticas de colecciones
+            st.subheader("Estadísticas de Colecciones")
+            
+            collection_stats = []
+            for module in MODULES:
+                collection_name = MONGODB_COLLECTIONS.get(module, '')
+                if collection_name:
+                    stats = st.session_state.system_monitor.get_collection_stats(collection_name)
+                    if stats:
+                        collection_stats.append({
+                            'Colección': MODULES[module],
+                            'Tamaño': f"{stats['size']:.1f} MB",
+                            'Documentos': f"{stats['count']:,}",
+                            'Tamaño Promedio': f"{stats['avg_obj_size']:.1f} KB",
+                            'Índices': stats['indexes']
+                        })
+            
+            if collection_stats:
+                st.dataframe(
+                    pd.DataFrame(collection_stats),
+                    hide_index=True,
+                    use_container_width=True
+                )
+            
+            # Botón para actualizar métricas
+            if st.button("🔄 Actualizar Métricas", use_container_width=True):
+                st.experimental_rerun()
+            
+            # Mostrar tiempo de la última actualización
+            st.caption(
+                f"Última actualización: {datetime.now().strftime('%H:%M:%S')}"
+            )
     
     with tab3:
         st.header("📝 Logs Avanzados")

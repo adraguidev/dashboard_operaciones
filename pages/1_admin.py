@@ -120,12 +120,27 @@ if 'menu_admin' not in st.session_state:
 with st.sidebar:
     # Menú Dashboard
     if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
+        st.session_state.menu_dashboard = True
+        st.session_state.menu_admin = False
         st.switch_page("dashboard.py")
     
     # Menú Admin
     if st.button("⚙️ Admin", key="btn_admin", use_container_width=True, type="primary"):
         st.session_state.menu_admin = True
         st.session_state.menu_dashboard = False
+    
+    # Submenú de Admin
+    if st.session_state.menu_admin:
+        with st.container():
+            st.markdown('<div class="submenu">', unsafe_allow_html=True)
+            admin_option = st.radio(
+                "",
+                options=["panel_control"],
+                format_func=lambda x: "🔐 Panel de Control",
+                key="admin_selector",
+                label_visibility="collapsed"
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # Función para verificar la contraseña
 def check_password():

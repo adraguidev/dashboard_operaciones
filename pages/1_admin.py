@@ -130,6 +130,28 @@ st.markdown("""
     .st-emotion-cache-1k5e5jk {
         display: none !important;
     }
+    
+    /* Ajustes para el sidebar colapsado */
+    [data-testid="collapsedControl"] {
+        display: block !important;
+        color: #1f1f1f !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        margin-left: -220px !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
+        margin-left: 0 !important;
+        width: 100% !important;
+        transition: margin 0.3s, width 0.3s !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
+        margin-left: 220px !important;
+        width: calc(100% - 220px) !important;
+        transition: margin 0.3s, width 0.3s !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 

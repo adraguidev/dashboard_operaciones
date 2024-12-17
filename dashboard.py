@@ -311,13 +311,12 @@ def show_header():
 
 # Función para verificar última actualización (cacheada por 5 minutos para no consultar constantemente)
 @st.cache_data(ttl=300)
-def check_db_last_update(collection_name):
+def get_current_time():
     """
-    Verifica la última actualización en la base de datos.
-    Cacheado por 5 minutos para no consultar constantemente.
+    Retorna la hora actual en la zona horaria de Lima.
     """
-    data_loader = st.session_state.data_loader
-    return data_loader._get_collection_last_update(collection_name)
+    lima_tz = pytz.timezone('America/Lima')
+    return datetime.now(pytz.UTC).astimezone(lima_tz)
 
 # Función para generar hash de datos
 def generate_data_hash(data):
@@ -337,19 +336,18 @@ def generate_data_hash(data):
     return hashlib.md5(data_str.encode()).hexdigest()
 
 # Función cacheada para cargar datos del módulo y su timestamp
-@st.cache_data(ttl=24*3600)
-def load_module_data_with_timestamp(selected_module, collection_name, last_update_in_db):
+@st.cache_data(ttl=None)  # Cache permanente hasta actualización manual
+def load_module_data_with_timestamp(selected_module):
     """
     Carga y cachea los datos del módulo junto con su timestamp.
     Incluye un hash para detectar cambios reales en los datos.
     """
     data_loader = st.session_state.data_loader
-    data = data_loader.load_module_data(selected_module, last_update_in_db)
+    data = data_loader.load_module_data(selected_module)
     
     if data is not None:
-        # Usar el timestamp de la DB para mantener consistencia
-        lima_tz = pytz.timezone('America/Lima')
-        update_time = last_update_in_db.astimezone(lima_tz) if last_update_in_db else datetime.now(pytz.UTC).astimezone(lima_tz)
+        # Usar el timestamp actual
+        update_time = get_current_time()
         
         # Generar hash de los datos
         data_hash = generate_data_hash(data)
@@ -364,14 +362,10 @@ def load_module_data_with_timestamp(selected_module, collection_name, last_updat
 
 def get_module_data(selected_module, collection_name):
     """
-    Función que maneja la lógica de verificación y carga de datos.
-    Ahora incluye verificación de hash para detectar cambios reales.
+    Función que maneja la lógica de carga de datos.
     """
-    # Verificar última actualización en la DB (cacheado por 5 minutos)
-    last_update_in_db = check_db_last_update(collection_name)
-    
     # Intentar cargar datos cacheados
-    cached_data = load_module_data_with_timestamp(selected_module, collection_name, last_update_in_db)
+    cached_data = load_module_data_with_timestamp(selected_module)
     
     if cached_data is not None:
         # Guardar el hash en session_state si no existe

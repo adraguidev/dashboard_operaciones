@@ -65,13 +65,21 @@ st.markdown("""
         padding-left: 0.5rem;
     }
     
-    /* Estilo para el título de actualización */
-    .update-title {
-        font-size: 0.9rem !important;
+    /* Estilo para el expander de actualización */
+    .small-expander {
+        font-size: 0.8rem !important;
         color: #6c757d;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-        padding-left: 0.5rem;
+        margin-top: auto;
+    }
+    
+    /* Contenedor para empujar contenido al fondo */
+    .sidebar-bottom {
+        position: fixed;
+        bottom: 0;
+        padding: 1rem;
+        width: inherit;
+        background: white;
+        border-top: 1px solid #e9ecef;
     }
     
     /* Ajustar radio buttons del sidebar */
@@ -508,15 +516,14 @@ def main():
                     unsafe_allow_html=True
                 )
             
-            # Botón de actualización manual (al final)
-            st.markdown("<div style='flex-grow: 1;'></div>", unsafe_allow_html=True)
-            st.markdown("---")
-            st.markdown('<p class="update-title">🔄 Actualización de Datos</p>', unsafe_allow_html=True)
-            with st.expander("Actualizar datos manualmente"):
+            # Contenedor para el botón de actualización al fondo
+            st.markdown('<div class="sidebar-bottom">', unsafe_allow_html=True)
+            with st.expander("actualizar datos manualmente", expanded=False):
                 password = st.text_input("Contraseña", type="password")
                 if st.button("Actualizar Datos"):
                     if data_loader.force_data_refresh(password):
                         st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
         if selected_module != 'SPE':
             # Crear pestañas

@@ -390,6 +390,110 @@ st.markdown("""
         font-size: 1.25rem !important;
         margin-bottom: 1rem !important;
     }
+    
+    /* Estilos para las pestañas y contenedores */
+    .stTabs {
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+        margin-top: 1rem;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: transparent;
+        padding: 0;
+        margin-bottom: 1.5rem;
+        border-bottom: none;
+        gap: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 3rem;
+        background-color: rgba(255,255,255,0.8);
+        border-radius: var(--border-radius);
+        color: #6c757d;
+        font-size: 0.95rem;
+        font-weight: 500;
+        border: 1px solid #f1f1f1;
+        padding: 0 1.5rem;
+        margin: 0;
+        transition: all 0.2s;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: white;
+        color: var(--primary-color);
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-hover) 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border: none !important;
+        box-shadow: 0 4px 6px rgba(255,75,75,0.2) !important;
+    }
+    
+    /* Contenido de las pestañas */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 0;
+        background-color: transparent;
+    }
+    
+    /* Ajustes para el contenedor principal */
+    section[data-testid="stContent"] {
+        padding: 2rem !important;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    /* Eliminar líneas divisorias innecesarias */
+    .main-nav, hr, .stMarkdown hr {
+        display: none !important;
+    }
+    
+    /* Ajustes para el sidebar */
+    section[data-testid="stSidebar"] > div {
+        padding-top: 1.5rem !important;
+        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
+    }
+    
+    /* Ajustes para los radio buttons en el submenu */
+    .submenu {
+        margin-left: 0.5rem !important;
+        padding-left: 0.5rem !important;
+        border-left: 2px solid rgba(255,75,75,0.1) !important;
+    }
+    
+    .submenu .stRadio > div {
+        background: transparent !important;
+        padding: 0 !important;
+    }
+    
+    .submenu .stRadio label {
+        background: rgba(255,255,255,0.8) !important;
+        border: 1px solid #f1f1f1;
+        margin-bottom: 0.2rem !important;
+    }
+    
+    .submenu .stRadio label:hover {
+        background: white !important;
+        border-color: var(--primary-color);
+    }
+    
+    /* Ajustes para los contenedores de datos */
+    [data-testid="stMetric"], .stDataFrame, .streamlit-expanderHeader {
+        background: rgba(255,255,255,0.8);
+        border: 1px solid #f1f1f1;
+        transition: all 0.2s;
+    }
+    
+    [data-testid="stMetric"]:hover, .stDataFrame:hover, .streamlit-expanderHeader:hover {
+        background: white;
+        border-color: #e9ecef;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
 </style>
 """, unsafe_allow_html=True)
 

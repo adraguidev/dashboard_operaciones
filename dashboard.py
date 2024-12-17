@@ -472,23 +472,6 @@ def main():
                 key="module_selector"
             )
 
-            # Mostrar última actualización
-            if update_time:
-                st.markdown(
-                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
-                    unsafe_allow_html=True
-                )
-            
-            # Botón de actualización manual (movido al final)
-            st.markdown("<div style='flex-grow: 1;'></div>", unsafe_allow_html=True)
-            st.markdown("---")
-            st.markdown('<p class="update-title">🔄 Actualización de Datos</p>', unsafe_allow_html=True)
-            with st.expander("Actualizar datos manualmente"):
-                password = st.text_input("Contraseña", type="password")
-                if st.button("Actualizar Datos"):
-                    if data_loader.force_data_refresh(password):
-                        st.rerun()
-
         # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':
             if google_credentials is None:
@@ -500,6 +483,7 @@ def main():
                 lambda: SPEModule()
             )
             spe.render_module()
+            update_time = get_current_time()
             
         else:
             # Para otros módulos
@@ -515,13 +499,26 @@ def main():
                     st.error("No se encontraron datos para este módulo en la base de datos.")
                     return
 
-                # Mostrar última actualización
-                if update_time:
-                    st.sidebar.markdown(
-                        f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
-                        unsafe_allow_html=True
-                    )
+        # Agregar elementos adicionales al sidebar después de cargar los datos
+        with st.sidebar:
+            # Mostrar última actualización si está disponible
+            if 'update_time' in locals():
+                st.markdown(
+                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
+                    unsafe_allow_html=True
+                )
+            
+            # Botón de actualización manual (al final)
+            st.markdown("<div style='flex-grow: 1;'></div>", unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown('<p class="update-title">🔄 Actualización de Datos</p>', unsafe_allow_html=True)
+            with st.expander("Actualizar datos manualmente"):
+                password = st.text_input("Contraseña", type="password")
+                if st.button("Actualizar Datos"):
+                    if data_loader.force_data_refresh(password):
+                        st.rerun()
 
+        if selected_module != 'SPE':
             # Crear pestañas
             tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
                 "Reporte de pendientes",

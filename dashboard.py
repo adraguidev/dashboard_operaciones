@@ -343,6 +343,37 @@ st.markdown("""
         visibility: visible;
         opacity: 1;
     }
+    
+    /* Estilo para el botón discreto de actualización */
+    .update-icon {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        opacity: 0.3;
+        font-size: 0.9rem;
+        z-index: 1000;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 5px;
+        transition: opacity 0.3s;
+    }
+    
+    .update-icon:hover {
+        opacity: 1;
+    }
+    
+    /* Estilo para el contenedor de actualización */
+    .update-container {
+        position: fixed;
+        bottom: 60px;
+        left: 10px;
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        z-index: 999;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -544,18 +575,23 @@ def main():
                     unsafe_allow_html=True
                 )
             
-            # Contenedor para el botón de actualización discreto al fondo
-            st.markdown('<div class="sidebar-bottom">', unsafe_allow_html=True)
-            update_trigger = st.markdown('🔄', help="Actualizar datos")
-            if update_trigger:
-                with st.expander("", expanded=False):
-                    st.markdown("<div style='padding: 10px;'>", unsafe_allow_html=True)
-                    password = st.text_input("Contraseña", type="password")
-                    if st.button("Actualizar Datos"):
+            # Inicializar el estado del expander si no existe
+            if 'show_update_form' not in st.session_state:
+                st.session_state.show_update_form = False
+            
+            # Botón discreto de actualización
+            col1, col2 = st.columns([1, 20])
+            with col1:
+                if st.button('🔄', help="Actualizar datos", key="update_trigger"):
+                    st.session_state.show_update_form = not st.session_state.show_update_form
+            
+            # Mostrar formulario de actualización si está activo
+            if st.session_state.show_update_form:
+                with st.container():
+                    password = st.text_input("Contraseña", type="password", key="update_password")
+                    if st.button("Actualizar", key="update_confirm"):
                         if data_loader.force_data_refresh(password):
                             st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
 
         if selected_module != 'SPE':
             # Crear pestañas

@@ -14,8 +14,16 @@ st.set_page_config(
 # Estilos personalizados
 st.markdown("""
 <style>
-    /* Ocultar el menú por defecto de Streamlit */
-    section[data-testid="stSidebarNav"] {
+    /* Ocultar completamente el menú por defecto de Streamlit */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    
+    div[data-testid="collapsedControl"] {
+        display: none !important;
+    }
+    
+    #MainMenu {
         display: none !important;
     }
     
@@ -62,9 +70,6 @@ st.markdown("""
     .sidebar-content {
         margin-top: 1rem;
     }
-    
-    /* Ocultar elementos por defecto de Streamlit */
-    #MainMenu, header {display: none;}
     
     /* Estilo para el título de la página */
     h1 {

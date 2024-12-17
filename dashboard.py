@@ -24,8 +24,16 @@ st.set_page_config(
 # CSS personalizado para mejorar la interfaz
 st.markdown("""
 <style>
-    /* Ocultar el menú por defecto de Streamlit */
-    section[data-testid="stSidebarNav"] {
+    /* Ocultar completamente el menú por defecto de Streamlit */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    
+    div[data-testid="collapsedControl"] {
+        display: none !important;
+    }
+    
+    #MainMenu {
         display: none !important;
     }
     
@@ -385,7 +393,7 @@ def main():
                 )
 
     except Exception as e:
-        st.error(f"Error inesperado en la aplicaci��n: {str(e)}")
+        st.error(f"Error inesperado en la aplicación: {str(e)}")
         print(f"Error detallado: {str(e)}")
 
 if __name__ == "__main__":

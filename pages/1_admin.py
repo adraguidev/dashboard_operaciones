@@ -158,7 +158,7 @@ st.markdown("""
         background: transparent;
         padding: 0;
         box-shadow: none;
-        margin-top: 1rem;
+        margin-top: 0.5rem;
     }
     
     .stTabs [data-baseweb="tab-list"] {
@@ -184,7 +184,7 @@ st.markdown("""
         margin-right: -1px;
         transition: all 0.2s;
         position: relative;
-        bottom: -1px;
+        bottom: 0;
     }
     
     .stTabs [data-baseweb="tab"]:hover {
@@ -207,9 +207,9 @@ st.markdown("""
     
     /* Contenido de las pestañas */
     .stTabs [data-baseweb="tab-panel"] {
-        padding: 2rem 0 0 0;
+        padding: 1rem 0 0 0;
         background-color: transparent;
-        border-top: 1px solid #dee2e6;
+        border-top: none;
         margin-top: 0;
     }
     
@@ -280,8 +280,8 @@ st.markdown("""
     
     /* Contenedor principal */
     section[data-testid="stContent"] {
-        padding: 1rem 2rem !important;
-        max-width: 1200px;
+        padding: 1rem !important;
+        max-width: 1400px;
         margin: 0 auto;
     }
     
@@ -392,8 +392,8 @@ st.markdown("""
     }
     
     h1 {
-        font-size: 2rem !important;
-        margin-bottom: 2rem !important;
+        font-size: 1.75rem !important;
+        margin-bottom: 1rem !important;
     }
     
     h2 {

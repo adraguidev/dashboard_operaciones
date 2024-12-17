@@ -32,7 +32,7 @@ st.markdown("""
     }
     
     section[data-testid="stSidebar"] > div {
-        padding-top: 5rem !important;
+        padding-top: 7rem !important;
         background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
     }
     
@@ -262,8 +262,8 @@ st.markdown("""
     button[data-testid="collapsedControl"] {
         display: block !important;
         position: fixed !important;
-        top: 0.75rem !important;
-        left: 0.75rem !important;
+        top: 1rem !important;
+        left: 1rem !important;
         background-color: white !important;
         border-radius: 4px !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
@@ -483,6 +483,11 @@ st.markdown("""
         background: white;
         border-color: #e9ecef;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    /* Ajustes para el primer botón del sidebar */
+    section[data-testid="stSidebar"] button:first-of-type {
+        margin-top: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)

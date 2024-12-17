@@ -24,70 +24,56 @@ st.set_page_config(
 # CSS personalizado para mejorar la interfaz
 st.markdown("""
 <style>
-    /* Eliminar todo el padding superior */
-    .main > div:first-child {
-        padding-top: 0 !important;
+    /* Estilo para el menú principal */
+    .menu-title {
+        color: #1f1f1f;
+        font-size: 1rem;
+        font-weight: 600;
+        padding: 0.5rem;
+        margin: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        background: white;
+        border-radius: 5px;
+        margin-bottom: 0.5rem;
+        transition: all 0.2s;
     }
     
-    /* Reducir espacio del contenedor principal */
-    .main .block-container {
-        padding-top: 0.5rem !important;
-        padding-bottom: 0.5rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+    .menu-title:hover {
+        background: #f8f9fa;
     }
     
-    /* Estilos para el menú de navegación principal */
-    section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 0;
-        background-color: #f8f9fa;
+    .menu-title.active {
+        background: #FF4B4B;
+        color: white;
     }
     
-    /* Contenedor del menú principal */
-    .main-nav {
-        background: linear-gradient(to right, #FF4B4B, #ff6b6b);
-        margin: -1rem -1rem 1rem -1rem;
-        padding: 2rem 1rem 1rem 1rem;
+    /* Estilo para los submódulos */
+    .submenu {
+        margin-left: 1rem;
+        margin-bottom: 1rem;
+        border-left: 2px solid #f1f1f1;
     }
     
-    /* Estilo para los enlaces del menú */
-    .nav-link {
-        color: white !important;
-        text-decoration: none;
-        padding: 0.5rem 1rem;
-        margin: 0.2rem 0;
+    /* Estilo para radio buttons en el submenu */
+    .submenu .stRadio > div {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    
+    .submenu .stRadio label {
+        padding: 0.4rem 1rem;
+        background: white;
         border-radius: 5px;
         transition: all 0.2s;
-        display: inline-block;
-        width: auto;
-        text-align: center;
-        font-weight: 500;
-        background: rgba(255,255,255,0.1);
+        cursor: pointer;
     }
     
-    .nav-link:hover {
-        background: rgba(255,255,255,0.2);
+    .submenu .stRadio label:hover {
+        background: #f8f9fa;
         transform: translateX(5px);
-    }
-    
-    .nav-link.active {
-        background: white;
-        color: #FF4B4B !important;
-        font-weight: 600;
-    }
-    
-    /* Ajustes para el contenido del sidebar */
-    .sidebar-content {
-        margin-top: 1rem;
-    }
-    
-    /* Estilo para el título de módulos */
-    .sidebar-title {
-        font-size: 1.5rem !important;
-        color: #1f1f1f;
-        font-weight: 600;
-        margin: 1rem 0;
-        padding-left: 0.5rem;
     }
     
     /* Estilo para la información de actualización */
@@ -97,15 +83,10 @@ st.markdown("""
         padding: 0.2rem 0.4rem;
         background-color: #e9ecef;
         border-radius: 0.2rem;
-        margin-top: 0.3rem;
+        margin-top: 1rem;
         display: inline-block;
     }
 </style>
-
-<div class="main-nav">
-    <a href="/" class="nav-link active">📊 Dashboard</a>
-    <a href="/admin" class="nav-link">⚙️ Admin</a>
-</div>
 """, unsafe_allow_html=True)
 
 # Función para mostrar el header con información del usuario
@@ -242,6 +223,60 @@ def main():
             st.error("No se pudo inicializar la conexión a la base de datos.")
             return
 
+        # Inicializar estados del menú si no existen
+        if 'menu_dashboard' not in st.session_state:
+            st.session_state.menu_dashboard = True
+        if 'menu_admin' not in st.session_state:
+            st.session_state.menu_admin = False
+
+        # Contenedor para el sidebar con estilo
+        with st.sidebar:
+            # Menú Dashboard
+            col1, col2 = st.columns([9,1])
+            with col1:
+                if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
+                    st.session_state.menu_dashboard = not st.session_state.menu_dashboard
+                    st.session_state.menu_admin = False
+            with col2:
+                st.markdown("▼" if st.session_state.menu_dashboard else "▶️")
+            
+            # Submódulos de Dashboard
+            if st.session_state.menu_dashboard:
+                with st.container():
+                    st.markdown('<div class="submenu">', unsafe_allow_html=True)
+                    selected_module = st.radio(
+                        "",
+                        options=st.session_state.get('visible_modules', list(MODULES.keys())),
+                        format_func=lambda x: MODULES[x],
+                        key="module_selector",
+                        label_visibility="collapsed"
+                    )
+                    st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Menú Admin
+            col3, col4 = st.columns([9,1])
+            with col3:
+                if st.button("⚙️ Admin", key="btn_admin", use_container_width=True):
+                    st.session_state.menu_admin = not st.session_state.menu_admin
+                    st.session_state.menu_dashboard = False
+            with col4:
+                st.markdown("▼" if st.session_state.menu_admin else "▶️")
+            
+            # Submenú de Admin
+            if st.session_state.menu_admin:
+                with st.container():
+                    st.markdown('<div class="submenu">', unsafe_allow_html=True)
+                    if st.button("🔐 Panel de Control", use_container_width=True):
+                        st.switch_page("pages/1_admin.py")
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            # Mostrar última actualización si está disponible
+            if 'update_time' in locals():
+                st.markdown(
+                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
+                    unsafe_allow_html=True
+                )
+
         # Inicializar la fecha de datos actual en session_state si no existe
         if 'current_data_date' not in st.session_state:
             st.session_state.current_data_date = None
@@ -259,25 +294,6 @@ def main():
 
         # Mostrar header
         show_header()
-
-        # Contenedor para el sidebar con estilo
-        with st.sidebar:
-            st.markdown('<p class="sidebar-title">🎯 MÓDULOS</p>', unsafe_allow_html=True)
-            
-            # Selección de módulo con estilo compacto
-            selected_module = st.radio(
-                "",
-                options=st.session_state.get('visible_modules', list(MODULES.keys())),
-                format_func=lambda x: MODULES[x],
-                key="module_selector"
-            )
-
-            # Mostrar última actualización si está disponible
-            if 'update_time' in locals():
-                st.markdown(
-                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
-                    unsafe_allow_html=True
-                )
 
         # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':

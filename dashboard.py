@@ -500,7 +500,7 @@ def show_header():
         </div>
     """, unsafe_allow_html=True)
 
-# Función para verificar última actualización (cacheada por 5 minutos para no consultar constantemente)
+# Función para verificar última actualización (cacheada por 5 minutos)
 @st.cache_data(ttl=300)
 def get_current_time():
     """
@@ -527,11 +527,10 @@ def generate_data_hash(data):
     return hashlib.md5(data_str.encode()).hexdigest()
 
 # Función cacheada para cargar datos del módulo y su timestamp
-@st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
+@st.cache_data
 def load_module_data_with_timestamp(selected_module):
     """
     Carga y cachea los datos del módulo junto con su timestamp.
-    El caché persiste en disco y solo se invalida manualmente desde el panel de control.
     """
     # Verificar si hay una actualización forzada desde el panel de control
     if st.session_state.get('force_refresh', False):

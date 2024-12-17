@@ -292,4 +292,4 @@ class ReportGenerator:
             
         except Exception as e:
             logging.error(f"Error al generar reporte de uso: {str(e)}")
-            return "" 
+            return ""

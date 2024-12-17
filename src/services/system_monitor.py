@@ -164,4 +164,4 @@ class SystemMonitor:
             return backup_file
         except Exception as e:
             logging.error(f"Error al realizar backup de configuración: {str(e)}")
-            return "" 
+            return ""

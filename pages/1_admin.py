@@ -14,53 +14,13 @@ st.set_page_config(
 # Estilos personalizados
 st.markdown("""
 <style>
-    /* Ajustes para el botón de colapso */
-    [data-testid="collapsedControl"] {
-        position: fixed !important;
-        left: 220px !important;
-        top: 0.5rem !important;
-        background: white !important;
-        border-radius: 50% !important;
-        width: 32px !important;
-        height: 32px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        z-index: 999 !important;
-        border: 1px solid #e9ecef !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
-        transition: left 0.3s !important;
-    }
-
-    section[data-testid="stSidebar"][aria-expanded="false"] [data-testid="collapsedControl"] {
-        left: 0 !important;
-    }
-
-    /* Ajustes para el sidebar y su contenido */
+    /* Estilos para el sidebar y menú */
     section[data-testid="stSidebar"] {
         background-color: #f8f9fa;
         min-width: 220px !important;
         max-width: 220px !important;
-        transition: margin-left 0.3s !important;
     }
-
-    section[data-testid="stSidebar"][aria-expanded="false"] {
-        margin-left: -220px !important;
-    }
-
-    section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
-        margin-left: 0 !important;
-        width: 100% !important;
-        transition: margin 0.3s, width 0.3s !important;
-    }
-
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
-        margin-left: 220px !important;
-        width: calc(100% - 220px) !important;
-        transition: margin 0.3s, width 0.3s !important;
-    }
-
-    /* Estilos para el sidebar y menú */
+    
     section[data-testid="stSidebar"] > div {
         padding: 1rem 0.5rem !important;
     }
@@ -169,6 +129,28 @@ st.markdown("""
     /* Ocultar contenedor de navegación */
     .st-emotion-cache-1k5e5jk {
         display: none !important;
+    }
+    
+    /* Ajustes para el sidebar colapsado */
+    [data-testid="collapsedControl"] {
+        display: block !important;
+        color: #1f1f1f !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        margin-left: -220px !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
+        margin-left: 0 !important;
+        width: 100% !important;
+        transition: margin 0.3s, width 0.3s !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
+        margin-left: 220px !important;
+        width: calc(100% - 220px) !important;
+        transition: margin 0.3s, width 0.3s !important;
     }
 </style>
 """, unsafe_allow_html=True)

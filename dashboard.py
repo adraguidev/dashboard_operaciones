@@ -157,11 +157,29 @@ st.markdown("""
     /* Ajustes para el sidebar colapsado */
     [data-testid="collapsedControl"] {
         display: block !important;
-        color: #1f1f1f !important;
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        background-color: white !important;
+        border-radius: 4px !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        z-index: 999 !important;
+        height: 2rem !important;
+        width: 2rem !important;
+        padding: 0.2rem !important;
+        transition: all 0.2s !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    
+    [data-testid="collapsedControl"]:hover {
+        background-color: #f8f9fa !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] {
         margin-left: -220px !important;
+        transition: margin 0.3s !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
@@ -255,27 +273,6 @@ st.markdown("""
     .stTabs button[kind="primary"]:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 6px rgba(255,75,75,0.3);
-    }
-    
-    /* Botón de colapso del sidebar siempre visible */
-    [data-testid="collapsedControl"] {
-        display: block !important;
-        position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
-        background-color: white !important;
-        border-radius: 4px !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        z-index: 999 !important;
-        height: 2rem !important;
-        width: 2rem !important;
-        padding: 0.2rem !important;
-        transition: all 0.2s !important;
-    }
-    
-    [data-testid="collapsedControl"]:hover {
-        background-color: #f8f9fa !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }
     
     /* Estilos globales */

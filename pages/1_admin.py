@@ -135,57 +135,49 @@ st.markdown("""
     
     /* Ajustes para el sidebar colapsado */
     [data-testid="collapsedControl"] {
-        display: none !important;
-    }
-    
-    /* Nuestro botón personalizado para el sidebar */
-    #custom-sidebar-toggle {
         position: fixed !important;
         top: 0.5rem !important;
         left: 0.5rem !important;
-        width: 2rem !important;
-        height: 2rem !important;
         background: white !important;
         border: 1px solid #dee2e6 !important;
         border-radius: 4px !important;
-        cursor: pointer !important;
-        z-index: 999999 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        height: 2rem !important;
+        width: 2rem !important;
         transition: background 0.2s !important;
+        opacity: 1 !important;
+        visibility: visible !important;
     }
     
-    #custom-sidebar-toggle:hover {
+    [data-testid="collapsedControl"]:hover {
         background: #f8f9fa !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }
     
     /* Ajustes para el sidebar */
     section[data-testid="stSidebar"] {
-        margin-left: 0 !important;
-        transition: transform 0.3s ease-in-out !important;
-        transform: none !important;
+        transition: margin 0.3s ease-in-out !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] {
-        transform: translateX(-100%) !important;
-        margin-left: 0 !important;
+        margin-left: -21rem !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="true"] {
-        transform: translateX(0) !important;
         margin-left: 0 !important;
     }
     
     /* Ajustes para el contenido principal */
     section[data-testid="stContent"] {
-        margin-left: 220px !important;
-        transition: margin-left 0.3s ease-in-out !important;
+        transition: margin 0.3s ease-in-out !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
         margin-left: 0 !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
+        margin-left: 21rem !important;
     }
     
     /* Estilos para las pestañas */

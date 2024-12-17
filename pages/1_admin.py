@@ -152,6 +152,62 @@ st.markdown("""
         width: calc(100% - 220px) !important;
         transition: margin 0.3s, width 0.3s !important;
     }
+    
+    /* Estilos para las pestañas */
+    .stTabs {
+        background-color: white;
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2px;
+        background-color: #f8f9fa;
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 2.5rem;
+        background-color: white;
+        border-radius: 4px;
+        color: #1f1f1f;
+        font-size: 0.9rem;
+        border: none;
+        transition: all 0.2s;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #fff3f3;
+        color: #FF4B4B;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #FF4B4B !important;
+        color: white !important;
+    }
+    
+    /* Botón de colapso del sidebar siempre visible */
+    [data-testid="collapsedControl"] {
+        display: block !important;
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        background-color: white !important;
+        border-radius: 4px !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        z-index: 999 !important;
+        height: 2rem !important;
+        width: 2rem !important;
+        padding: 0.2rem !important;
+        transition: all 0.2s !important;
+    }
+    
+    [data-testid="collapsedControl"]:hover {
+        background-color: #f8f9fa !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 

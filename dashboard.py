@@ -108,7 +108,7 @@ st.markdown("""
     }
     
     div[data-testid="collapsedControl"] {
-        display: none !important;
+        display: block !important;
     }
     
     #MainMenu {
@@ -163,13 +163,14 @@ st.markdown("""
         background-color: white !important;
         border-radius: 4px !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        z-index: 999 !important;
+        z-index: 999999 !important;
         height: 2rem !important;
         width: 2rem !important;
         padding: 0.2rem !important;
-        transition: all 0.2s !important;
+        transition: none !important;
         opacity: 1 !important;
         visibility: visible !important;
+        pointer-events: auto !important;
     }
     
     [data-testid="collapsedControl"]:hover {

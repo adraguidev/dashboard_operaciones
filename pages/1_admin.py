@@ -71,64 +71,61 @@ st.markdown("""
         padding-top: 0rem !important;
     }
     
-    /* Estilos para el menú de navegación principal */
-    section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 0;
-        background-color: #f8f9fa;
-    }
-    
-    /* Contenedor del menú principal */
-    .main-nav {
-        background: linear-gradient(to right, #FF4B4B, #ff6b6b);
-        margin: -1rem -1rem 1rem -1rem;
-        padding: 2rem 1rem 1rem 1rem;
-    }
-    
-    /* Estilo para los enlaces del menú */
-    .nav-link {
-        color: white !important;
-        text-decoration: none;
-        padding: 0.5rem 1rem;
-        margin: 0.2rem 0;
-        border-radius: 5px;
-        transition: all 0.2s;
-        display: inline-block;
-        width: auto;
-        text-align: center;
-        font-weight: 500;
-        background: rgba(255,255,255,0.1);
-    }
-    
-    .nav-link:hover {
-        background: rgba(255,255,255,0.2);
-        transform: translateX(5px);
-    }
-    
-    .nav-link.active {
-        background: white;
-        color: #FF4B4B !important;
-        font-weight: 600;
-    }
-    
-    /* Ajustes para el contenido del sidebar */
-    .sidebar-content {
-        margin-top: 1rem;
-    }
-    
-    /* Estilo para el título de la página */
-    h1 {
+    /* Estilo para el menú principal */
+    .menu-title {
         color: #1f1f1f;
-        font-size: 2rem !important;
+        font-size: 1rem;
         font-weight: 600;
-        margin-bottom: 2rem !important;
+        padding: 0.5rem;
+        margin: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        background: white;
+        border-radius: 5px;
+        margin-bottom: 0.5rem;
+        transition: all 0.2s;
+    }
+    
+    .menu-title:hover {
+        background: #f8f9fa;
+    }
+    
+    .menu-title.active {
+        background: #FF4B4B;
+        color: white;
+    }
+    
+    /* Estilo para los submódulos */
+    .submenu {
+        margin-left: 1rem;
+        margin-bottom: 1rem;
+        border-left: 2px solid #f1f1f1;
+    }
+    
+    /* Eliminar el menú naranja superior */
+    .main-nav {
+        display: none !important;
     }
 </style>
-
-<div class="main-nav">
-    <a href="/" class="nav-link">📊 Dashboard</a>
-    <a href="/admin" class="nav-link active">⚙️ Admin</a>
-</div>
 """, unsafe_allow_html=True)
+
+# Inicializar estados del menú si no existen
+if 'menu_dashboard' not in st.session_state:
+    st.session_state.menu_dashboard = False
+if 'menu_admin' not in st.session_state:
+    st.session_state.menu_admin = True
+
+# Contenedor para el sidebar con estilo
+with st.sidebar:
+    # Menú Dashboard
+    if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
+        st.switch_page("dashboard.py")
+    
+    # Menú Admin
+    if st.button("⚙️ Admin", key="btn_admin", use_container_width=True, type="primary"):
+        st.session_state.menu_admin = True
+        st.session_state.menu_dashboard = False
 
 # Función para verificar la contraseña
 def check_password():

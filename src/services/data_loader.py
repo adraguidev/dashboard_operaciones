@@ -7,6 +7,7 @@ from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS
 from dotenv import load_dotenv
 import logging
 import time
+import hashlib
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,9 +41,9 @@ class DataLoader:
                 connectTimeoutMS=5000,
                 socketTimeoutMS=10000,
                 serverSelectionTimeoutMS=5000,
-                maxPoolSize=10,
-                minPoolSize=5,
-                maxIdleTimeMS=45000,
+                maxPoolSize=5,
+                minPoolSize=2,
+                maxIdleTimeMS=300000,
                 waitQueueTimeoutMS=5000,
                 appName='MigracionesApp',
                 compressors=['zlib'],
@@ -65,25 +66,29 @@ class DataLoader:
             st.error(f"Error al conectar con MongoDB: {str(e)}")
             raise
 
-    def _get_collection_last_update(_self, collection_name: str) -> datetime:
-        """Obtiene la última fecha de actualización de una colección."""
-        try:
-            latest_doc = _self.migraciones_db[collection_name].find_one(
-                {},
-                sort=[('FechaActualizacion', -1)],
-                projection={'FechaActualizacion': 1}
-            )
-            return latest_doc.get('FechaActualizacion') if latest_doc else None
-        except Exception as e:
-            print(f"Error al obtener última actualización: {str(e)}")
-            return None
+    def verify_password(_self, password: str) -> bool:
+        """Verifica si la contraseña proporcionada es correcta."""
+        correct_password = "Ka260314!"
+        return password == correct_password
 
-    @st.cache_data(ttl=None)  # Sin TTL, el cache se limpiará manualmente
-    def load_module_data(_self, module_name: str, last_update: datetime = None) -> pd.DataFrame:
-        """
-        Carga datos consolidados desde migraciones_db.
-        El parámetro last_update se usa como hash key para invalidar el cache.
-        """
+    def force_data_refresh(_self, password: str) -> bool:
+        """Fuerza una actualización de datos si la contraseña es correcta."""
+        if not _self.verify_password(password):
+            st.error("Contraseña incorrecta")
+            return False
+        
+        try:
+            # Limpiar todo el caché de Streamlit
+            st.cache_data.clear()
+            st.success("✅ Datos actualizados correctamente")
+            return True
+        except Exception as e:
+            st.error(f"Error al actualizar datos: {str(e)}")
+            return False
+
+    @st.cache_data(ttl=None)  # Cache permanente hasta actualización manual
+    def load_module_data(_self, module_name: str) -> pd.DataFrame:
+        """Carga datos consolidados desde migraciones_db."""
         try:
             # SPE siempre se carga fresco (sin cache)
             if module_name == 'SPE':
@@ -149,26 +154,6 @@ class DataLoader:
         except Exception as e:
             st.error(f"Error al cargar datos: {str(e)}")
             return None
-
-    @st.cache_data(ttl=3600)
-    def get_latest_update(_self, module_name: str) -> datetime:
-        """Obtiene la fecha de la última actualización de un módulo."""
-        try:
-            collection_name = f"consolidado_{module_name.lower()}_historical"
-            historical_collection = _self.expedientes_db[collection_name]
-            latest = historical_collection.find_one(
-                {},
-                sort=[('metadata.fecha_actualizacion', -1)],
-                projection={'metadata.fecha_actualizacion': 1}
-            )
-            return latest['metadata']['fecha_actualizacion'] if latest else None
-        except Exception as e:
-            st.error(f"Error al obtener última actualización: {str(e)}")
-            return None
-
-    def _process_ccm_ley_data(_self, data: pd.DataFrame) -> pd.DataFrame:
-        """Procesa datos específicos para CCM-LEY."""
-        return data[data['TipoTramite'] == 'LEY'].copy()
 
     def _load_spe_from_sheets(_self):
         """Carga datos de SPE desde Google Sheets."""

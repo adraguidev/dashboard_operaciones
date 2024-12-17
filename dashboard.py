@@ -461,6 +461,15 @@ def main():
         with st.sidebar:
             st.markdown('<p class="sidebar-title">🎯 MÓDULOS</p>', unsafe_allow_html=True)
             
+            # Botón de actualización manual
+            st.markdown("---")
+            st.markdown("### 🔄 Actualización de Datos")
+            with st.expander("Actualizar datos manualmente"):
+                password = st.text_input("Contraseña", type="password")
+                if st.button("Actualizar Datos"):
+                    if data_loader.force_data_refresh(password):
+                        st.rerun()
+            
             # Selección de módulo con estilo compacto
             selected_module = st.radio(
                 "",

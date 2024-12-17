@@ -378,28 +378,96 @@ st.markdown("""
     /* Estilo para el contenedor del botón admin */
     .admin-button-container {
         position: fixed;
-        bottom: 20px;
-        left: 10px;
+        bottom: 25px;
+        left: 15px;
         z-index: 1000;
-        opacity: 0.3;
-        transition: opacity 0.3s;
+        background: white;
+        border-radius: 50%;
+        width: 35px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        cursor: pointer;
+        transition: all 0.3s ease;
     }
     
     .admin-button-container:hover {
-        opacity: 1;
+        transform: rotate(180deg);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
     
     /* Estilo para el contenedor de la contraseña */
     .password-container {
         position: fixed;
-        bottom: 60px;
-        left: 10px;
+        bottom: 70px;
+        left: 15px;
         background: white;
-        padding: 10px;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         z-index: 999;
-        width: 200px;
+        width: 250px;
+        animation: slideUp 0.3s ease;
+    }
+    
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    /* Estilo para el panel de control */
+    .admin-panel {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    
+    .admin-panel h2 {
+        color: #1f1f1f;
+        font-size: 1.5rem;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 10px;
+    }
+    
+    .admin-section {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .admin-section h3 {
+        color: #2c3e50;
+        font-size: 1.2rem;
+        margin-bottom: 15px;
+    }
+    
+    /* Estilo para los botones del panel */
+    .stButton>button {
+        width: 100%;
+        padding: 10px 15px;
+        border-radius: 5px;
+        background-color: #FF4B4B;
+        color: white;
+        border: none;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton>button:hover {
+        background-color: #ff3333;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -533,76 +601,92 @@ def show_loading_progress(message, action, show_fade_in=True):
 
 def render_admin_panel(data_loader):
     """Renderiza el panel de control administrativo."""
+    st.markdown('<div class="admin-panel">', unsafe_allow_html=True)
     st.markdown("## ⚙️ Panel de Control")
     
     # Secciones del panel
+    st.markdown('<div class="admin-section">', unsafe_allow_html=True)
     st.markdown("### 🔄 Gestión de Datos")
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("#### Actualización de Datos")
         if st.button("Actualizar Base de Datos", key="admin_update"):
-            st.session_state.force_refresh = True
-            if data_loader.force_data_refresh("Ka260314!"):
-                st.success("✅ Datos actualizados correctamente")
-                st.rerun()
+            with st.spinner("Actualizando datos..."):
+                st.session_state.force_refresh = True
+                if data_loader.force_data_refresh("Ka260314!"):
+                    st.success("✅ Datos actualizados correctamente")
+                    time.sleep(1)
+                    st.rerun()
     
         st.markdown("#### Monitoreo de Conexiones")
-        if st.button("Verificar Estado de Conexiones"):
-            try:
-                data_loader.migraciones_db.command('ping')
-                st.success("✅ Conexión a MongoDB activa")
-            except Exception as e:
-                st.error(f"❌ Error de conexión: {str(e)}")
+        if st.button("Verificar Conexiones"):
+            with st.spinner("Verificando conexiones..."):
+                try:
+                    data_loader.migraciones_db.command('ping')
+                    st.success("✅ Conexión a MongoDB activa")
+                except Exception as e:
+                    st.error(f"❌ Error de conexión: {str(e)}")
     
     with col2:
         st.markdown("#### Estadísticas del Sistema")
-        # Mostrar estadísticas de caché
-        st.metric("Módulos en Caché", len(st.session_state))
-        st.metric("Última Actualización", 
-                 get_current_time().strftime("%d/%m/%Y %H:%M"))
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.metric("Módulos Activos", 
+                     len(st.session_state.get('visible_modules', [])),
+                     help="Número de módulos habilitados")
+        with col_b:
+            st.metric("Caché", 
+                     f"{round(len(str(st.session_state)) / 1024, 1)}MB",
+                     help="Uso de memoria caché")
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    st.markdown("---")
-    st.markdown("### 📊 Configuración de Visualización")
+    st.markdown('<div class="admin-section">', unsafe_allow_html=True)
+    st.markdown("### 📊 Configuración")
     
-    col3, col4 = st.columns(2)
-    with col3:
+    # Tabs para la configuración
+    config_tab1, config_tab2 = st.tabs(["Módulos", "Sistema"])
+    
+    with config_tab1:
         st.markdown("#### Módulos Visibles")
-        # Permitir habilitar/deshabilitar módulos
-        if 'visible_modules' not in st.session_state:
-            st.session_state.visible_modules = list(MODULES.keys())
-        
-        for module in MODULES.keys():
-            if st.checkbox(MODULES[module], 
-                         value=module in st.session_state.visible_modules,
-                         key=f"module_visibility_{module}"):
-                if module not in st.session_state.visible_modules:
-                    st.session_state.visible_modules.append(module)
-            else:
-                if module in st.session_state.visible_modules:
-                    st.session_state.visible_modules.remove(module)
+        cols = st.columns(2)
+        for i, module in enumerate(MODULES.keys()):
+            with cols[i % 2]:
+                if st.checkbox(MODULES[module], 
+                             value=module in st.session_state.get('visible_modules', []),
+                             key=f"module_visibility_{module}"):
+                    if 'visible_modules' not in st.session_state:
+                        st.session_state.visible_modules = []
+                    if module not in st.session_state.visible_modules:
+                        st.session_state.visible_modules.append(module)
+                else:
+                    if module in st.session_state.get('visible_modules', []):
+                        st.session_state.visible_modules.remove(module)
     
-    with col4:
-        st.markdown("#### Configuración de Caché")
-        if st.button("Limpiar Caché"):
-            st.cache_data.clear()
-            st.success("✅ Caché limpiado correctamente")
-            st.rerun()
+    with config_tab2:
+        st.markdown("#### Mantenimiento")
+        if st.button("Limpiar Caché del Sistema", type="secondary"):
+            with st.spinner("Limpiando caché..."):
+                st.cache_data.clear()
+                st.success("✅ Caché limpiado correctamente")
+                time.sleep(1)
+                st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    st.markdown("---")
-    st.markdown("### 🔍 Diagnóstico del Sistema")
+    st.markdown('<div class="admin-section">', unsafe_allow_html=True)
+    st.markdown("### 🔍 Diagnóstico")
     
     # Mostrar logs y errores recientes
-    with st.expander("Logs del Sistema"):
-        st.code("""
-        [INFO] Última conexión exitosa: {time}
-        [INFO] Total de consultas realizadas: {queries}
-        [INFO] Uso de memoria caché: {cache_size}MB
-        """.format(
-            time=get_current_time().strftime("%d/%m/%Y %H:%M"),
-            queries=len(st.session_state),
-            cache_size=round(len(str(st.session_state)) / 1024, 2)
-        ))
+    with st.expander("Logs del Sistema", expanded=False):
+        st.code(f"""
+[INFO] Sistema iniciado: {get_current_time().strftime("%d/%m/%Y %H:%M")}
+[INFO] Módulos activos: {len(st.session_state.get('visible_modules', []))}
+[INFO] Memoria caché: {round(len(str(st.session_state)) / 1024, 2)}MB
+[INFO] Última actualización: {get_current_time().strftime("%d/%m/%Y %H:%M")}
+[INFO] Estado de conexión: Activa
+        """)
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def main():
     try:
@@ -653,23 +737,22 @@ def main():
             
             # Botón discreto para Panel de Control
             st.markdown('<div class="admin-button-container">', unsafe_allow_html=True)
-            cols = st.columns([1, 19])
-            with cols[0]:
-                if st.button("⚙️", help="Panel de Control", key="admin_button"):
-                    # Toggle del estado del panel
-                    if 'show_admin' in st.session_state:
-                        st.session_state.show_admin = not st.session_state.show_admin
-                    else:
-                        st.session_state.show_admin = True
-                    # Limpiar autenticación al ocultar
-                    if not st.session_state.show_admin:
-                        st.session_state.admin_authenticated = False
+            if st.button("⚙️", help="Panel de Control", key="admin_button"):
+                # Toggle del estado del panel
+                if 'show_admin' in st.session_state:
+                    st.session_state.show_admin = not st.session_state.show_admin
+                else:
+                    st.session_state.show_admin = True
+                # Limpiar autenticación al ocultar
+                if not st.session_state.show_admin:
+                    st.session_state.admin_authenticated = False
             st.markdown('</div>', unsafe_allow_html=True)
             
             # Si se activa el panel de control, pedir contraseña
             if st.session_state.get('show_admin', False):
                 st.markdown('<div class="password-container">', unsafe_allow_html=True)
-                password = st.text_input("Contraseña", type="password", key="admin_password")
+                st.markdown("🔐 Acceso Administrativo", help="Ingrese la contraseña para acceder al panel de control")
+                password = st.text_input("", type="password", key="admin_password", placeholder="Contraseña")
                 if password == "Ka260314!":
                     st.session_state.admin_authenticated = True
                 elif password:

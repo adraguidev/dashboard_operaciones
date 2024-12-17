@@ -1,10 +1,10 @@
 # Base
-streamlit>=1.32.0
-pandas>=1.0.0
-numpy>=1.23.0,<2.0.0
+streamlit==1.29.0
+pandas==2.1.4
+numpy==1.26.2
 
 # MongoDB
-pymongo>=3.11.0
+pymongo==4.6.1
 python-dotenv>=0.19.0
 
 # Google APIs
@@ -27,15 +27,20 @@ prophet>=1.0
 
 # Utilidades
 python-dateutil>=2.8.2
-pytz>=2023.3
+pytz>=2023.3.post1
 pyarrow>=14.0.1
 fastparquet>=2023.8.0
 
 # Optimizaciones de rendimiento
-psutil>=5.9.0
+psutil>=5.9.7
 fastparquet>=2023.8.0
 memory-profiler>=0.60.0
-psutil>=5.9.0
+psutil>=5.9.7
 
 # Nueva dependencia para manejo de estilos en consola
 rich>=13.7.0
+
+# Monitoreo del sistema
+matplotlib==3.8.2
+seaborn==0.13.0
+fpdf==1.7.2

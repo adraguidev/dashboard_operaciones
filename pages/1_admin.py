@@ -3,6 +3,9 @@ import time
 from datetime import datetime
 import pytz
 from src.services.data_loader import DataLoader
+from src.services.system_monitor import SystemMonitor
+from src.services.report_generator import ReportGenerator
+import os
 
 # Configuración de la página
 st.set_page_config(
@@ -589,10 +592,13 @@ if check_password():
     data_loader = st.session_state.data_loader
     
     # Crear tabs para diferentes secciones
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🔄 Gestión de Datos",
-        "⚙️ Configuración",
-        "📊 Monitoreo"
+        "📊 Monitoreo de Rendimiento",
+        "📝 Logs Avanzados",
+        "💾 Optimización",
+        "📈 Reportes",
+        "🔧 Mantenimiento"
     ])
     
     with tab1:
@@ -619,9 +625,6 @@ if check_password():
                     except Exception as e:
                         st.error(f"❌ Error de conexión: {str(e)}")
     
-    with tab2:
-        st.header("Configuración del Sistema")
-        
         # Configuración de módulos
         st.subheader("Módulos del Sistema")
         from config.settings import MODULES
@@ -642,51 +645,270 @@ if check_password():
                 else:
                     if module in st.session_state.visible_modules:
                         st.session_state.visible_modules.remove(module)
-        
-        # Gestión de caché
-        st.subheader("Gestión de Caché")
-        if st.button("🗑️ Limpiar Caché del Sistema", type="secondary", use_container_width=True):
-            with st.spinner("Limpiando caché..."):
-                st.cache_data.clear()
-                st.success("✅ Caché limpiado correctamente")
-                time.sleep(1)
-                st.rerun()
     
-    with tab3:
-        st.header("Monitoreo del Sistema")
+    with tab2:
+        st.header("📊 Monitoreo de Rendimiento")
         
-        # Métricas del sistema
+        # Métricas en tiempo real
+        metrics = st.session_state.system_monitor.get_system_metrics()
+        
         col1, col2, col3 = st.columns(3)
-        
         with col1:
             st.metric(
-                "Módulos Activos",
-                len(st.session_state.get('visible_modules', [])),
-                help="Número de módulos habilitados"
+                "Tiempo de Respuesta",
+                f"{metrics.get('response_time', 0):.0f}ms",
+                f"{metrics.get('response_time_delta', 0):.0f}ms"
             )
-        
         with col2:
             st.metric(
-                "Uso de Caché",
-                f"{round(len(str(st.session_state)) / 1024, 1)}MB",
-                help="Memoria utilizada por el caché"
+                "Uso de CPU",
+                f"{metrics.get('cpu_usage', 0):.1f}%",
+                f"{metrics.get('cpu_delta', 0):.1f}%"
             )
-        
         with col3:
-            lima_tz = pytz.timezone('America/Lima')
-            current_time = datetime.now(pytz.UTC).astimezone(lima_tz)
             st.metric(
-                "Última Actualización",
-                current_time.strftime("%d/%m/%Y %H:%M"),
-                help="Hora de la última actualización"
+                "Memoria RAM",
+                f"{metrics.get('memory_used', 0):.1f}GB",
+                f"{metrics.get('memory_delta', 0):.1f}GB"
             )
         
-        # Logs del sistema
-        st.subheader("Logs del Sistema")
-        with st.expander("Ver logs", expanded=True):
-            st.code(f"""
-[INFO] Sistema iniciado: {current_time.strftime("%d/%m/%Y %H:%M")}
-[INFO] Módulos activos: {len(st.session_state.get('visible_modules', []))}
-[INFO] Memoria caché: {round(len(str(st.session_state)) / 1024, 2)}MB
-[INFO] Estado de conexión: Activa
-            """) 
+        # MongoDB Stats
+        st.subheader("Estadísticas de MongoDB")
+        mongo_stats = st.session_state.system_monitor.get_mongodb_stats()
+        
+        if mongo_stats:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(
+                    "Conexiones Activas",
+                    mongo_stats.get('connections', {}).get('current', 0)
+                )
+            with col2:
+                st.metric(
+                    "Operaciones/min",
+                    sum(mongo_stats.get('opcounters', {}).values()) // 60
+                )
+        
+        # Estadísticas por módulo
+        st.subheader("Rendimiento por Módulo")
+        module_stats = []
+        for module in MODULES:
+            stats = st.session_state.system_monitor.get_collection_stats(
+                MONGODB_COLLECTIONS.get(module, '')
+            )
+            if stats:
+                module_stats.append({
+                    'Módulo': MODULES[module],
+                    'Tamaño (MB)': f"{stats['size']:.1f}",
+                    'Documentos': stats['count'],
+                    'Índices': stats['indexes']
+                })
+        
+        if module_stats:
+            st.dataframe(pd.DataFrame(module_stats), hide_index=True)
+    
+    with tab3:
+        st.header("📝 Logs Avanzados")
+        
+        # Filtros de logs
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            log_type = st.selectbox("Tipo de Log", ["Todos", "Error", "Warning", "Info", "Debug"])
+        with col2:
+            log_module = st.selectbox("Módulo", ["Todos"] + list(MODULES.values()))
+        with col3:
+            log_date = st.date_input("Fecha")
+        
+        # Obtener y mostrar logs
+        logs = st.session_state.system_monitor.get_system_logs(
+            log_type=log_type if log_type != "Todos" else None,
+            module=log_module if log_module != "Todos" else None,
+            start_date=datetime.combine(log_date, datetime.min.time()),
+            end_date=datetime.combine(log_date, datetime.max.time())
+        )
+        
+        if logs:
+            st.dataframe(
+                pd.DataFrame(logs)[['timestamp', 'level', 'module', 'message']],
+                hide_index=True
+            )
+        else:
+            st.info("No hay logs para los filtros seleccionados")
+        
+        # Acciones de logs
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.download_button(
+                "📥 Exportar Logs",
+                data=pd.DataFrame(logs).to_csv(index=False).encode('utf-8'),
+                file_name=f"logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            ):
+                st.success("Logs exportados correctamente")
+        
+        with col2:
+            if st.button("🗑️ Limpiar Logs Antiguos"):
+                with st.spinner("Limpiando logs antiguos..."):
+                    deleted = st.session_state.system_monitor.clean_old_data(
+                        'system_logs',
+                        days=30
+                    )
+                    st.success(f"Se eliminaron {deleted} logs antiguos")
+    
+    with tab4:
+        st.header("💾 Optimización de Datos")
+        
+        # Uso de almacenamiento
+        st.subheader("Uso de Almacenamiento")
+        storage_data = []
+        for module in MODULES:
+            stats = st.session_state.system_monitor.get_collection_stats(
+                MONGODB_COLLECTIONS.get(module, '')
+            )
+            if stats:
+                storage_data.append({
+                    'Colección': MODULES[module],
+                    'Tamaño (MB)': f"{stats['size']:.1f}",
+                    'Documentos': stats['count'],
+                    'Tamaño Promedio (KB)': f"{stats['avg_obj_size']:.1f}"
+                })
+        
+        if storage_data:
+            st.dataframe(pd.DataFrame(storage_data), hide_index=True)
+        
+        # Acciones de optimización
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🗑️ Limpiar Datos Antiguos"):
+                with st.spinner("Limpiando datos antiguos..."):
+                    total_deleted = 0
+                    for module in MODULES:
+                        collection = MONGODB_COLLECTIONS.get(module, '')
+                        if collection:
+                            deleted = st.session_state.system_monitor.clean_old_data(
+                                collection,
+                                days=st.session_state.get('retention_days', 180)
+                            )
+                            total_deleted += deleted
+                    st.success(f"Se eliminaron {total_deleted} documentos antiguos")
+        
+        with col2:
+            if st.button("🔄 Reindexar Colecciones"):
+                with st.spinner("Reindexando colecciones..."):
+                    success = True
+                    for module in MODULES:
+                        collection = MONGODB_COLLECTIONS.get(module, '')
+                        if collection:
+                            if not st.session_state.system_monitor.optimize_collection(collection):
+                                success = False
+                                break
+                    
+                    if success:
+                        st.success("Colecciones reindexadas correctamente")
+                    else:
+                        st.error("Error al reindexar algunas colecciones")
+        
+        # Configuración de retención
+        st.subheader("Política de Retención")
+        retention_days = st.slider(
+            "Días de retención de datos",
+            30, 365, st.session_state.get('retention_days', 180)
+        )
+        
+        if st.button("💾 Guardar Configuración"):
+            st.session_state.retention_days = retention_days
+            st.success("Configuración guardada correctamente")
+    
+    with tab5:
+        st.header("📈 Reportes del Sistema")
+        
+        # Generación de reportes
+        st.subheader("Generar Reporte")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            report_type = st.selectbox("Tipo de Reporte", [
+                "Rendimiento del Sistema",
+                "Errores y Advertencias",
+                "Estadísticas de Uso"
+            ])
+        with col2:
+            report_format = st.selectbox("Formato", ["PDF", "Excel", "CSV"])
+        with col3:
+            days = st.number_input("Días a incluir", 1, 90, 7)
+        
+        if st.button("📊 Generar Reporte"):
+            with st.spinner("Generando reporte..."):
+                if report_type == "Rendimiento del Sistema":
+                    report_file = st.session_state.report_generator.generate_performance_report(
+                        days=days,
+                        format=report_format
+                    )
+                elif report_type == "Errores y Advertencias":
+                    report_file = st.session_state.report_generator.generate_error_report(
+                        days=days,
+                        format=report_format
+                    )
+                else:  # Estadísticas de Uso
+                    report_file = st.session_state.report_generator.generate_usage_report(
+                        days=days,
+                        format=report_format
+                    )
+                
+                if report_file:
+                    with open(report_file, 'rb') as f:
+                        st.download_button(
+                            "📥 Descargar Reporte",
+                            data=f.read(),
+                            file_name=os.path.basename(report_file),
+                            mime="application/octet-stream"
+                        )
+                else:
+                    st.error("Error al generar el reporte")
+    
+    with tab6:
+        st.header("🔧 Mantenimiento")
+        
+        # Estado del sistema
+        st.subheader("Estado del Sistema")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Uptime", st.session_state.system_monitor.get_uptime())
+        with col2:
+            st.metric("Versión", "1.0.0")
+        with col3:
+            mongo_status = "Operativo" if st.session_state.system_monitor.get_mongodb_stats() else "Error"
+            st.metric("Estado MongoDB", mongo_status)
+        
+        # Tareas de mantenimiento
+        st.subheader("Tareas de Mantenimiento")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🗑️ Limpiar Caché"):
+                with st.spinner("Limpiando caché..."):
+                    st.cache_data.clear()
+                    st.success("Caché limpiado correctamente")
+        
+        with col2:
+            if st.button("💾 Backup Configuración"):
+                with st.spinner("Realizando backup..."):
+                    backup_file = st.session_state.system_monitor.backup_config()
+                    if backup_file:
+                        st.success(f"Backup guardado en: {backup_file}")
+                    else:
+                        st.error("Error al realizar el backup")
+        
+        # Historial de mantenimiento
+        st.subheader("Historial de Mantenimiento")
+        maintenance_logs = st.session_state.system_monitor.get_system_logs(
+            log_type="Info",
+            module="Maintenance",
+            limit=10
+        )
+        
+        if maintenance_logs:
+            st.dataframe(
+                pd.DataFrame(maintenance_logs)[['timestamp', 'message']],
+                hide_index=True
+            )
+        else:
+            st.info("No hay registros de mantenimiento") 

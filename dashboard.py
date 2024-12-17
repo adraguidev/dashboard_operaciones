@@ -256,7 +256,7 @@ def show_loading_progress(message, action, show_fade_in=True):
     Returns:
         El resultado de la acción ejecutada
     """
-    with st.spinner(f'���� {message}...'):
+    with st.spinner(f'{message}...'):
         progress_bar = st.progress(0)
         for i in range(100):
             time.sleep(0.01)
@@ -362,7 +362,7 @@ def main():
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
                 data, update_time, _ = show_loading_progress(
-                    f'Cargando datos del módulo {MODULES[selected_module]}',
+                    f'📊 Cargando datos del módulo {MODULES[selected_module]}',
                     lambda: get_module_data(selected_module, collection_name),
                     show_fade_in=False
                 )
@@ -390,37 +390,37 @@ def main():
             # Renderizar cada pestaña usando la función helper
             with tab1:
                 show_loading_progress(
-                    'Cargando reporte de pendientes',
+                    '📋 Cargando reporte de pendientes',
                     lambda: render_pending_reports_tab(data, selected_module)
                 )
             
             with tab2:
                 show_loading_progress(
-                    'Cargando análisis de ingresos',
+                    '📈 Cargando análisis de ingresos',
                     lambda: render_entry_analysis_tab(data)
                 )
             
             with tab3:
                 show_loading_progress(
-                    'Cargando análisis de cierres',
+                    '📉 Cargando análisis de cierres',
                     lambda: render_closing_analysis_tab(data)
                 )
             
             with tab4:
                 show_loading_progress(
-                    'Cargando reporte por evaluador',
+                    '👥 Cargando reporte por evaluador',
                     lambda: render_evaluator_report_tab(data)
                 )
             
             with tab5:
                 show_loading_progress(
-                    'Cargando reporte de asignaciones',
+                    '📋 Cargando reporte de asignaciones',
                     lambda: render_assignment_report_tab(data)
                 )
             
             with tab6:
                 show_loading_progress(
-                    'Cargando ranking de expedientes',
+                    '🏆 Cargando ranking de expedientes',
                     lambda: ranking_report.render_ranking_report_tab(
                         data, 
                         selected_module, 

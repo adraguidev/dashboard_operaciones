@@ -14,6 +14,71 @@ st.set_page_config(
 # Estilos personalizados
 st.markdown("""
 <style>
+    /* Estilos para el sidebar y menú */
+    section[data-testid="stSidebar"] {
+        background-color: #f8f9fa;
+        min-width: 220px !important;
+        max-width: 220px !important;
+    }
+    
+    section[data-testid="stSidebar"] > div {
+        padding: 1rem 0.5rem !important;
+    }
+    
+    /* Estilo para los botones principales */
+    section[data-testid="stSidebar"] button {
+        height: 2.2rem !important;
+        padding: 0 0.8rem !important;
+        margin-bottom: 0.3rem !important;
+        border: none !important;
+        background-color: white !important;
+        color: #1f1f1f !important;
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+        box-shadow: none !important;
+    }
+    
+    section[data-testid="stSidebar"] button[kind="primary"] {
+        background-color: #FF4B4B !important;
+        color: white !important;
+    }
+    
+    /* Estilo para los submódulos */
+    .submenu {
+        margin-left: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+        padding-left: 0.5rem !important;
+        border-left: 2px solid #e9ecef !important;
+    }
+    
+    /* Estilo para radio buttons en el submenu */
+    .submenu .stRadio > div {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.2rem !important;
+    }
+    
+    .submenu .stRadio label {
+        padding: 0.3rem 0.8rem !important;
+        font-size: 0.85rem !important;
+        background: white !important;
+        border-radius: 4px !important;
+        transition: all 0.2s !important;
+        cursor: pointer !important;
+        margin: 0 !important;
+    }
+    
+    .submenu .stRadio label:hover {
+        background: #f8f9fa !important;
+        transform: translateX(3px) !important;
+    }
+    
+    /* Ajustes adicionales para el contenido principal */
+    section[data-testid="stSidebarContent"] {
+        padding-top: 0 !important;
+        height: calc(100vh - 2rem) !important;
+    }
+    
     /* Ocultar elementos específicos de Streamlit */
     header[data-testid="stHeader"] {
         display: none !important;
@@ -63,48 +128,6 @@ st.markdown("""
     
     /* Ocultar contenedor de navegación */
     .st-emotion-cache-1k5e5jk {
-        display: none !important;
-    }
-    
-    /* Ajustar el padding superior del sidebar */
-    section[data-testid="stSidebar"] > div {
-        padding-top: 0rem !important;
-    }
-    
-    /* Estilo para el menú principal */
-    .menu-title {
-        color: #1f1f1f;
-        font-size: 1rem;
-        font-weight: 600;
-        padding: 0.5rem;
-        margin: 0;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        background: white;
-        border-radius: 5px;
-        margin-bottom: 0.5rem;
-        transition: all 0.2s;
-    }
-    
-    .menu-title:hover {
-        background: #f8f9fa;
-    }
-    
-    .menu-title.active {
-        background: #FF4B4B;
-        color: white;
-    }
-    
-    /* Estilo para los submódulos */
-    .submenu {
-        margin-left: 1rem;
-        margin-bottom: 1rem;
-        border-left: 2px solid #f1f1f1;
-    }
-    
-    /* Eliminar el menú naranja superior */
-    .main-nav {
         display: none !important;
     }
 </style>

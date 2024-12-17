@@ -14,7 +14,7 @@ st.set_page_config(
 # Estilos personalizados
 st.markdown("""
 <style>
-    /* Ocultar completamente el menú por defecto de Streamlit */
+    /* Ocultar elementos específicos de Streamlit */
     header[data-testid="stHeader"] {
         display: none !important;
     }
@@ -25,6 +25,32 @@ st.markdown("""
     
     #MainMenu {
         display: none !important;
+    }
+    
+    /* Ocultar elementos del sidebar por defecto */
+    .st-emotion-cache-1rtdyuf {
+        display: none !important;
+    }
+    
+    .st-emotion-cache-h5rgaw {
+        display: none !important;
+    }
+    
+    .st-emotion-cache-1q1z5mp {
+        display: none !important;
+    }
+    
+    .st-emotion-cache-1oe5cao {
+        display: none !important;
+    }
+    
+    .st-emotion-cache-pkbazv {
+        display: none !important;
+    }
+    
+    /* Ajustar el padding superior del sidebar */
+    section[data-testid="stSidebar"] > div {
+        padding-top: 0rem !important;
     }
     
     /* Estilos para el menú de navegación principal */

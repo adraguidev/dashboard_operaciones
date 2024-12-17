@@ -187,43 +187,53 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] {
         background-color: transparent;
         padding: 0;
-        margin-bottom: 1.5rem;
+        margin-bottom: 0;
         border-bottom: none;
-        gap: 0.5rem;
+        gap: 0;
+        position: relative;
     }
     
     .stTabs [data-baseweb="tab"] {
-        height: 3rem;
-        background-color: rgba(255,255,255,0.8);
-        border-radius: var(--border-radius);
+        height: 2.5rem;
+        background-color: rgba(248,249,250,0.5);
+        border-radius: 0.5rem 0.5rem 0 0;
         color: #6c757d;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         font-weight: 500;
-        border: 1px solid #f1f1f1;
+        border: 1px solid #dee2e6;
+        border-bottom: none;
         padding: 0 1.5rem;
         margin: 0;
+        margin-right: -1px;
         transition: all 0.2s;
+        position: relative;
+        bottom: -1px;
     }
     
     .stTabs [data-baseweb="tab"]:hover {
         background-color: white;
         color: var(--primary-color);
-        border-color: var(--primary-color);
+        border-color: #dee2e6;
         transform: translateY(-1px);
+        z-index: 1;
     }
     
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-hover) 100%) !important;
-        color: white !important;
+        background: white !important;
+        color: var(--primary-color) !important;
         font-weight: 600 !important;
-        border: none !important;
-        box-shadow: 0 4px 6px rgba(255,75,75,0.2) !important;
+        border: 1px solid #dee2e6 !important;
+        border-bottom: 1px solid white !important;
+        box-shadow: none !important;
+        z-index: 2;
     }
     
     /* Contenido de las pestañas */
     .stTabs [data-baseweb="tab-panel"] {
-        padding: 0;
+        padding: 2rem 0 0 0;
         background-color: transparent;
+        border-top: 1px solid #dee2e6;
+        margin-top: 0;
     }
     
     /* Estilo para los botones dentro de las pestañas */

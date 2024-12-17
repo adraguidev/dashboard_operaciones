@@ -155,47 +155,62 @@ st.markdown("""
     
     /* Estilos para las pestañas */
     .stTabs {
-        background-color: white;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+        margin-top: 1rem;
     }
     
     .stTabs [data-baseweb="tab-list"] {
-        gap: 3px;
-        background-color: #f8f9fa;
-        padding: 0.75rem;
-        border-radius: 0.5rem;
+        background-color: transparent;
+        padding: 0;
+        margin-bottom: 0;
+        border-bottom: none;
+        gap: 0;
+        position: relative;
     }
     
     .stTabs [data-baseweb="tab"] {
-        height: 3rem;
-        background-color: white;
-        border-radius: 4px;
-        color: #1f1f1f;
-        font-size: 0.95rem;
+        height: 2.5rem;
+        background-color: rgba(248,249,250,0.5);
+        border-radius: 0.5rem 0.5rem 0 0;
+        color: #6c757d;
+        font-size: 0.9rem;
         font-weight: 500;
-        border: none;
+        border: 1px solid #dee2e6;
+        border-bottom: none;
         padding: 0 1.5rem;
+        margin: 0;
+        margin-right: -1px;
         transition: all 0.2s;
+        position: relative;
+        bottom: -1px;
     }
     
     .stTabs [data-baseweb="tab"]:hover {
-        background-color: #fff3f3;
-        color: #FF4B4B;
+        background-color: white;
+        color: var(--primary-color);
+        border-color: #dee2e6;
         transform: translateY(-1px);
+        z-index: 1;
     }
     
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(90deg, #FF4B4B 0%, #ff6b6b 100%) !important;
-        color: white !important;
+        background: white !important;
+        color: var(--primary-color) !important;
         font-weight: 600 !important;
-        box-shadow: 0 2px 4px rgba(255,75,75,0.2) !important;
+        border: 1px solid #dee2e6 !important;
+        border-bottom: 1px solid white !important;
+        box-shadow: none !important;
+        z-index: 2;
     }
     
     /* Contenido de las pestañas */
     .stTabs [data-baseweb="tab-panel"] {
-        padding: 1.5rem 0.5rem;
+        padding: 2rem 0 0 0;
+        background-color: transparent;
+        border-top: 1px solid #dee2e6;
+        margin-top: 0;
     }
     
     /* Estilo para los botones dentro de las pestañas */

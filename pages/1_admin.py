@@ -14,8 +14,77 @@ st.set_page_config(
 # Estilos personalizados
 st.markdown("""
 <style>
-    /* Ocultar solo elementos específicos de Streamlit */
+    /* Estilos para el sidebar y menú */
+    section[data-testid="stSidebar"] {
+        background-color: #f8f9fa;
+        min-width: 220px !important;
+        max-width: 220px !important;
+    }
+    
+    section[data-testid="stSidebar"] > div {
+        padding: 1rem 0.5rem !important;
+    }
+    
+    /* Estilo para los botones principales */
+    section[data-testid="stSidebar"] button {
+        height: 2.2rem !important;
+        padding: 0 0.8rem !important;
+        margin-bottom: 0.3rem !important;
+        border: none !important;
+        background-color: white !important;
+        color: #1f1f1f !important;
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+        box-shadow: none !important;
+    }
+    
+    section[data-testid="stSidebar"] button[kind="primary"] {
+        background-color: #FF4B4B !important;
+        color: white !important;
+    }
+    
+    /* Estilo para los submódulos */
+    .submenu {
+        margin-left: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+        padding-left: 0.5rem !important;
+        border-left: 2px solid #e9ecef !important;
+    }
+    
+    /* Estilo para radio buttons en el submenu */
+    .submenu .stRadio > div {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.2rem !important;
+    }
+    
+    .submenu .stRadio label {
+        padding: 0.3rem 0.8rem !important;
+        font-size: 0.85rem !important;
+        background: white !important;
+        border-radius: 4px !important;
+        transition: all 0.2s !important;
+        cursor: pointer !important;
+        margin: 0 !important;
+    }
+    
+    .submenu .stRadio label:hover {
+        background: #f8f9fa !important;
+        transform: translateX(3px) !important;
+    }
+    
+    /* Ajustes adicionales para el contenido principal */
+    section[data-testid="stSidebarContent"] {
+        padding-top: 0 !important;
+        height: calc(100vh - 2rem) !important;
+    }
+    
+    /* Ocultar elementos específicos de Streamlit */
     header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    
+    div[data-testid="collapsedControl"] {
         display: none !important;
     }
     
@@ -23,49 +92,53 @@ st.markdown("""
         display: none !important;
     }
     
-    /* Ajustes para el sidebar */
-    section[data-testid="stSidebar"] {
-        background-color: #f8f9fa;
-        min-width: 220px !important;
-        max-width: 220px !important;
-        position: relative;
+    /* Ocultar elementos del sidebar por defecto */
+    .st-emotion-cache-1rtdyuf {
+        display: none !important;
     }
     
-    section[data-testid="stSidebar"] > div {
-        padding-top: 3rem !important;
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
-        height: 100vh;
-        position: fixed;
-        width: 220px;
+    .st-emotion-cache-h5rgaw {
+        display: none !important;
     }
     
-    /* Ajustes para el botón de colapso */
-    button[kind="secondary"][data-testid="baseButton-secondary"] {
-        position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
-        background-color: white !important;
-        border-radius: 4px !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        z-index: 999 !important;
-        height: 2rem !important;
-        width: 2rem !important;
-        padding: 0.2rem !important;
-        transition: all 0.2s !important;
-        margin: 0 !important;
+    .st-emotion-cache-1q1z5mp {
+        display: none !important;
     }
     
-    /* Transiciones del sidebar */
+    .st-emotion-cache-1oe5cao {
+        display: none !important;
+    }
+    
+    .st-emotion-cache-pkbazv {
+        display: none !important;
+    }
+    
+    /* Ocultar textos de páginas en el sidebar */
+    section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+    
+    .st-emotion-cache-eczf16 {
+        display: none !important;
+    }
+    
+    .st-emotion-cache-r421ms {
+        display: none !important;
+    }
+    
+    /* Ocultar contenedor de navegación */
+    .st-emotion-cache-1k5e5jk {
+        display: none !important;
+    }
+    
+    /* Ajustes para el sidebar colapsado */
+    [data-testid="collapsedControl"] {
+        display: block !important;
+        color: #1f1f1f !important;
+    }
+    
     section[data-testid="stSidebar"][aria-expanded="false"] {
         margin-left: -220px !important;
-        transition: margin-left 0.3s !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="true"] {
-        margin-left: 0 !important;
-        transition: margin-left 0.3s !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
@@ -80,8 +153,362 @@ st.markdown("""
         transition: margin 0.3s, width 0.3s !important;
     }
     
-    /* Resto de los estilos... */
-    // ... existing code ...
+    /* Estilos para las pestañas */
+    .stTabs {
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+        margin-top: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: transparent;
+        padding: 0;
+        margin-bottom: 0;
+        border-bottom: none;
+        gap: 0;
+        position: relative;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 2.5rem;
+        background-color: rgba(248,249,250,0.5);
+        border-radius: 0.5rem 0.5rem 0 0;
+        color: #6c757d;
+        font-size: 0.9rem;
+        font-weight: 500;
+        border: 1px solid #dee2e6;
+        border-bottom: none;
+        padding: 0 1.5rem;
+        margin: 0;
+        margin-right: -1px;
+        transition: all 0.2s;
+        position: relative;
+        bottom: 0;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: white;
+        color: var(--primary-color);
+        border-color: #dee2e6;
+        transform: translateY(-1px);
+        z-index: 1;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: white !important;
+        color: var(--primary-color) !important;
+        font-weight: 600 !important;
+        border: 1px solid #dee2e6 !important;
+        border-bottom: 1px solid white !important;
+        box-shadow: none !important;
+        z-index: 2;
+    }
+    
+    /* Contenido de las pestañas */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 1rem 0 0 0;
+        background-color: transparent;
+        border-top: none;
+        margin-top: 0;
+    }
+    
+    /* Estilo para los botones dentro de las pestañas */
+    .stTabs button {
+        border-radius: 4px;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    
+    .stTabs button[kind="primary"] {
+        background: linear-gradient(90deg, #FF4B4B 0%, #ff6b6b 100%);
+        border: none;
+        color: white;
+        box-shadow: 0 2px 4px rgba(255,75,75,0.2);
+    }
+    
+    .stTabs button[kind="primary"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(255,75,75,0.3);
+    }
+    
+    /* Botón de colapso del sidebar siempre visible */
+    [data-testid="collapsedControl"] {
+        display: block !important;
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        background-color: white !important;
+        border-radius: 4px !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        z-index: 999 !important;
+        height: 2rem !important;
+        width: 2rem !important;
+        padding: 0.2rem !important;
+        transition: all 0.2s !important;
+    }
+    
+    [data-testid="collapsedControl"]:hover {
+        background-color: #f8f9fa !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
+    
+    /* Estilos globales */
+    :root {
+        --primary-color: #FF4B4B;
+        --primary-color-hover: #ff6b6b;
+        --background-color: #ffffff;
+        --sidebar-color: #f8f9fa;
+        --text-color: #1f1f1f;
+        --border-radius: 0.5rem;
+        --transition-speed: 0.2s;
+    }
+    
+    /* Fondo principal */
+    .stApp {
+        background-color: var(--background-color);
+    }
+    
+    /* Estilos para el sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: var(--sidebar-color);
+        border-right: 1px solid rgba(0,0,0,0.1);
+        box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+    }
+    
+    /* Contenedor principal */
+    section[data-testid="stContent"] {
+        padding: 1rem !important;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    /* Estilos para las pestañas */
+    .stTabs {
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: transparent;
+        padding: 0;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #f1f1f1;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 2.5rem;
+        background-color: transparent;
+        border-radius: 4px 4px 0 0;
+        color: #6c757d;
+        font-size: 0.9rem;
+        font-weight: 500;
+        border: none;
+        padding: 0 1.5rem;
+        margin-right: 0.5rem;
+        transition: all 0.2s;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #fff3f3;
+        color: var(--primary-color);
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-hover) 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        box-shadow: 0 2px 4px rgba(255,75,75,0.2) !important;
+    }
+    
+    /* Contenido de las pestañas */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 1.5rem 0;
+        background-color: transparent;
+    }
+    
+    /* Estilos para cards */
+    .stCard {
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: var(--border-radius);
+        border: 1px solid #f1f1f1;
+        transition: all 0.2s;
+    }
+    
+    .stCard:hover {
+        border-color: #e9ecef;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    /* Estilos para métricas */
+    [data-testid="stMetric"] {
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: var(--border-radius);
+        border: 1px solid #f1f1f1;
+        transition: all 0.2s;
+    }
+    
+    [data-testid="stMetric"]:hover {
+        border-color: #e9ecef;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    /* Estilos para dataframes */
+    .stDataFrame {
+        background-color: white;
+        padding: 1rem;
+        border-radius: var(--border-radius);
+        border: 1px solid #f1f1f1;
+        transition: all 0.2s;
+    }
+    
+    .stDataFrame:hover {
+        border-color: #e9ecef;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    /* Estilos para expanders */
+    .streamlit-expanderHeader {
+        background-color: white;
+        border: 1px solid #f1f1f1 !important;
+        border-radius: var(--border-radius) !important;
+        transition: all 0.2s;
+    }
+    
+    .streamlit-expanderHeader:hover {
+        border-color: #e9ecef !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    /* Estilos para headers */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--text-color);
+        font-weight: 600;
+    }
+    
+    h1 {
+        font-size: 1.75rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    h2 {
+        font-size: 1.5rem !important;
+        margin-bottom: 1.5rem !important;
+    }
+    
+    h3 {
+        font-size: 1.25rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* Estilos para las pestañas y contenedores */
+    .stTabs {
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+        margin-top: 1rem;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: transparent;
+        padding: 0;
+        margin-bottom: 1.5rem;
+        border-bottom: none;
+        gap: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 3rem;
+        background-color: rgba(255,255,255,0.8);
+        border-radius: var(--border-radius);
+        color: #6c757d;
+        font-size: 0.95rem;
+        font-weight: 500;
+        border: 1px solid #f1f1f1;
+        padding: 0 1.5rem;
+        margin: 0;
+        transition: all 0.2s;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: white;
+        color: var(--primary-color);
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-hover) 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border: none !important;
+        box-shadow: 0 4px 6px rgba(255,75,75,0.2) !important;
+    }
+    
+    /* Contenido de las pestañas */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 0;
+        background-color: transparent;
+    }
+    
+    /* Ajustes para el contenedor principal */
+    section[data-testid="stContent"] {
+        padding: 2rem !important;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    /* Eliminar líneas divisorias innecesarias */
+    .main-nav, hr, .stMarkdown hr {
+        display: none !important;
+    }
+    
+    /* Ajustes para el sidebar */
+    section[data-testid="stSidebar"] > div {
+        padding-top: 1.5rem !important;
+        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
+    }
+    
+    /* Ajustes para los radio buttons en el submenu */
+    .submenu {
+        margin-left: 0.5rem !important;
+        padding-left: 0.5rem !important;
+        border-left: 2px solid rgba(255,75,75,0.1) !important;
+    }
+    
+    .submenu .stRadio > div {
+        background: transparent !important;
+        padding: 0 !important;
+    }
+    
+    .submenu .stRadio label {
+        background: rgba(255,255,255,0.8) !important;
+        border: 1px solid #f1f1f1;
+        margin-bottom: 0.2rem !important;
+    }
+    
+    .submenu .stRadio label:hover {
+        background: white !important;
+        border-color: var(--primary-color);
+    }
+    
+    /* Ajustes para los contenedores de datos */
+    [data-testid="stMetric"], .stDataFrame, .streamlit-expanderHeader {
+        background: rgba(255,255,255,0.8);
+        border: 1px solid #f1f1f1;
+        transition: all 0.2s;
+    }
+    
+    [data-testid="stMetric"]:hover, .stDataFrame:hover, .streamlit-expanderHeader:hover {
+        background: white;
+        border-color: #e9ecef;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
 </style>
 """, unsafe_allow_html=True)
 

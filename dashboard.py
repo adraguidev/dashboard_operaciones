@@ -29,17 +29,10 @@ st.markdown("""
         background-color: #f8f9fa;
         min-width: 220px !important;
         max-width: 220px !important;
-        position: relative;
     }
     
     section[data-testid="stSidebar"] > div {
-        padding-top: 3rem !important;
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
-        height: 100vh;
-        position: fixed;
-        width: 220px;
+        padding: 1rem 0.5rem !important;
     }
     
     /* Estilo para los botones principales */
@@ -164,18 +157,7 @@ st.markdown("""
     /* Ajustes para el sidebar colapsado */
     [data-testid="collapsedControl"] {
         display: block !important;
-        position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
-        background-color: white !important;
-        border-radius: 4px !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        z-index: 999 !important;
-        height: 2rem !important;
-        width: 2rem !important;
-        padding: 0.2rem !important;
-        transition: all 0.2s !important;
-        margin: 0 !important;
+        color: #1f1f1f !important;
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] {
@@ -500,50 +482,6 @@ st.markdown("""
         border-color: #e9ecef;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
-    
-    /* Ajustes para el botón de colapso */
-    button[kind="secondary"][data-testid="baseButton-secondary"] {
-        position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
-        background-color: white !important;
-        border-radius: 4px !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        z-index: 999 !important;
-        height: 2rem !important;
-        width: 2rem !important;
-        padding: 0.2rem !important;
-        transition: all 0.2s !important;
-        margin: 0 !important;
-    }
-    
-    button[kind="secondary"][data-testid="baseButton-secondary"]:hover {
-        background-color: #f8f9fa !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-    }
-    
-    /* Transiciones del sidebar */
-    section[data-testid="stSidebar"][aria-expanded="false"] {
-        margin-left: -220px !important;
-        transition: margin-left 0.3s !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="true"] {
-        margin-left: 0 !important;
-        transition: margin-left 0.3s !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
-        margin-left: 0 !important;
-        width: 100% !important;
-        transition: margin 0.3s, width 0.3s !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
-        margin-left: 220px !important;
-        width: calc(100% - 220px) !important;
-        transition: margin 0.3s, width 0.3s !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -692,10 +630,8 @@ def main():
         # Contenedor para el sidebar con estilo
         with st.sidebar:
             # Menú Dashboard
-            if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
-                st.session_state.menu_dashboard = not st.session_state.menu_dashboard
-                if not st.session_state.menu_dashboard and not st.session_state.menu_admin:
-                    st.session_state.menu_dashboard = True
+            if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True, type="primary"):
+                st.session_state.menu_dashboard = True
                 st.session_state.menu_admin = False
             
             # Submódulos de Dashboard
@@ -716,10 +652,16 @@ def main():
             
             # Menú Admin
             if st.button("⚙️ Admin", key="btn_admin", use_container_width=True):
-                st.session_state.menu_admin = not st.session_state.menu_admin
-                if not st.session_state.menu_dashboard and not st.session_state.menu_admin:
-                    st.session_state.menu_admin = True
+                st.session_state.menu_admin = True
                 st.session_state.menu_dashboard = False
+                st.switch_page("pages/1_admin.py")
+            
+            # Mostrar última actualización si está disponible
+            if 'update_time' in locals():
+                st.markdown(
+                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
+                    unsafe_allow_html=True
+                )
 
         # Inicializar la fecha de datos actual en session_state si no existe
         if 'current_data_date' not in st.session_state:

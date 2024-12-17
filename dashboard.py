@@ -58,6 +58,15 @@ st.markdown("""
     
     /* Estilo para el título de módulos */
     .sidebar-title {
+        font-size: 1.5rem !important;
+        color: #1f1f1f;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-left: 0.5rem;
+    }
+    
+    /* Estilo para el título de actualización */
+    .update-title {
         font-size: 0.9rem !important;
         color: #6c757d;
         font-weight: 600;
@@ -455,15 +464,6 @@ def main():
         with st.sidebar:
             st.markdown('<p class="sidebar-title">🎯 MÓDULOS</p>', unsafe_allow_html=True)
             
-            # Botón de actualización manual
-            st.markdown("---")
-            st.markdown("### 🔄 Actualización de Datos")
-            with st.expander("Actualizar datos manualmente"):
-                password = st.text_input("Contraseña", type="password")
-                if st.button("Actualizar Datos"):
-                    if data_loader.force_data_refresh(password):
-                        st.rerun()
-            
             # Selección de módulo con estilo compacto
             selected_module = st.radio(
                 "",
@@ -471,6 +471,23 @@ def main():
                 format_func=lambda x: MODULES[x],
                 key="module_selector"
             )
+
+            # Mostrar última actualización
+            if update_time:
+                st.markdown(
+                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
+                    unsafe_allow_html=True
+                )
+            
+            # Botón de actualización manual (movido al final)
+            st.markdown("<div style='flex-grow: 1;'></div>", unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown('<p class="update-title">🔄 Actualización de Datos</p>', unsafe_allow_html=True)
+            with st.expander("Actualizar datos manualmente"):
+                password = st.text_input("Contraseña", type="password")
+                if st.button("Actualizar Datos"):
+                    if data_loader.force_data_refresh(password):
+                        st.rerun()
 
         # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':

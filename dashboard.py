@@ -374,6 +374,33 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         z-index: 999;
     }
+    
+    /* Estilo para el contenedor del botón admin */
+    .admin-button-container {
+        position: fixed;
+        bottom: 20px;
+        left: 10px;
+        z-index: 1000;
+        opacity: 0.3;
+        transition: opacity 0.3s;
+    }
+    
+    .admin-button-container:hover {
+        opacity: 1;
+    }
+    
+    /* Estilo para el contenedor de la contraseña */
+    .password-container {
+        position: fixed;
+        bottom: 60px;
+        left: 10px;
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        z-index: 999;
+        width: 200px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -487,7 +514,7 @@ def show_loading_progress(message, action, show_fade_in=True):
     Returns:
         El resultado de la acción ejecutada
     """
-    with st.spinner(f'🔄 {message}...'):
+    with st.spinner(f'��� {message}...'):
         progress_bar = st.progress(0)
         for i in range(100):
             time.sleep(0.01)
@@ -621,23 +648,33 @@ def main():
                     unsafe_allow_html=True
                 )
             
-            # Espacio flexible para empujar el botón al fondo
-            st.markdown('<div style="flex: 1;"></div>', unsafe_allow_html=True)
+            # Contenedor para el botón admin al final del sidebar
+            st.markdown('<div style="flex-grow: 1; min-height: 50vh;"></div>', unsafe_allow_html=True)
             
-            # Botón discreto para Panel de Control al final del sidebar
-            cols = st.columns([19, 1])
-            with cols[1]:
+            # Botón discreto para Panel de Control
+            st.markdown('<div class="admin-button-container">', unsafe_allow_html=True)
+            cols = st.columns([1, 19])
+            with cols[0]:
                 if st.button("⚙️", help="Panel de Control", key="admin_button"):
-                    st.session_state.show_admin = not st.session_state.get('show_admin', False)
+                    # Toggle del estado del panel
+                    if 'show_admin' in st.session_state:
+                        st.session_state.show_admin = not st.session_state.show_admin
+                    else:
+                        st.session_state.show_admin = True
+                    # Limpiar autenticación al ocultar
+                    if not st.session_state.show_admin:
+                        st.session_state.admin_authenticated = False
+            st.markdown('</div>', unsafe_allow_html=True)
             
             # Si se activa el panel de control, pedir contraseña
             if st.session_state.get('show_admin', False):
-                with st.container():
-                    password = st.text_input("Contraseña", type="password", key="admin_password")
-                    if password == "Ka260314!":
-                        st.session_state.admin_authenticated = True
-                    elif password:
-                        st.error("Contraseña incorrecta")
+                st.markdown('<div class="password-container">', unsafe_allow_html=True)
+                password = st.text_input("Contraseña", type="password", key="admin_password")
+                if password == "Ka260314!":
+                    st.session_state.admin_authenticated = True
+                elif password:
+                    st.error("Contraseña incorrecta")
+                st.markdown('</div>', unsafe_allow_html=True)
 
         # Si está autenticado como admin y el panel está activo, mostrar el panel
         if st.session_state.get('admin_authenticated', False) and st.session_state.get('show_admin', False):

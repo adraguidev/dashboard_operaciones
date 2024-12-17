@@ -412,20 +412,22 @@ def generate_data_hash(data):
     return hashlib.md5(data_str.encode()).hexdigest()
 
 # Función cacheada para cargar datos del módulo y su timestamp
-@st.cache_data(ttl=None)  # Cache permanente hasta actualización manual
+@st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
 def load_module_data_with_timestamp(selected_module):
     """
     Carga y cachea los datos del módulo junto con su timestamp.
-    Incluye un hash para detectar cambios reales en los datos.
+    El caché persiste en disco y solo se invalida manualmente desde el panel de control.
     """
+    # Verificar si hay una actualización forzada desde el panel de control
+    if st.session_state.get('force_refresh', False):
+        st.cache_data.clear()
+        st.session_state.force_refresh = False
+    
     data_loader = st.session_state.data_loader
     data = data_loader.load_module_data(selected_module)
     
     if data is not None:
-        # Usar el timestamp actual
         update_time = get_current_time()
-        
-        # Generar hash de los datos
         data_hash = generate_data_hash(data)
         
         return {
@@ -513,6 +515,7 @@ def render_admin_panel(data_loader):
     with col1:
         st.markdown("#### Actualización de Datos")
         if st.button("Actualizar Base de Datos", key="admin_update"):
+            st.session_state.force_refresh = True
             if data_loader.force_data_refresh("Ka260314!"):
                 st.success("✅ Datos actualizados correctamente")
                 st.rerun()
@@ -603,18 +606,6 @@ def main():
         with st.sidebar:
             st.markdown('<p class="sidebar-title">🎯 MÓDULOS</p>', unsafe_allow_html=True)
             
-            # Botón discreto para Panel de Control
-            if st.button("⚙️", help="Panel de Control"):
-                st.session_state.show_admin = not st.session_state.get('show_admin', False)
-            
-            # Si se activa el panel de control, pedir contraseña
-            if st.session_state.get('show_admin', False):
-                password = st.text_input("Contraseña", type="password", key="admin_password")
-                if password == "Ka260314!":
-                    st.session_state.admin_authenticated = True
-                elif password:
-                    st.error("Contraseña incorrecta")
-            
             # Selección de módulo con estilo compacto
             selected_module = st.radio(
                 "",
@@ -622,6 +613,31 @@ def main():
                 format_func=lambda x: MODULES[x],
                 key="module_selector"
             )
+
+            # Mostrar última actualización si está disponible
+            if 'update_time' in locals():
+                st.markdown(
+                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
+                    unsafe_allow_html=True
+                )
+            
+            # Espacio flexible para empujar el botón al fondo
+            st.markdown('<div style="flex: 1;"></div>', unsafe_allow_html=True)
+            
+            # Botón discreto para Panel de Control al final del sidebar
+            cols = st.columns([19, 1])
+            with cols[1]:
+                if st.button("⚙️", help="Panel de Control", key="admin_button"):
+                    st.session_state.show_admin = not st.session_state.get('show_admin', False)
+            
+            # Si se activa el panel de control, pedir contraseña
+            if st.session_state.get('show_admin', False):
+                with st.container():
+                    password = st.text_input("Contraseña", type="password", key="admin_password")
+                    if password == "Ka260314!":
+                        st.session_state.admin_authenticated = True
+                    elif password:
+                        st.error("Contraseña incorrecta")
 
         # Si está autenticado como admin y el panel está activo, mostrar el panel
         if st.session_state.get('admin_authenticated', False) and st.session_state.get('show_admin', False):
@@ -657,30 +673,8 @@ def main():
 
         # Agregar elementos adicionales al sidebar después de cargar los datos
         with st.sidebar:
-            # Mostrar última actualización si está disponible
-            if 'update_time' in locals():
-                st.markdown(
-                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
-                    unsafe_allow_html=True
-                )
-            
-            # Inicializar el estado del expander si no existe
-            if 'show_update_form' not in st.session_state:
-                st.session_state.show_update_form = False
-            
-            # Botón discreto de actualización
-            col1, col2 = st.columns([1, 20])
-            with col1:
-                if st.button('🔄', help="Actualizar datos", key="update_trigger"):
-                    st.session_state.show_update_form = not st.session_state.show_update_form
-            
-            # Mostrar formulario de actualización si está activo
-            if st.session_state.show_update_form:
-                with st.container():
-                    password = st.text_input("Contraseña", type="password", key="update_password")
-                    if st.button("Actualizar", key="update_confirm"):
-                        if data_loader.force_data_refresh(password):
-                            st.rerun()
+            if 'show_update_form' in st.session_state:
+                del st.session_state.show_update_form
 
         if selected_module != 'SPE':
             # Crear pestañas

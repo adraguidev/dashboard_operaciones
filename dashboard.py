@@ -299,24 +299,13 @@ st.markdown("""
         background-color: var(--sidebar-color);
         border-right: 1px solid rgba(0,0,0,0.1);
         box-shadow: 2px 0 5px rgba(0,0,0,0.05);
-        position: fixed;
-        height: 100vh;
-        overflow-y: auto;
-    }
-    
-    section[data-testid="stSidebar"] > div {
-        padding-top: 3rem !important;
-        height: 100vh;
-        position: relative;
-        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
     }
     
     /* Contenedor principal */
     section[data-testid="stContent"] {
-        margin-left: 220px !important;
         padding: 1rem !important;
-        width: calc(100% - 220px) !important;
-        transition: margin 0.3s, width 0.3s !important;
+        max-width: 1400px;
+        margin: 0 auto;
     }
     
     /* Estilos para las pestañas */

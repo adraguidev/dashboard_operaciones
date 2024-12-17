@@ -244,80 +244,103 @@ st.markdown("""
     :root {
         --primary-color: #FF4B4B;
         --primary-color-hover: #ff6b6b;
-        --background-color: #f8f9fa;
+        --background-color: #ffffff;
+        --sidebar-color: #f8f9fa;
         --text-color: #1f1f1f;
         --border-radius: 0.5rem;
         --transition-speed: 0.2s;
     }
     
-    /* Estilos base */
+    /* Fondo principal */
     .stApp {
         background-color: var(--background-color);
+    }
+    
+    /* Estilos para el sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: var(--sidebar-color);
+        border-right: 1px solid rgba(0,0,0,0.1);
+        box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+    }
+    
+    /* Contenedor principal */
+    section[data-testid="stContent"] {
+        padding: 1rem 2rem !important;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    /* Estilos para las pestañas */
+    .stTabs {
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: transparent;
+        padding: 0;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #f1f1f1;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 2.5rem;
+        background-color: transparent;
+        border-radius: 4px 4px 0 0;
+        color: #6c757d;
+        font-size: 0.9rem;
+        font-weight: 500;
+        border: none;
+        padding: 0 1.5rem;
+        margin-right: 0.5rem;
+        transition: all 0.2s;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #fff3f3;
+        color: var(--primary-color);
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-hover) 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        box-shadow: 0 2px 4px rgba(255,75,75,0.2) !important;
+    }
+    
+    /* Contenido de las pestañas */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 1.5rem 0;
+        background-color: transparent;
     }
     
     /* Estilos para cards */
     .stCard {
         background-color: white;
-        padding: 1rem;
+        padding: 1.5rem;
         border-radius: var(--border-radius);
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
+        border: 1px solid #f1f1f1;
+        transition: all 0.2s;
+    }
+    
+    .stCard:hover {
+        border-color: #e9ecef;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     
     /* Estilos para métricas */
     [data-testid="stMetric"] {
         background-color: white;
-        padding: 1rem;
+        padding: 1.5rem;
         border-radius: var(--border-radius);
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        border: 1px solid #f1f1f1;
+        transition: all 0.2s;
     }
     
-    [data-testid="stMetricValue"] {
-        color: var(--primary-color) !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Estilos para botones */
-    .stButton button {
-        border-radius: var(--border-radius);
-        font-weight: 500;
-        transition: all var(--transition-speed);
-    }
-    
-    .stButton button[kind="primary"] {
-        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-hover) 100%);
-        border: none;
-        color: white;
-        box-shadow: 0 2px 4px rgba(255,75,75,0.2);
-    }
-    
-    .stButton button[kind="primary"]:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px rgba(255,75,75,0.3);
-    }
-    
-    /* Estilos para selectores */
-    .stSelectbox select {
-        border-radius: var(--border-radius);
-    }
-    
-    /* Estilos para inputs */
-    .stTextInput input {
-        border-radius: var(--border-radius);
-    }
-    
-    /* Estilos para radio buttons */
-    .stRadio > div {
-        background-color: white;
-        padding: 0.5rem;
-        border-radius: var(--border-radius);
-    }
-    
-    /* Estilos para expanders */
-    .streamlit-expanderHeader {
-        background-color: white;
-        border-radius: var(--border-radius);
-        border: none !important;
+    [data-testid="stMetric"]:hover {
+        border-color: #e9ecef;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     
     /* Estilos para dataframes */
@@ -325,34 +348,26 @@ st.markdown("""
         background-color: white;
         padding: 1rem;
         border-radius: var(--border-radius);
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        border: 1px solid #f1f1f1;
+        transition: all 0.2s;
     }
     
-    /* Estilos para tooltips */
-    .tooltip {
-        position: relative;
-        display: inline-block;
+    .stDataFrame:hover {
+        border-color: #e9ecef;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     
-    .tooltip .tooltiptext {
-        visibility: hidden;
-        background-color: #333;
-        color: white;
-        text-align: center;
-        padding: 0.5rem;
-        border-radius: 0.25rem;
-        position: absolute;
-        z-index: 1;
-        bottom: 125%;
-        left: 50%;
-        transform: translateX(-50%);
-        opacity: 0;
-        transition: opacity var(--transition-speed);
+    /* Estilos para expanders */
+    .streamlit-expanderHeader {
+        background-color: white;
+        border: 1px solid #f1f1f1 !important;
+        border-radius: var(--border-radius) !important;
+        transition: all 0.2s;
     }
     
-    .tooltip:hover .tooltiptext {
-        visibility: visible;
-        opacity: 1;
+    .streamlit-expanderHeader:hover {
+        border-color: #e9ecef !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     
     /* Estilos para headers */

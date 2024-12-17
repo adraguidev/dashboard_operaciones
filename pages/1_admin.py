@@ -22,7 +22,7 @@ st.markdown("""
     }
     
     section[data-testid="stSidebar"] > div {
-        padding-top: 7rem !important;
+        padding-top: 15rem !important;
         background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
     }
     

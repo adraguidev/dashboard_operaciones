@@ -122,7 +122,7 @@ class DataLoader:
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
         """Carga datos consolidados desde migraciones_db."""
         try:
-            # SPE tiene su propia lógica de carga separada y siempre carga datos frescos
+            # SPE tiene su propia lógica de carga separada
             if module_name == 'SPE':
                 return _self._load_spe_from_sheets()
             
@@ -132,30 +132,13 @@ class DataLoader:
             # Procesamiento especial para CCM-LEY
             if module_name == 'CCM-LEY':
                 logger.info("Iniciando carga de CCM-LEY...")
-                
-                # Cargar datos de CCM
-                logger.info("Cargando datos de CCM...")
                 ccm_data = _self.load_module_data('CCM')
-                if ccm_data is None:
-                    logger.error("No se pudieron cargar los datos de CCM")
-                    st.error("❌ No se pudieron cargar los datos de CCM")
-                    return None
-                logger.info(f"Datos de CCM cargados: {len(ccm_data)} registros")
-                
-                # Cargar datos de CCM-ESP
-                logger.info("Cargando datos de CCM-ESP...")
                 ccm_esp_data = _self.load_module_data('CCM-ESP')
-                if ccm_esp_data is None:
-                    logger.error("No se pudieron cargar los datos de CCM-ESP")
-                    st.error("❌ No se pudieron cargar los datos de CCM-ESP")
+                
+                if ccm_data is None or ccm_esp_data is None:
                     return None
-                logger.info(f"Datos de CCM-ESP cargados: {len(ccm_esp_data)} registros")
-                
-                # Excluir expedientes que están en CCM-ESP
-                logger.info("Filtrando datos para CCM-LEY...")
+                    
                 data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])].copy()
-                logger.info(f"Registros finales para CCM-LEY: {len(data)}")
-                
                 return data
 
             collection_name = MONGODB_COLLECTIONS.get(module_name)
@@ -164,57 +147,30 @@ class DataLoader:
 
             collection = _self.migraciones_db[collection_name]
             
-            # Optimizar la consulta usando cursor con batch_size y hint
+            # Optimizar la consulta usando cursor con batch_size
             cursor = collection.find(
                 {},
-                {'_id': 0},  # Excluir solo el _id
-                batch_size=5000,  # Tamaño de lote optimizado
-                hint=[("FechaExpendiente", 1)]  # Usar índice existente
-            ).allow_disk_use(True)  # Permitir uso de disco para consultas grandes
-
-            # Procesar datos en chunks para mejor manejo de memoria
-            chunks = []
-            chunk_size = 10000
-            current_chunk = []
-
-            print("Iniciando carga de datos...")
-            records_processed = 0
+                {'_id': 0},
+                batch_size=10000  # Aumentamos el batch_size para reducir viajes a la BD
+            ).hint([("FechaExpendiente", 1)])  # Usar índice para mejor rendimiento
             
-            for doc in cursor:
-                current_chunk.append(doc)
-                if len(current_chunk) >= chunk_size:
-                    df_chunk = pd.DataFrame(current_chunk)
-                    # Optimizar tipos de datos inmediatamente
-                    df_chunk = _self._optimize_dtypes(df_chunk)
-                    chunks.append(df_chunk)
-                    records_processed += len(current_chunk)
-                    print(f"Procesados {records_processed} registros...")
-                    current_chunk = []
-
-            if current_chunk:  # Procesar el último chunk
-                df_chunk = pd.DataFrame(current_chunk)
-                df_chunk = _self._optimize_dtypes(df_chunk)
-                chunks.append(df_chunk)
-                records_processed += len(current_chunk)
-
-            if not chunks:
-                st.error(f"No se encontraron datos para el módulo {module_name} en la base de datos.")
+            # Usar pandas para leer el cursor directamente
+            data = pd.DataFrame(list(cursor))
+            if data.empty:
+                st.error(f"No se encontraron datos para el módulo {module_name}")
                 return None
 
-            # Concatenar chunks eficientemente
-            print("Combinando datos...")
-            data = pd.concat(chunks, ignore_index=True)
+            # Optimizar tipos de datos inmediatamente después de cargar
+            data = _self._optimize_dtypes(data)
             
-            # Convertir fechas eficientemente
-            print("Procesando fechas...")
+            # Convertir fechas de manera más eficiente
             for col in DATE_COLUMNS:
                 if col in data.columns:
                     data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
 
             elapsed_time = time.time() - start_time
-            print(f"Tiempo de carga para {module_name}: {elapsed_time:.2f} segundos")
-            print(f"Total registros cargados: {len(data)}")
-            print(f"Uso de memoria: {data.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
+            logger.info(f"Carga de {module_name} completada en {elapsed_time:.2f} segundos")
+            logger.info(f"Registros cargados: {len(data)}")
             
             return data
 
@@ -225,29 +181,26 @@ class DataLoader:
 
     def _optimize_dtypes(_self, df: pd.DataFrame) -> pd.DataFrame:
         """Optimiza los tipos de datos del DataFrame para reducir uso de memoria."""
-        # Convertir columnas numéricas a tipos más eficientes
-        for col in df.select_dtypes(include=['int64']).columns:
-            if df[col].min() >= 0:  # Si son todos positivos
-                if df[col].max() < 255:
-                    df[col] = df[col].astype('uint8')
-                elif df[col].max() < 65535:
-                    df[col] = df[col].astype('uint16')
-                else:
-                    df[col] = df[col].astype('uint32')
-            else:
-                if df[col].min() > -128 and df[col].max() < 127:
-                    df[col] = df[col].astype('int8')
-                elif df[col].min() > -32768 and df[col].max() < 32767:
-                    df[col] = df[col].astype('int16')
-                else:
+        try:
+            # Optimizar tipos numéricos
+            for col in df.select_dtypes(include=['int64', 'float64']).columns:
+                # Intentar convertir a entero si no hay decimales
+                if df[col].dtype == 'float64' and df[col].notnull().all() and (df[col] % 1 == 0).all():
                     df[col] = df[col].astype('int32')
+                # Optimizar enteros
+                elif df[col].dtype == 'int64':
+                    df[col] = pd.to_numeric(df[col], downcast='integer')
 
-        # Optimizar columnas de texto que se repiten frecuentemente
-        for col in df.select_dtypes(include=['object']).columns:
-            if df[col].nunique() / len(df) < 0.5:  # Si hay muchos valores repetidos
-                df[col] = pd.Categorical(df[col])
+            # Optimizar strings usando categorías para valores repetidos
+            for col in df.select_dtypes(include=['object']).columns:
+                num_unique = df[col].nunique()
+                if num_unique < len(df) * 0.5:  # Si hay menos de 50% de valores únicos
+                    df[col] = df[col].astype('category')
 
-        return df
+            return df
+        except Exception as e:
+            logger.warning(f"Error en optimización de tipos: {str(e)}")
+            return df  # Retornar el DataFrame original si hay error
 
     # Método separado para SPE sin caché - siempre carga datos frescos
     def _load_spe_from_sheets(_self):

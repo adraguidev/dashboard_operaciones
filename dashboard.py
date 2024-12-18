@@ -366,6 +366,11 @@ def main():
                     f'<div class="update-info">Última actualización:<br>{last_update}</div>',
                     unsafe_allow_html=True
                 )
+            else:
+                st.markdown(
+                    '<div class="update-info">No hay datos de actualización</div>',
+                    unsafe_allow_html=True
+                )
         
         # Botón de actualización de datos
         with st.expander("🔄 Actualizar Datos"):

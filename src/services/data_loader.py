@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import logging
 import time
 import hashlib
+import pytz
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -263,3 +264,29 @@ class DataLoader:
     def get_rankings_collection(_self):
         """Retorna la colección de rankings de expedientes_db."""
         return _self.expedientes_db['rankings']
+
+    def get_last_update_time(_self, collection_name: str) -> str:
+        """
+        Obtiene la fecha de la última actualización de una colección.
+        
+        Args:
+            collection_name: Nombre de la colección
+            
+        Returns:
+            str: Fecha de última actualización en formato dd/mm/yyyy HH:MM
+        """
+        try:
+            # Obtener el último documento insertado
+            last_doc = _self.migraciones_db[collection_name].find_one(
+                sort=[('FechaExpendiente', -1)]
+            )
+            
+            if last_doc:
+                # Intentar obtener la fecha de actualización del documento
+                update_time = datetime.now(pytz.timezone('America/Lima')).strftime("%d/%m/%Y %H:%M")
+                return update_time
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error al obtener última actualización de {collection_name}: {str(e)}")
+            return None

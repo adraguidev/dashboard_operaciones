@@ -11,545 +11,164 @@ st.set_page_config(
     layout="wide",
 )
 
-# Estilos personalizados
+# Estilos personalizados mejorados
 st.markdown("""
 <style>
-    /* Estilos para el sidebar y menú */
-    section[data-testid="stSidebar"] {
-        background-color: #f8f9fa;
-        min-width: 220px !important;
-        max-width: 220px !important;
-    }
-    
-    section[data-testid="stSidebar"] > div {
-        padding-top: 15rem !important;
-        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
-    }
-    
-    /* Estilo para los botones principales */
-    section[data-testid="stSidebar"] button {
-        height: 2.2rem !important;
-        padding: 0 0.8rem !important;
-        margin-bottom: 0.3rem !important;
-        border: none !important;
-        background-color: white !important;
-        color: #1f1f1f !important;
-        font-size: 0.9rem !important;
-        font-weight: 500 !important;
-        box-shadow: none !important;
-    }
-    
-    section[data-testid="stSidebar"] button[kind="primary"] {
-        background-color: #FF4B4B !important;
-        color: white !important;
-    }
-    
-    /* Estilo para los submódulos */
-    .submenu {
-        margin-left: 0.5rem !important;
-        margin-bottom: 0.5rem !important;
-        padding-left: 0.5rem !important;
-        border-left: 2px solid #e9ecef !important;
-    }
-    
-    /* Estilo para radio buttons en el submenu */
-    .submenu .stRadio > div {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 0.2rem !important;
-    }
-    
-    .submenu .stRadio label {
-        padding: 0.3rem 0.8rem !important;
-        font-size: 0.85rem !important;
-        background: white !important;
-        border-radius: 4px !important;
-        transition: all 0.2s !important;
-        cursor: pointer !important;
-        margin: 0 !important;
-    }
-    
-    .submenu .stRadio label:hover {
-        background: #f8f9fa !important;
-        transform: translateX(3px) !important;
-    }
-    
-    /* Ajustes adicionales para el contenido principal */
-    section[data-testid="stSidebarContent"] {
-        padding-top: 0 !important;
-        height: calc(100vh - 2rem) !important;
-    }
-    
-    /* Ocultar elementos específicos de Streamlit */
-    header[data-testid="stHeader"] {
-        display: none !important;
-    }
-    
-    div[data-testid="collapsedControl"] {
-        display: block !important;
-    }
-    
-    #MainMenu {
-        display: none !important;
-    }
-    
-    /* Ocultar elementos del sidebar por defecto */
-    .st-emotion-cache-1rtdyuf {
-        display: block !important;
-    }
-    
-    .st-emotion-cache-h5rgaw {
-        display: none !important;
-    }
-    
-    .st-emotion-cache-1q1z5mp {
-        display: none !important;
-    }
-    
-    .st-emotion-cache-1oe5cao {
-        display: none !important;
-    }
-    
-    .st-emotion-cache-pkbazv {
-        display: none !important;
-    }
-    
-    /* Ocultar textos de páginas en el sidebar */
-    section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {
-        display: none !important;
-    }
-    
-    .st-emotion-cache-eczf16 {
-        display: none !important;
-    }
-    
-    .st-emotion-cache-r421ms {
-        display: none !important;
-    }
-    
-    /* Ocultar contenedor de navegación */
-    .st-emotion-cache-1k5e5jk {
-        display: none !important;
-    }
-    
-    /* Ajustes para el sidebar colapsado */
-    [data-testid="collapsedControl"] {
-        display: block !important;
-        color: #1f1f1f !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="false"] {
-        margin-left: -220px !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="false"] ~ section[data-testid="stContent"] {
-        margin-left: 0 !important;
-        width: 100% !important;
-        transition: margin 0.3s, width 0.3s !important;
-    }
-    
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ section[data-testid="stContent"] {
-        margin-left: 220px !important;
-        width: calc(100% - 220px) !important;
-        transition: margin 0.3s, width 0.3s !important;
-    }
-    
-    /* Estilos para las pestañas */
-    .stTabs {
-        background: transparent;
-        padding: 0;
-        box-shadow: none;
-        margin-top: 0.5rem;
-    }
-    
-    .stTabs [data-baseweb="tab-list"] {
-        background-color: transparent;
-        padding: 0;
-        margin-bottom: 0;
-        border-bottom: none;
-        gap: 0;
-        position: relative;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 2.5rem;
-        background-color: rgba(248,249,250,0.5);
-        border-radius: 0.5rem 0.5rem 0 0;
-        color: #6c757d;
-        font-size: 0.9rem;
-        font-weight: 500;
-        border: 1px solid #dee2e6;
-        border-bottom: none;
-        padding: 0 1.5rem;
-        margin: 0;
-        margin-right: -1px;
-        transition: all 0.2s;
-        position: relative;
-        bottom: 0;
-    }
-    
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: white;
-        color: var(--primary-color);
-        border-color: #dee2e6;
-        transform: translateY(-1px);
-        z-index: 1;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: white !important;
-        color: var(--primary-color) !important;
-        font-weight: 600 !important;
-        border: 1px solid #dee2e6 !important;
-        border-bottom: 1px solid white !important;
-        box-shadow: none !important;
-        z-index: 2;
-    }
-    
-    /* Contenido de las pestañas */
-    .stTabs [data-baseweb="tab-panel"] {
-        padding: 1rem 0 0 0;
-        background-color: transparent;
-        border-top: none;
-        margin-top: 0;
-    }
-    
-    /* Estilo para los botones dentro de las pestañas */
-    .stTabs button {
-        border-radius: 4px;
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-    
-    .stTabs button[kind="primary"] {
-        background: linear-gradient(90deg, #FF4B4B 0%, #ff6b6b 100%);
-        border: none;
-        color: white;
-        box-shadow: 0 2px 4px rgba(255,75,75,0.2);
-    }
-    
-    .stTabs button[kind="primary"]:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px rgba(255,75,75,0.3);
-    }
-    
-    /* Botón de colapso del sidebar siempre visible */
-    [data-testid="collapsedControl"] {
-        display: block !important;
-        position: fixed !important;
-        top: 1rem !important;
-        left: 1rem !important;
-        background-color: white !important;
-        border-radius: 4px !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        z-index: 999 !important;
-        height: 2.5rem !important;
-        width: 2.5rem !important;
-        padding: 0.5rem !important;
-        transition: all 0.2s !important;
-        border: 1px solid #dee2e6 !important;
-    }
-    
-    [data-testid="collapsedControl"]:hover {
-        background-color: #f8f9fa !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-    }
-    
-    /* Estilos globales */
+    /* Variables globales */
     :root {
         --primary-color: #FF4B4B;
-        --primary-color-hover: #ff6b6b;
-        --background-color: #ffffff;
-        --sidebar-color: #f8f9fa;
-        --text-color: #1f1f1f;
-        --border-radius: 0.5rem;
-        --transition-speed: 0.2s;
+        --primary-hover: #ff6b6b;
+        --bg-color: #f8f9fa;
+        --card-bg: white;
+        --border-radius: 0.75rem;
+        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --transition: all 0.2s ease;
     }
-    
-    /* Fondo principal */
-    .stApp {
-        background-color: var(--background-color);
-    }
-    
-    /* Estilos para el sidebar */
-    section[data-testid="stSidebar"] {
-        background-color: var(--sidebar-color);
-        border-right: 1px solid rgba(0,0,0,0.1);
-        box-shadow: 2px 0 5px rgba(0,0,0,0.05);
-    }
-    
+
     /* Contenedor principal */
-    section[data-testid="stContent"] {
-        padding: 1rem !important;
+    .main {
+        padding: 2rem;
         max-width: 1400px;
         margin: 0 auto;
     }
-    
-    /* Estilos para las pestañas */
-    .stTabs {
-        background: transparent;
-        padding: 0;
-        box-shadow: none;
-    }
-    
-    .stTabs [data-baseweb="tab-list"] {
-        background-color: transparent;
-        padding: 0;
-        margin-bottom: 1rem;
-        border-bottom: 2px solid #f1f1f1;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 2.5rem;
-        background-color: transparent;
-        border-radius: 4px 4px 0 0;
-        color: #6c757d;
-        font-size: 0.9rem;
-        font-weight: 500;
-        border: none;
-        padding: 0 1.5rem;
-        margin-right: 0.5rem;
-        transition: all 0.2s;
-    }
-    
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: #fff3f3;
-        color: var(--primary-color);
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-hover) 100%) !important;
-        color: white !important;
-        font-weight: 600 !important;
-        box-shadow: 0 2px 4px rgba(255,75,75,0.2) !important;
-    }
-    
-    /* Contenido de las pestañas */
-    .stTabs [data-baseweb="tab-panel"] {
-        padding: 1.5rem 0;
-        background-color: transparent;
-    }
-    
+
     /* Estilos para cards */
-    .stCard {
-        background-color: white;
-        padding: 1.5rem;
+    .admin-card {
+        background: linear-gradient(to bottom right, var(--card-bg), #fafafa);
         border-radius: var(--border-radius);
-        border: 1px solid #f1f1f1;
-        transition: all 0.2s;
+        padding: 1.5rem;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        box-shadow: var(--shadow);
+        transition: var(--transition);
+        margin-bottom: 1rem;
     }
-    
-    .stCard:hover {
-        border-color: #e9ecef;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+
+    .admin-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.15);
     }
-    
+
+    /* Estilos para botones */
+    .stButton > button {
+        width: 100%;
+        padding: 0.75rem 1rem !important;
+        border-radius: 0.5rem !important;
+        font-weight: 500 !important;
+        transition: var(--transition) !important;
+    }
+
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-hover) 100%) !important;
+        border: none !important;
+        color: white !important;
+    }
+
+    .stButton > button[kind="primary"]:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 6px rgba(255, 75, 75, 0.2) !important;
+    }
+
     /* Estilos para métricas */
     [data-testid="stMetric"] {
-        background-color: white;
-        padding: 1.5rem;
+        background: var(--card-bg);
+        padding: 1.25rem;
         border-radius: var(--border-radius);
-        border: 1px solid #f1f1f1;
-        transition: all 0.2s;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        transition: var(--transition);
     }
-    
+
     [data-testid="stMetric"]:hover {
-        border-color: #e9ecef;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow);
     }
-    
-    /* Estilos para dataframes */
-    .stDataFrame {
-        background-color: white;
-        padding: 1rem;
-        border-radius: var(--border-radius);
-        border: 1px solid #f1f1f1;
-        transition: all 0.2s;
+
+    [data-testid="stMetricLabel"] {
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+        color: #4b5563 !important;
     }
-    
-    .stDataFrame:hover {
-        border-color: #e9ecef;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
-    
-    /* Estilos para expanders */
-    .streamlit-expanderHeader {
-        background-color: white;
-        border: 1px solid #f1f1f1 !important;
-        border-radius: var(--border-radius) !important;
-        transition: all 0.2s;
-    }
-    
-    .streamlit-expanderHeader:hover {
-        border-color: #e9ecef !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
-    
-    /* Estilos para headers */
-    h1, h2, h3, h4, h5, h6 {
-        color: var(--text-color);
-        font-weight: 600;
-    }
-    
-    h1 {
-        font-size: 1.75rem !important;
-        margin-bottom: 1rem !important;
-    }
-    
-    h2 {
+
+    [data-testid="stMetricValue"] {
         font-size: 1.5rem !important;
-        margin-bottom: 1.5rem !important;
+        font-weight: 600 !important;
+        color: var(--primary-color) !important;
     }
-    
-    h3 {
-        font-size: 1.25rem !important;
-        margin-bottom: 1rem !important;
-    }
-    
-    /* Estilos para las pestañas y contenedores */
+
+    /* Estilos para tabs */
     .stTabs {
         background: transparent;
         padding: 0;
-        box-shadow: none;
         margin-top: 1rem;
     }
-    
+
     .stTabs [data-baseweb="tab-list"] {
         background-color: transparent;
-        padding: 0;
-        margin-bottom: 1.5rem;
-        border-bottom: none;
+        border-bottom: 2px solid #f1f1f1;
         gap: 0.5rem;
     }
-    
+
     .stTabs [data-baseweb="tab"] {
-        height: 3rem;
-        background-color: rgba(255,255,255,0.8);
-        border-radius: var(--border-radius);
-        color: #6c757d;
-        font-size: 0.95rem;
-        font-weight: 500;
-        border: 1px solid #f1f1f1;
-        padding: 0 1.5rem;
-        margin: 0;
-        transition: all 0.2s;
+        padding: 0.75rem 1.5rem !important;
+        font-weight: 500 !important;
+        border-radius: 0.5rem 0.5rem 0 0 !important;
+        border: none !important;
+        background: transparent !important;
+        color: #6b7280 !important;
+        transition: var(--transition) !important;
     }
-    
+
     .stTabs [data-baseweb="tab"]:hover {
-        background-color: white;
-        color: var(--primary-color);
-        border-color: var(--primary-color);
-        transform: translateY(-1px);
+        background: rgba(255, 75, 75, 0.1) !important;
+        color: var(--primary-color) !important;
     }
-    
+
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-hover) 100%) !important;
+        background: var(--primary-color) !important;
         color: white !important;
         font-weight: 600 !important;
-        border: none !important;
-        box-shadow: 0 4px 6px rgba(255,75,75,0.2) !important;
     }
-    
-    /* Contenido de las pestañas */
-    .stTabs [data-baseweb="tab-panel"] {
-        padding: 0;
-        background-color: transparent;
+
+    /* Estilos para checkboxes */
+    .stCheckbox {
+        padding: 0.5rem;
+        border-radius: 0.375rem;
+        transition: var(--transition);
     }
-    
-    /* Ajustes para el contenedor principal */
-    section[data-testid="stContent"] {
-        padding: 2rem !important;
-        max-width: 1400px;
-        margin: 0 auto;
+
+    .stCheckbox:hover {
+        background: rgba(0, 0, 0, 0.02);
     }
-    
-    /* Eliminar líneas divisorias innecesarias */
-    .main-nav, hr, .stMarkdown hr {
-        display: none !important;
+
+    /* Estilos para expander */
+    .streamlit-expanderHeader {
+        background: var(--card-bg) !important;
+        border-radius: var(--border-radius) !important;
+        border: 1px solid rgba(0, 0, 0, 0.05) !important;
+        transition: var(--transition) !important;
     }
-    
-    /* Ajustes para el sidebar */
-    section[data-testid="stSidebar"] > div {
-        padding-top: 1.5rem !important;
-        background: linear-gradient(to bottom, var(--sidebar-color) 0%, rgba(248,249,250,0.97) 100%);
+
+    .streamlit-expanderHeader:hover {
+        background: #f8f9fa !important;
     }
-    
-    /* Ajustes para los radio buttons en el submenu */
-    .submenu {
-        margin-left: 0.5rem !important;
-        padding-left: 0.5rem !important;
-        border-left: 2px solid rgba(255,75,75,0.1) !important;
+
+    /* Estilos para código */
+    .stCodeBlock {
+        background: #1f2937 !important;
+        border-radius: var(--border-radius) !important;
+        padding: 1rem !important;
     }
-    
-    .submenu .stRadio > div {
-        background: transparent !important;
-        padding: 0 !important;
+
+    /* Animaciones */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
-    
-    .submenu .stRadio label {
-        background: rgba(255,255,255,0.8) !important;
-        border: 1px solid #f1f1f1;
-        margin-bottom: 0.2rem !important;
-    }
-    
-    .submenu .stRadio label:hover {
-        background: white !important;
-        border-color: var(--primary-color);
-    }
-    
-    /* Ajustes para los contenedores de datos */
-    [data-testid="stMetric"], .stDataFrame, .streamlit-expanderHeader {
-        background: rgba(255,255,255,0.8);
-        border: 1px solid #f1f1f1;
-        transition: all 0.2s;
-    }
-    
-    [data-testid="stMetric"]:hover, .stDataFrame:hover, .streamlit-expanderHeader:hover {
-        background: white;
-        border-color: #e9ecef;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
-    
-    /* Ajustes para el primer botón del sidebar */
-    section[data-testid="stSidebar"] button:first-of-type {
-        margin-top: 0 !important;
+
+    .stTabs [data-baseweb="tab-panel"] > div {
+        animation: fadeIn 0.3s ease-out;
     }
 </style>
 """, unsafe_allow_html=True)
-
-# Inicializar estados del menú si no existen
-if 'menu_dashboard' not in st.session_state:
-    st.session_state.menu_dashboard = False
-if 'menu_admin' not in st.session_state:
-    st.session_state.menu_admin = True
-
-# Contenedor para el sidebar con estilo
-with st.sidebar:
-    # Menú Dashboard
-    if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True):
-        st.session_state.menu_dashboard = True
-        st.session_state.menu_admin = False
-        st.switch_page("dashboard.py")
-    
-    # Menú Admin
-    if st.button("⚙️ Admin", key="btn_admin", use_container_width=True, type="primary"):
-        st.session_state.menu_admin = True
-        st.session_state.menu_dashboard = False
-    
-    # Submenú de Admin
-    if st.session_state.menu_admin:
-        with st.container():
-            st.markdown('<div class="submenu">', unsafe_allow_html=True)
-            admin_option = st.radio(
-                "",
-                options=["panel_control"],
-                format_func=lambda x: "🔐 Panel de Control",
-                key="admin_selector",
-                label_visibility="collapsed"
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
 
 # Función para verificar la contraseña
 def check_password():
@@ -564,15 +183,24 @@ def check_password():
 
     if "password_correct" not in st.session_state:
         # Primera vez, mostrar el input
+        st.markdown("""
+        <div class="admin-card" style="max-width: 400px; margin: 2rem auto;">
+            <h3 style="text-align: center; margin-bottom: 1rem;">🔐 Acceso Administrativo</h3>
+        """, unsafe_allow_html=True)
         st.text_input(
             "Contraseña", 
             type="password", 
             on_change=password_entered, 
             key="password"
         )
+        st.markdown("</div>", unsafe_allow_html=True)
         return False
     elif not st.session_state["password_correct"]:
         # Contraseña incorrecta, mostrar el input
+        st.markdown("""
+        <div class="admin-card" style="max-width: 400px; margin: 2rem auto;">
+            <h3 style="text-align: center; margin-bottom: 1rem;">🔐 Acceso Administrativo</h3>
+        """, unsafe_allow_html=True)
         st.text_input(
             "Contraseña", 
             type="password", 
@@ -580,13 +208,19 @@ def check_password():
             key="password"
         )
         st.error("😕 Contraseña incorrecta")
+        st.markdown("</div>", unsafe_allow_html=True)
         return False
     else:
         # Contraseña correcta
         return True
 
 if check_password():
-    st.title("🔐 Panel de Administración")
+    st.markdown("""
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <h1 style="color: #1f2937; font-size: 2rem; font-weight: 700;">🔐 Panel de Administración</h1>
+        <p style="color: #6b7280; font-size: 1rem;">Gestión y monitoreo del sistema</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Inicializar data_loader si no existe
     if 'data_loader' not in st.session_state:
@@ -603,11 +237,19 @@ if check_password():
     ])
     
     with tab1:
-        st.header("Gestión de Datos")
+        st.markdown("""
+        <div class="admin-card">
+            <h2 style="color: #1f2937; font-size: 1.5rem; margin-bottom: 1rem;">Gestión de Datos</h2>
+        """, unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("Actualización de Datos")
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(255,75,75,0.05); border-radius: 0.5rem;">
+                <h3 style="color: #1f2937; font-size: 1.1rem; margin-bottom: 0.5rem;">Actualización de Datos</h3>
+                <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 1rem;">Actualiza la base de datos del sistema</p>
+            </div>
+            """, unsafe_allow_html=True)
             if st.button("🔄 Actualizar Base de Datos", use_container_width=True):
                 with st.spinner("Actualizando datos..."):
                     st.session_state.force_refresh = True
@@ -617,7 +259,12 @@ if check_password():
                         st.rerun()
         
         with col2:
-            st.subheader("Estado de Conexiones")
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(255,75,75,0.05); border-radius: 0.5rem;">
+                <h3 style="color: #1f2937; font-size: 1.1rem; margin-bottom: 0.5rem;">Estado de Conexiones</h3>
+                <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 1rem;">Verifica el estado de las conexiones</p>
+            </div>
+            """, unsafe_allow_html=True)
             if st.button("🔍 Verificar Conexiones", use_container_width=True):
                 with st.spinner("Verificando conexiones..."):
                     try:
@@ -625,12 +272,23 @@ if check_password():
                         st.success("✅ Conexión a MongoDB activa")
                     except Exception as e:
                         st.error(f"❌ Error de conexión: {str(e)}")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
     
     with tab2:
-        st.header("Configuración del Sistema")
+        st.markdown("""
+        <div class="admin-card">
+            <h2 style="color: #1f2937; font-size: 1.5rem; margin-bottom: 1rem;">Configuración del Sistema</h2>
+        """, unsafe_allow_html=True)
         
         # Configuración de módulos
-        st.subheader("Módulos del Sistema")
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(255,75,75,0.05); border-radius: 0.5rem; margin-bottom: 1rem;">
+            <h3 style="color: #1f2937; font-size: 1.1rem; margin-bottom: 0.5rem;">Módulos del Sistema</h3>
+            <p style="color: #6b7280; font-size: 0.9rem;">Gestiona la visibilidad de los módulos</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         from config.settings import MODULES
         
         if 'visible_modules' not in st.session_state:
@@ -651,49 +309,68 @@ if check_password():
                         st.session_state.visible_modules.remove(module)
         
         # Gestión de caché
-        st.subheader("Gestión de Caché")
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(255,75,75,0.05); border-radius: 0.5rem; margin: 1rem 0;">
+            <h3 style="color: #1f2937; font-size: 1.1rem; margin-bottom: 0.5rem;">Gestión de Caché</h3>
+            <p style="color: #6b7280; font-size: 0.9rem;">Administra la memoria caché del sistema</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         if st.button("🗑️ Limpiar Caché del Sistema", type="secondary", use_container_width=True):
             with st.spinner("Limpiando caché..."):
                 st.cache_data.clear()
                 st.success("✅ Caché limpiado correctamente")
                 time.sleep(1)
                 st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True)
     
     with tab3:
-        st.header("Monitoreo del Sistema")
+        st.markdown("""
+        <div class="admin-card">
+            <h2 style="color: #1f2937; font-size: 1.5rem; margin-bottom: 1rem;">Monitoreo del Sistema</h2>
+        """, unsafe_allow_html=True)
         
         # Métricas del sistema
         col1, col2, col3 = st.columns(3)
         
         with col1:
             st.metric(
-                "Módulos Activos",
+                "📦 Módulos Activos",
                 len(st.session_state.get('visible_modules', [])),
-                help="Número de módulos habilitados"
+                help="Número de módulos habilitados en el sistema"
             )
         
         with col2:
             st.metric(
-                "Uso de Caché",
+                "💾 Uso de Caché",
                 f"{round(len(str(st.session_state)) / 1024, 1)}MB",
-                help="Memoria utilizada por el caché"
+                help="Memoria utilizada por el caché del sistema"
             )
         
         with col3:
             lima_tz = pytz.timezone('America/Lima')
             current_time = datetime.now(pytz.UTC).astimezone(lima_tz)
             st.metric(
-                "Última Actualización",
+                "🕒 Última Actualización",
                 current_time.strftime("%d/%m/%Y %H:%M"),
-                help="Hora de la última actualización"
+                help="Hora de la última actualización del sistema"
             )
         
         # Logs del sistema
-        st.subheader("Logs del Sistema")
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(255,75,75,0.05); border-radius: 0.5rem; margin: 1rem 0;">
+            <h3 style="color: #1f2937; font-size: 1.1rem; margin-bottom: 0.5rem;">Logs del Sistema</h3>
+            <p style="color: #6b7280; font-size: 0.9rem;">Registro de actividades del sistema</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         with st.expander("Ver logs", expanded=True):
             st.code(f"""
 [INFO] Sistema iniciado: {current_time.strftime("%d/%m/%Y %H:%M")}
 [INFO] Módulos activos: {len(st.session_state.get('visible_modules', []))}
 [INFO] Memoria caché: {round(len(str(st.session_state)) / 1024, 2)}MB
 [INFO] Estado de conexión: Activa
-            """) 
+            """)
+        
+        st.markdown("</div>", unsafe_allow_html=True)

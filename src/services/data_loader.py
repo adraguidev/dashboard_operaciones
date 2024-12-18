@@ -16,6 +16,8 @@ import time
 import redis
 import pickle
 import json
+import concurrent.futures
+import multiprocessing
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,7 +29,9 @@ class DataLoader:
     def __init__(_self):
         """Inicializa las conexiones a MongoDB y Redis."""
         try:
-            logger.info("Iniciando conexiones...")
+            # Configurar el número de workers basado en CPUs disponibles
+            _self.max_workers = multiprocessing.cpu_count()
+            logger.info(f"Usando {_self.max_workers} workers para procesamiento paralelo")
             
             # Configuración de Redis
             _self.redis_client = redis.Redis(
@@ -80,13 +84,10 @@ class DataLoader:
             # Configurar índices
             _self.setup_indexes()
             
-            # Iniciar precarga asíncrona de datos
+            # Iniciar precarga asíncrona con procesamiento paralelo
             _self._start_async_preload()
             
             logger.info("Todas las conexiones establecidas correctamente")
-        except redis.ConnectionError as e:
-            logger.error(f"Error al conectar con Redis: {str(e)}")
-            raise
         except Exception as e:
             logger.error(f"Error en inicialización: {str(e)}")
             raise
@@ -213,27 +214,46 @@ class DataLoader:
             return False
 
     def _load_fresh_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos frescos desde MongoDB."""
+        """Carga datos frescos desde MongoDB con procesamiento paralelo."""
         try:
             collection_name = MONGODB_COLLECTIONS.get(module_name)
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
             collection = _self.migraciones_db[collection_name]
+            
+            # Usar cursor con batch_size optimizado
             cursor = collection.find(
                 {},
                 {'_id': 0},
-                batch_size=5000
+                batch_size=10000  # Aumentado para mejor rendimiento
             ).allow_disk_use(True)
 
-            data = pd.DataFrame(list(cursor))
+            # Procesar documentos en chunks para mejor rendimiento
+            chunk_size = 20000
+            chunks = []
+            current_chunk = []
             
-            # Procesar fechas
-            for col in DATE_COLUMNS:
-                if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
+            for doc in cursor:
+                current_chunk.append(doc)
+                if len(current_chunk) >= chunk_size:
+                    chunks.append(current_chunk)
+                    current_chunk = []
             
+            if current_chunk:
+                chunks.append(current_chunk)
+            
+            # Convertir chunks a DataFrames en paralelo
+            with concurrent.futures.ThreadPoolExecutor(max_workers=_self.max_workers) as executor:
+                dfs = list(executor.map(pd.DataFrame, chunks))
+            
+            # Concatenar resultados
+            if not dfs:
+                return None
+                
+            data = pd.concat(dfs, ignore_index=True)
             return data
+            
         except Exception as e:
             logger.error(f"Error cargando datos frescos: {str(e)}")
             return None
@@ -316,6 +336,48 @@ class DataLoader:
 
         return df
 
+    def _optimize_dtypes_parallel(_self, df: pd.DataFrame) -> pd.DataFrame:
+        """Optimiza tipos de datos en paralelo."""
+        def optimize_numeric_column(col):
+            if df[col].dtype == 'int64':
+                if df[col].min() >= 0:
+                    if df[col].max() < 255:
+                        return col, df[col].astype('uint8')
+                    elif df[col].max() < 65535:
+                        return col, df[col].astype('uint16')
+                    else:
+                        return col, df[col].astype('uint32')
+                else:
+                    if df[col].min() > -128 and df[col].max() < 127:
+                        return col, df[col].astype('int8')
+                    elif df[col].min() > -32768 and df[col].max() < 32767:
+                        return col, df[col].astype('int16')
+                    else:
+                        return col, df[col].astype('int32')
+            return col, df[col]
+
+        def optimize_object_column(col):
+            if df[col].dtype == 'object':
+                if df[col].nunique() / len(df) < 0.5:
+                    return col, pd.Categorical(df[col])
+            return col, df[col]
+
+        # Procesar columnas numéricas y de texto en paralelo
+        numeric_cols = df.select_dtypes(include=['int64']).columns
+        object_cols = df.select_dtypes(include=['object']).columns
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_self.max_workers) as executor:
+            # Optimizar columnas numéricas
+            numeric_results = list(executor.map(optimize_numeric_column, numeric_cols))
+            # Optimizar columnas de texto
+            object_results = list(executor.map(optimize_object_column, object_cols))
+
+        # Aplicar optimizaciones
+        for col, optimized_series in numeric_results + object_results:
+            df[col] = optimized_series
+
+        return df
+
     # Método separado para SPE sin caché - siempre carga datos frescos
     def _load_spe_from_sheets(_self):
         """Carga datos de SPE desde Google Sheets. Sin caché para mantener datos frescos."""
@@ -354,27 +416,41 @@ class DataLoader:
         thread.start()
 
     def _preload_data(_self):
-        """Precarga datos en Redis de manera optimizada."""
+        """Precarga datos en Redis con procesamiento paralelo."""
         try:
-            # Orden de prioridad de módulos (basado en uso común)
-            priority_modules = ['CCM', 'CCM-ESP', 'PRR', 'SOL']
-            
-            for module in priority_modules:
+            def load_and_cache_module(module):
                 if not _self._is_module_cached(module):
                     data = _self._load_fresh_data(module)
                     if data is not None:
-                        # Optimizar tipos de datos antes de cachear
-                        data = _self._optimize_dtypes(data)
-                        _self._cache_data(module, data)
-                        
-            # Procesar CCM-LEY después de CCM y CCM-ESP
+                        # Optimizar y cachear en paralelo
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as inner_executor:
+                            future1 = inner_executor.submit(_self._optimize_dtypes_parallel, data)
+                            future2 = inner_executor.submit(_self.prepare_common_data, module, data)
+                            
+                            optimized_data = future1.result()
+                            _self._cache_data(module, optimized_data)
+                            
+                            # El resultado de prepare_common_data ya está cacheado
+                            future2.result()
+            
+            # Cargar módulos principales en paralelo
+            priority_modules = ['CCM', 'CCM-ESP', 'PRR', 'SOL']
+            with concurrent.futures.ThreadPoolExecutor(max_workers=_self.max_workers) as executor:
+                executor.map(load_and_cache_module, priority_modules)
+            
+            # Procesar CCM-LEY después
             if not _self._is_module_cached('CCM-LEY'):
                 ccm_data = _self._get_cached_data('CCM')
                 ccm_esp_data = _self._get_cached_data('CCM-ESP')
                 if ccm_data is not None and ccm_esp_data is not None:
                     ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
-                    ccm_ley_data = _self._optimize_dtypes(ccm_ley_data)
-                    _self._cache_data('CCM-LEY', ccm_ley_data)
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                        future1 = executor.submit(_self._optimize_dtypes_parallel, ccm_ley_data)
+                        future2 = executor.submit(_self.prepare_common_data, 'CCM-LEY', ccm_ley_data)
+                        
+                        optimized_data = future1.result()
+                        _self._cache_data('CCM-LEY', optimized_data)
+                        future2.result()
             
             logger.info("Precarga de datos completada")
         except Exception as e:
@@ -494,28 +570,36 @@ class DataLoader:
             return None
 
     def prepare_common_data(_self, module_name: str, data: pd.DataFrame) -> pd.DataFrame:
-        """Prepara los datos comunes con soporte de cache persistente."""
+        """Prepara los datos comunes con procesamiento paralelo."""
         try:
             # Intentar obtener datos preprocesados del cache
             processed_data = _self.get_processed_data(module_name, "common")
             if processed_data is not None:
                 return processed_data
 
-            # Si no hay cache, procesar los datos
             logger.info(f"Procesando datos comunes para {module_name}...")
             
-            # Procesar datos de manera más eficiente
-            data = data.copy()
+            # Crear una copia eficiente
+            data = data.copy(deep=False)  # Copia superficial para mejor rendimiento
             
-            # Convertir fechas usando un método más rápido
-            for col in DATE_COLUMNS:
-                if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce', cache=True)
+            # Procesar fechas en paralelo
+            date_cols = [col for col in DATE_COLUMNS if col in data.columns]
             
-            # Optimizar tipos de datos
-            data = _self._optimize_dtypes(data)
+            def process_date_column(col):
+                return col, pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce', cache=True)
             
-            # Cachear los resultados
+            with concurrent.futures.ThreadPoolExecutor(max_workers=_self.max_workers) as executor:
+                # Procesar todas las columnas de fecha en paralelo
+                date_results = list(executor.map(process_date_column, date_cols))
+            
+            # Aplicar resultados
+            for col, processed_series in date_results:
+                data[col] = processed_series
+            
+            # Optimizar tipos de datos en paralelo
+            data = _self._optimize_dtypes_parallel(data)
+            
+            # Cachear resultados
             _self.cache_processed_data(module_name, data, "common")
             
             return data

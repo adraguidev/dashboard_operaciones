@@ -687,6 +687,9 @@ def main():
             if st.session_state.menu_dashboard:
                 with st.container():
                     st.markdown('<div class="submenu">', unsafe_allow_html=True)
+                    # Obtener el módulo actual antes del cambio
+                    previous_module = st.session_state.get('selected_module')
+                    
                     selected_module = st.radio(
                         "",
                         options=st.session_state.get('visible_modules', list(MODULES.keys())),
@@ -694,7 +697,18 @@ def main():
                         key="module_selector",
                         label_visibility="collapsed"
                     )
-                    st.session_state.selected_module = selected_module
+                    
+                    # Si el módulo cambió, limpiar el estado y recargar
+                    if previous_module != selected_module:
+                        # Guardar el nuevo módulo seleccionado
+                        st.session_state.selected_module = selected_module
+                        # Limpiar datos anteriores
+                        for key in list(st.session_state.keys()):
+                            if key.startswith('data_') or key.startswith('processed_') or key.startswith('tab_'):
+                                del st.session_state[key]
+                        # Forzar recarga
+                        st.rerun()
+                        
                     st.markdown('</div>', unsafe_allow_html=True)
             else:
                 selected_module = st.session_state.selected_module

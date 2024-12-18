@@ -573,6 +573,13 @@ def generate_data_hash(data):
     
     return hashlib.md5(data_str.encode()).hexdigest()
 
+# Función para obtener o inicializar el DataLoader
+def get_data_loader():
+    if 'data_loader' not in st.session_state:
+        with st.spinner('🔄 Inicializando conexión a la base de datos...'):
+            st.session_state.data_loader = DataLoader()
+    return st.session_state.data_loader
+
 # Función cacheada para cargar datos del módulo y su timestamp
 @st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
 def load_module_data_with_timestamp(selected_module):
@@ -585,11 +592,7 @@ def load_module_data_with_timestamp(selected_module):
         st.cache_data.clear()
         st.session_state.force_refresh = False
     
-    if 'data_loader' not in st.session_state:
-        with st.spinner('🔄 Inicializando conexión a la base de datos...'):
-            st.session_state.data_loader = DataLoader()
-    
-    data_loader = st.session_state.data_loader
+    data_loader = get_data_loader()
     data = data_loader.load_module_data(selected_module)
     
     if data is not None:
@@ -608,21 +611,25 @@ def get_module_data(selected_module, collection_name):
     """
     Función que maneja la lógica de carga de datos.
     """
-    # Intentar cargar datos cacheados
-    cached_data = load_module_data_with_timestamp(selected_module)
-    
-    if cached_data is not None:
-        # Guardar el hash en session_state si no existe
-        cache_key = f"{selected_module}_data_hash"
-        previous_hash = st.session_state.get(cache_key)
-        current_hash = cached_data['data_hash']
+    try:
+        # Intentar cargar datos cacheados
+        cached_data = load_module_data_with_timestamp(selected_module)
         
-        # Actualizar el hash en session_state
-        st.session_state[cache_key] = current_hash
+        if cached_data is not None:
+            # Guardar el hash en session_state si no existe
+            cache_key = f"{selected_module}_data_hash"
+            previous_hash = st.session_state.get(cache_key)
+            current_hash = cached_data['data_hash']
+            
+            # Actualizar el hash en session_state
+            st.session_state[cache_key] = current_hash
+            
+            return cached_data['data'], cached_data['update_time'], False
         
-        return cached_data['data'], cached_data['update_time'], False
-    
-    return None, None, False
+        return None, None, False
+    except Exception as e:
+        print(f"Error en get_module_data: {str(e)}")
+        return None, None, False
 
 def main():
     try:
@@ -723,7 +730,7 @@ def main():
                     ("Cierre de Expedientes", render_closing_analysis_tab, [data]),
                     ("Reporte por Evaluador", render_evaluator_report_tab, [data]),
                     ("Reporte de Asignaciones", render_assignment_report_tab, [data]),
-                    ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, st.session_state.data_loader.get_rankings_collection()])
+                    ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, data_loader.get_rankings_collection()])
                 ]
 
                 # Crear pestañas

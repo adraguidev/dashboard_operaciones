@@ -6,7 +6,8 @@ import os
 from config.settings import (
     MONGODB_COLLECTIONS, 
     DATE_COLUMNS, 
-    REDIS_CONFIG,
+    REDIS_CONNECTION,
+    REDIS_MEMORY_LIMIT,
     CACHE_TTL
 )
 from dotenv import load_dotenv
@@ -30,7 +31,7 @@ class DataLoader:
             
             # Configuración de Redis
             _self.redis_client = redis.Redis(
-                **REDIS_CONFIG,
+                **REDIS_CONNECTION,
                 socket_connect_timeout=5
             )
             
@@ -78,11 +79,11 @@ class DataLoader:
             
             # Verificar espacio disponible
             current_size = _self._get_cache_size()
-            if current_size > (REDIS_CONFIG['max_memory'] * 0.9):  # 90% del límite
+            if current_size > (REDIS_MEMORY_LIMIT * 0.9):  # 90% del límite
                 logger.warning("Cache casi lleno, limpiando datos antiguos...")
                 _self.redis_client.flushdb()
             
-            # Serializar y comprimir DataFrame
+            # Serializar DataFrame
             serialized_data = pickle.dumps(data)
             
             # Guardar en Redis con TTL

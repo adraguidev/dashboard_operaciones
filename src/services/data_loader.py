@@ -131,17 +131,33 @@ class DataLoader:
 
             # Procesamiento especial para CCM-LEY
             if module_name == 'CCM-LEY':
-                ccm_data = _self.load_module_data('CCM')
-                ccm_esp_data = _self.load_module_data('CCM-ESP')
+                print("Iniciando carga de CCM-LEY...")
                 
-                if ccm_data is not None and ccm_esp_data is not None:
-                    data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
-                    if 'TipoTramite' in data.columns:
-                        data = data[data['TipoTramite'] == 'LEY'].copy()
-                    return data
-                else:
-                    st.error("No se pudieron cargar los datos necesarios para CCM-LEY")
+                # Cargar datos de CCM
+                print("Cargando datos de CCM...")
+                ccm_data = _self.load_module_data('CCM')
+                if ccm_data is None:
+                    st.error("❌ No se pudieron cargar los datos de CCM")
                     return None
+                print(f"Datos de CCM cargados: {len(ccm_data)} registros")
+                
+                # Cargar datos de CCM-ESP
+                print("Cargando datos de CCM-ESP...")
+                ccm_esp_data = _self.load_module_data('CCM-ESP')
+                if ccm_esp_data is None:
+                    st.error("❌ No se pudieron cargar los datos de CCM-ESP")
+                    return None
+                print(f"Datos de CCM-ESP cargados: {len(ccm_esp_data)} registros")
+                
+                # Excluir expedientes que están en CCM-ESP
+                print("Filtrando datos para CCM-LEY...")
+                data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])].copy()
+                if len(data) == 0:
+                    st.error("❌ No quedaron registros después de filtrar CCM-ESP")
+                    return None
+                print(f"Registros finales para CCM-LEY: {len(data)}")
+                
+                return data
 
             collection_name = MONGODB_COLLECTIONS.get(module_name)
             if not collection_name:

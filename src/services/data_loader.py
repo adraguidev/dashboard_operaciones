@@ -22,6 +22,7 @@ MONGODB_PASSWORD = os.getenv('MONGODB_PASSWORD')
 class DataLoader:
     _instance = None
     _is_initialized = False
+    _connection_initialized = False
 
     def __new__(cls):
         if cls._instance is None:
@@ -50,13 +51,13 @@ class DataLoader:
 
             # Configuración optimizada de MongoDB
             mongo_options = {
-                'connectTimeoutMS': 3000,  # Reducido de 5000
-                'socketTimeoutMS': 5000,   # Reducido de 10000
-                'serverSelectionTimeoutMS': 3000,  # Reducido de 5000
-                'maxPoolSize': 10,
-                'minPoolSize': 1,          # Reducido de 3
+                'connectTimeoutMS': 2000,        # Reducido aún más
+                'socketTimeoutMS': 3000,         # Reducido aún más
+                'serverSelectionTimeoutMS': 2000, # Reducido aún más
+                'maxPoolSize': 5,                # Reducido para evitar sobrecarga
+                'minPoolSize': 1,
                 'maxIdleTimeMS': 300000,
-                'waitQueueTimeoutMS': 3000,  # Reducido de 5000
+                'waitQueueTimeoutMS': 2000,      # Reducido aún más
                 'appName': 'MigracionesApp',
                 'compressors': ['zlib'],
                 'retryWrites': True,
@@ -75,10 +76,8 @@ class DataLoader:
             # Verificar conexión básica sin ping
             _self.migraciones_db.list_collection_names()
             
-            # Inicializar índices y caché en segundo plano
-            st.session_state['init_background'] = True
-            
             DataLoader._is_initialized = True
+            DataLoader._connection_initialized = True
             logger.info("Conexión básica a MongoDB establecida")
             
         except Exception as e:
@@ -149,6 +148,12 @@ class DataLoader:
     def _get_cached_data(_self, module_name: str) -> pd.DataFrame:
         """Intenta obtener datos cacheados de MongoDB."""
         try:
+            # Verificar si hay datos en memoria
+            cache_key = f"cached_data_{module_name}"
+            if cache_key in st.session_state and not st.session_state.get('force_refresh', False):
+                logger.info(f"Usando datos de memoria para {module_name}")
+                return st.session_state[cache_key]
+
             cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
             
             # Buscar datos cacheados
@@ -158,7 +163,7 @@ class DataLoader:
             })
             
             if cached_data:
-                logger.info(f"Datos encontrados en caché para {module_name}")
+                logger.info(f"Datos encontrados en caché MongoDB para {module_name}")
                 # Convertir los datos BSON a DataFrame
                 df = pd.DataFrame(cached_data['data'])
                 
@@ -167,6 +172,8 @@ class DataLoader:
                     if col in df.columns:
                         df[col] = pd.to_datetime(df[col])
                 
+                # Guardar en memoria
+                st.session_state[cache_key] = df
                 return df
             
             return None
@@ -212,12 +219,9 @@ class DataLoader:
         """Fuerza una actualización de datos si la contraseña es correcta."""
         return _self.refresh_cache_in_background(password)
 
-    @st.cache_data(ttl=None)
+    @st.cache_data(ttl=None, show_spinner=False)
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
         """Carga datos consolidados desde migraciones_db con caché en MongoDB."""
-        # Asegurar que la inicialización en segundo plano se complete
-        _self.ensure_background_init()
-        
         try:
             # SPE tiene su propia lógica de carga
             if module_name == 'SPE':
@@ -225,13 +229,12 @@ class DataLoader:
             
             logger.info(f"Cargando datos para módulo: {module_name}")
             
-            # Intentar obtener datos del caché de MongoDB
+            # Intentar obtener datos del caché
             cached_data = _self._get_cached_data(module_name)
             if cached_data is not None:
-                logger.info(f"Usando datos cacheados de MongoDB para {module_name}")
                 return cached_data
             
-            logger.info(f"No se encontró caché en MongoDB para {module_name}, cargando datos frescos...")
+            logger.info(f"No se encontró caché para {module_name}, cargando datos frescos...")
             
             # Si no hay caché, procesar normalmente
             if module_name == 'CCM-LEY':
@@ -417,15 +420,19 @@ class DataLoader:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
             collection = _self.migraciones_db[collection_name]
+            
+            # Proyección para reducir datos transferidos
+            projection = {'_id': 0}
+            
             cursor = collection.find(
                 {},
-                {'_id': 0},
-                batch_size=5000,
+                projection,
+                batch_size=10000,  # Aumentado para reducir viajes a la BD
                 hint=[("FechaExpendiente", 1)]
             ).allow_disk_use(True)
 
             chunks = []
-            chunk_size = 10000
+            chunk_size = 20000  # Aumentado para procesar más datos por vez
             current_chunk = []
             
             for doc in cursor:
@@ -446,10 +453,10 @@ class DataLoader:
 
             data = pd.concat(chunks, ignore_index=True)
             
-            # Procesar fechas
-            for col in DATE_COLUMNS:
-                if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
+            # Procesar fechas eficientemente
+            date_columns = [col for col in DATE_COLUMNS if col in data.columns]
+            if date_columns:
+                data[date_columns] = data[date_columns].apply(pd.to_datetime, format='%d/%m/%Y', errors='coerce')
             
             return data
 

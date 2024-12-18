@@ -12,6 +12,7 @@ from src.utils.database import get_google_credentials
 import time
 from datetime import datetime, timedelta
 import pytz
+import pandas as pd
 
 # Configuración de página
 st.set_page_config(
@@ -578,28 +579,52 @@ def load_module_data_with_timestamp(selected_module):
     El caché solo se invalida manualmente desde el panel de control.
     """
     data_loader = st.session_state.data_loader
+    cache_key = f"data_{selected_module}"
     
-    # Intentar obtener datos directamente del caché de MongoDB
+    # Verificar si los datos ya están en session_state
+    if cache_key in st.session_state and not st.session_state.get('force_refresh', False):
+        return {
+            'data': st.session_state[cache_key],
+            'update_time': get_current_time(),
+            'module': selected_module
+        }
+    
+    # Intentar obtener datos del caché de MongoDB
     data = data_loader.load_module_data(selected_module)
     
     if data is not None:
-        # Preprocesar datos comunes aquí mismo para evitar otro paso de caché
-        date_columns = {col: data[col] for col in DATE_COLUMNS 
-                       if col in data.columns and data[col].dtype == 'datetime64[ns]'}
-        
-        if date_columns:
-            formatted_dates = {
-                f"{col}_formatted": series.dt.strftime('%d/%m/%Y')
-                for col, series in date_columns.items()
-            }
-            data = data.assign(**formatted_dates)
-        
+        # Guardar en session_state
+        st.session_state[cache_key] = data
         return {
             'data': data,
             'update_time': get_current_time(),
             'module': selected_module
         }
     return None
+
+def format_dates_if_needed(df):
+    """Formatea las fechas solo si es necesario"""
+    if 'formatted_dates' not in st.session_state:
+        st.session_state.formatted_dates = {}
+    
+    df_id = id(df)
+    if df_id in st.session_state.formatted_dates:
+        return st.session_state.formatted_dates[df_id]
+    
+    date_columns = {col: df[col] for col in DATE_COLUMNS 
+                   if col in df.columns and df[col].dtype == 'datetime64[ns]'}
+    
+    if not date_columns:
+        st.session_state.formatted_dates[df_id] = df
+        return df
+    
+    formatted_dates = {
+        f"{col}_formatted": series.dt.strftime('%d/%m/%Y')
+        for col, series in date_columns.items()
+    }
+    result = df.assign(**formatted_dates)
+    st.session_state.formatted_dates[df_id] = result
+    return result
 
 def get_module_data(selected_module, collection_name):
     """
@@ -609,10 +634,17 @@ def get_module_data(selected_module, collection_name):
     cached_data = load_module_data_with_timestamp(selected_module)
     
     if cached_data is not None:
+        # Formatear fechas solo si es necesario
+        data = format_dates_if_needed(cached_data['data'])
+        
         # Limpiar flag de actualización forzada si existe
         if 'force_refresh' in st.session_state:
             del st.session_state['force_refresh']
-        return cached_data['data'], cached_data['update_time'], False
+            # Limpiar caché de fechas formateadas
+            if 'formatted_dates' in st.session_state:
+                del st.session_state.formatted_dates
+        
+        return data, cached_data['update_time'], False
     
     return None, None, False
 
@@ -775,6 +807,9 @@ def main():
                 # Renderizar pestañas eficientemente
                 for i, (tab_name, render_func, args) in enumerate(tabs_config):
                     with tabs[i]:
+                        # Reemplazar el DataFrame original con el procesado en los argumentos
+                        if args and isinstance(args[0], pd.DataFrame):
+                            args = [data] + args[1:]
                         render_func(*args)
 
                 # Actualizar último módulo

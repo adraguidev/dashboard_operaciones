@@ -151,6 +151,7 @@ MONGODB_COLLECTIONS = {
     'CCM': 'consolidado_ccm',
     'PRR': 'consolidado_prr',
     'CCM-ESP': 'consolidado_ccm_esp',
+    'CCM-LEY': 'consolidado_ccm',
     'SOL': 'consolidado_sol',
     'SPE': 'consolidado_spe',
     'RANKINGS': 'rankings'

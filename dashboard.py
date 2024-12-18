@@ -12,6 +12,9 @@ from src.utils.database import get_google_credentials
 import time
 from datetime import datetime, timedelta
 import pytz
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import numpy as np
+import pandas as pd
 
 # Configuración de página
 st.set_page_config(
@@ -659,6 +662,94 @@ def show_loading_progress(message, action, show_fade_in=True):
         
         progress_bar.empty()
         return result
+
+def prepare_common_data():
+    """Prepara datos comunes para todos los módulos con procesamiento paralelo agresivo."""
+    try:
+        # Usar caché de Streamlit para datos comunes
+        @st.cache_data(ttl=3600)  # 1 hora de TTL
+        def load_cached_data():
+            if 'data_loader' not in st.session_state:
+                with st.spinner('Inicializando conexión a la base de datos...'):
+                    st.session_state.data_loader = DataLoader()
+            
+            data_loader = st.session_state.data_loader
+            
+            # Cargar datos en paralelo
+            with ThreadPoolExecutor(max_workers=4) as executor:  # Usar 4 threads para I/O
+                # Iniciar todas las cargas en paralelo
+                future_ccm = executor.submit(data_loader.load_module_data, 'CCM')
+                future_ccm_esp = executor.submit(data_loader.load_module_data, 'CCM-ESP')
+                future_prr = executor.submit(data_loader.load_module_data, 'PRR')
+                future_sol = executor.submit(data_loader.load_module_data, 'SOL')
+                
+                # Recolectar resultados
+                ccm_data = future_ccm.result()
+                ccm_esp_data = future_ccm_esp.result()
+                prr_data = future_prr.result()
+                sol_data = future_sol.result()
+            
+            # Procesar CCM-LEY en paralelo con ProcessPoolExecutor
+            with ProcessPoolExecutor(max_workers=2) as executor:  # Usar 2 procesos para CPU
+                if ccm_data is not None and ccm_esp_data is not None:
+                    # Preparar datos para procesamiento paralelo
+                    ccm_chunks = np.array_split(ccm_data, 2)  # Dividir en 2 chunks
+                    ccm_esp_nums = set(ccm_esp_data['NumeroTramite'])
+                    
+                    # Función para procesar chunk
+                    def process_chunk(chunk):
+                        return chunk[~chunk['NumeroTramite'].isin(ccm_esp_nums)]
+                    
+                    # Procesar chunks en paralelo
+                    futures = [executor.submit(process_chunk, chunk) for chunk in ccm_chunks]
+                    ccm_ley_chunks = [f.result() for f in futures]
+                    ccm_ley_data = pd.concat(ccm_ley_chunks, ignore_index=True)
+                else:
+                    ccm_ley_data = None
+            
+            return {
+                'CCM': ccm_data,
+                'CCM-ESP': ccm_esp_data,
+                'CCM-LEY': ccm_ley_data,
+                'PRR': prr_data,
+                'SOL': sol_data
+            }
+        
+        # Cargar datos usando el caché
+        data_dict = load_cached_data()
+        
+        # Verificar y procesar datos en paralelo
+        with ProcessPoolExecutor(max_workers=2) as executor:
+            futures = []
+            
+            def verify_and_process(df, module):
+                if df is None:
+                    st.error(f"❌ No se pudieron cargar los datos del módulo {module}")
+                    return None
+                
+                # Optimizar tipos de datos agresivamente
+                for col in df.select_dtypes(include=['object']).columns:
+                    if df[col].nunique() / len(df) < 0.5:
+                        df[col] = pd.Categorical(df[col])
+                
+                return df
+            
+            # Procesar cada módulo en paralelo
+            for module, df in data_dict.items():
+                futures.append(executor.submit(verify_and_process, df, module))
+            
+            # Recolectar resultados
+            results = [f.result() for f in futures]
+            
+            # Actualizar data_dict con resultados procesados
+            for i, (module, _) in enumerate(data_dict.items()):
+                data_dict[module] = results[i]
+        
+        return data_dict
+
+    except Exception as e:
+        st.error(f"Error preparando datos comunes: {str(e)}")
+        return None
 
 def main():
     try:

@@ -3,11 +3,18 @@ import streamlit as st
 from datetime import datetime
 from pymongo import MongoClient
 import os
-from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS
+from config.settings import (
+    MONGODB_COLLECTIONS, 
+    DATE_COLUMNS, 
+    REDIS_CONFIG,
+    CACHE_TTL
+)
 from dotenv import load_dotenv
 import logging
 import time
-import hashlib
+import redis
+import pickle
+import json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,63 +22,191 @@ logger = logging.getLogger(__name__)
 # Cargar variables de entorno
 load_dotenv()
 
-# Obtener las variables de entorno
-MONGODB_URI = os.getenv('MONGODB_URI')
-MONGODB_PASSWORD = os.getenv('MONGODB_PASSWORD')
-
 class DataLoader:
     def __init__(_self):
-        """Inicializa las conexiones a MongoDB usando los secrets de Streamlit o variables de entorno."""
+        """Inicializa las conexiones a MongoDB y Redis."""
         try:
-            logger.info("Iniciando conexión a MongoDB...")
-            # Primero intentar obtener la URI desde secrets de Streamlit
+            logger.info("Iniciando conexiones...")
+            
+            # Configuración de Redis
+            _self.redis_client = redis.Redis(
+                **REDIS_CONFIG,
+                socket_connect_timeout=5
+            )
+            
+            # Verificar conexión a Redis
+            _self.redis_client.ping()
+            logger.info("Conexión a Redis establecida")
+            
+            # Resto de la inicialización de MongoDB...
             try:
                 mongo_uri = st.secrets["connections"]["mongodb"]["uri"]
                 logger.info("Usando URI de MongoDB desde Streamlit secrets")
             except:
-                # Si no está en secrets, usar variables de entorno
                 load_dotenv()
                 mongo_uri = os.getenv('MONGODB_URI')
                 if not mongo_uri:
-                    raise ValueError("No se encontró la URI de MongoDB en secrets ni en variables de entorno")
+                    raise ValueError("No se encontró la URI de MongoDB")
                 logger.info("Usando URI de MongoDB desde variables de entorno")
 
-            # Configuración optimizada de MongoDB
-            mongo_options = {
-                'connectTimeoutMS': 5000,
-                'socketTimeoutMS': 10000,
-                'serverSelectionTimeoutMS': 5000,
-                'maxPoolSize': 10,  # Aumentado para mejor concurrencia
-                'minPoolSize': 3,   # Aumentado ligeramente
-                'maxIdleTimeMS': 300000,
-                'waitQueueTimeoutMS': 5000,
-                'appName': 'MigracionesApp',
-                'compressors': ['zlib'],
-                'retryWrites': True,
-                'retryReads': True,
-                'w': 'majority',    # Garantizar consistencia
-                'readPreference': 'primaryPreferred'  # Mejor rendimiento en lecturas
-            }
+            # Resto del código de inicialización de MongoDB...
             
-            _self.client = MongoClient(mongo_uri, **mongo_options)
-            
-            # Base de datos para datos consolidados
-            _self.migraciones_db = _self.client['migraciones_db']
-            # Base de datos para rankings
-            _self.expedientes_db = _self.client['expedientes_db']
-            
-            # Verificar conexiones con timeout
-            _self.migraciones_db.command('ping', maxTimeMS=5000)
-            _self.expedientes_db.command('ping', maxTimeMS=5000)
-            
-            # Configurar índices para optimizar consultas
-            _self.setup_indexes()
-            
-            logger.info("Conexión exitosa a MongoDB")
-        except Exception as e:
-            logger.error(f"Error detallado de conexión: {str(e)}")
-            st.error(f"Error al conectar con MongoDB: {str(e)}")
+            logger.info("Todas las conexiones establecidas correctamente")
+        except redis.ConnectionError as e:
+            logger.error(f"Error al conectar con Redis: {str(e)}")
             raise
+        except Exception as e:
+            logger.error(f"Error en inicialización: {str(e)}")
+            raise
+
+    def _get_cache_key(_self, module_name: str, operation: str = 'data') -> str:
+        """Genera una clave única para el cache."""
+        return f"migraciones:{module_name}:{operation}"
+
+    def _get_cache_size(_self) -> float:
+        """Obtiene el tamaño actual del cache en MB."""
+        try:
+            info = _self.redis_client.info(section='memory')
+            return info['used_memory'] / 1024 / 1024
+        except:
+            return 0
+
+    def _cache_data(_self, module_name: str, data: pd.DataFrame) -> bool:
+        """Almacena datos en Redis con compresión."""
+        try:
+            cache_key = _self._get_cache_key(module_name)
+            
+            # Verificar espacio disponible
+            current_size = _self._get_cache_size()
+            if current_size > (REDIS_CONFIG['max_memory'] * 0.9):  # 90% del límite
+                logger.warning("Cache casi lleno, limpiando datos antiguos...")
+                _self.redis_client.flushdb()
+            
+            # Serializar y comprimir DataFrame
+            serialized_data = pickle.dumps(data)
+            
+            # Guardar en Redis con TTL
+            ttl = CACHE_TTL.get(module_name, CACHE_TTL['default'])
+            success = _self.redis_client.setex(cache_key, ttl, serialized_data)
+            
+            if success:
+                # Guardar metadata del cache
+                metadata = {
+                    'rows': len(data),
+                    'columns': list(data.columns),
+                    'cached_at': datetime.now().isoformat(),
+                    'ttl': ttl
+                }
+                metadata_key = _self._get_cache_key(module_name, 'metadata')
+                _self.redis_client.setex(metadata_key, ttl, json.dumps(metadata))
+                
+                logger.info(f"Datos cacheados para {module_name}: {len(data)} registros")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error al cachear datos: {str(e)}")
+            return False
+
+    def _get_cached_data(_self, module_name: str) -> pd.DataFrame:
+        """Recupera datos cacheados de Redis."""
+        try:
+            cache_key = _self._get_cache_key(module_name)
+            cached_data = _self.redis_client.get(cache_key)
+            
+            if cached_data:
+                # Obtener metadata
+                metadata_key = _self._get_cache_key(module_name, 'metadata')
+                metadata = _self.redis_client.get(metadata_key)
+                if metadata:
+                    metadata = json.loads(metadata)
+                    logger.info(f"Usando cache para {module_name} - {metadata['rows']} registros")
+                
+                return pickle.loads(cached_data)
+            return None
+        except Exception as e:
+            logger.error(f"Error al recuperar cache: {str(e)}")
+            return None
+
+    def force_data_refresh(_self, password: str) -> bool:
+        """Fuerza actualización limpiando el cache."""
+        if not _self.verify_password(password):
+            st.error("Contraseña incorrecta")
+            return False
+        
+        try:
+            # Limpiar cache de Redis
+            _self.redis_client.flushdb()
+            logger.info("Cache de Redis limpiado")
+            
+            # Cargar datos frescos para cada módulo
+            modules = ['CCM', 'CCM-ESP', 'PRR', 'SOL']
+            with st.spinner("Actualizando datos..."):
+                for module in modules:
+                    data = _self._load_fresh_data(module)
+                    if data is not None:
+                        _self._cache_data(module, data)
+                        
+                # CCM-LEY se procesa después de CCM y CCM-ESP
+                ccm_data = _self._get_cached_data('CCM')
+                ccm_esp_data = _self._get_cached_data('CCM-ESP')
+                if ccm_data is not None and ccm_esp_data is not None:
+                    ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
+                    _self._cache_data('CCM-LEY', ccm_ley_data)
+            
+            st.success("✅ Datos actualizados y cacheados correctamente")
+            return True
+        except Exception as e:
+            logger.error(f"Error en actualización: {str(e)}")
+            st.error(f"Error al actualizar datos: {str(e)}")
+            return False
+
+    def _load_fresh_data(_self, module_name: str) -> pd.DataFrame:
+        """Carga datos frescos desde MongoDB."""
+        try:
+            collection_name = MONGODB_COLLECTIONS.get(module_name)
+            if not collection_name:
+                raise ValueError(f"Módulo no reconocido: {module_name}")
+
+            collection = _self.migraciones_db[collection_name]
+            cursor = collection.find(
+                {},
+                {'_id': 0},
+                batch_size=5000
+            ).allow_disk_use(True)
+
+            data = pd.DataFrame(list(cursor))
+            
+            # Procesar fechas
+            for col in DATE_COLUMNS:
+                if col in data.columns:
+                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
+            
+            return data
+        except Exception as e:
+            logger.error(f"Error cargando datos frescos: {str(e)}")
+            return None
+
+    def load_module_data(_self, module_name: str) -> pd.DataFrame:
+        """Carga datos con soporte de cache Redis."""
+        try:
+            # SPE siempre se carga fresco
+            if module_name == 'SPE':
+                return _self._load_spe_from_sheets()
+            
+            # Intentar obtener del cache
+            cached_data = _self._get_cached_data(module_name)
+            if cached_data is not None:
+                return cached_data
+
+            # Si no hay cache, cargar datos frescos
+            data = _self._load_fresh_data(module_name)
+            if data is not None:
+                _self._cache_data(module_name, data)
+            return data
+
+        except Exception as e:
+            logger.error(f"Error al cargar datos: {str(e)}")
+            return None
 
     def setup_indexes(_self):
         """Configura índices para optimizar consultas frecuentes."""
@@ -102,126 +237,6 @@ class DataLoader:
         """Verifica si la contraseña proporcionada es correcta."""
         correct_password = "Ka260314!"
         return password == correct_password
-
-    def force_data_refresh(_self, password: str) -> bool:
-        """Fuerza una actualización de datos si la contraseña es correcta."""
-        if not _self.verify_password(password):
-            st.error("Contraseña incorrecta")
-            return False
-        
-        try:
-            # Limpiar solo el caché de Streamlit
-            st.cache_data.clear()
-            st.success("✅ Datos actualizados correctamente")
-            return True
-        except Exception as e:
-            st.error(f"Error al actualizar datos: {str(e)}")
-            return False
-
-    @st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
-    def load_module_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos consolidados desde migraciones_db."""
-        try:
-            # SPE tiene su propia lógica de carga separada y siempre carga datos frescos
-            if module_name == 'SPE':
-                return _self._load_spe_from_sheets()
-            
-            logger.info(f"Cargando datos para módulo: {module_name}")
-            start_time = time.time()
-
-            # Procesamiento especial para CCM-LEY
-            if module_name == 'CCM-LEY':
-                logger.info("Iniciando carga de CCM-LEY...")
-                
-                # Cargar datos de CCM
-                logger.info("Cargando datos de CCM...")
-                ccm_data = _self.load_module_data('CCM')
-                if ccm_data is None:
-                    logger.error("No se pudieron cargar los datos de CCM")
-                    st.error("❌ No se pudieron cargar los datos de CCM")
-                    return None
-                logger.info(f"Datos de CCM cargados: {len(ccm_data)} registros")
-                
-                # Cargar datos de CCM-ESP
-                logger.info("Cargando datos de CCM-ESP...")
-                ccm_esp_data = _self.load_module_data('CCM-ESP')
-                if ccm_esp_data is None:
-                    logger.error("No se pudieron cargar los datos de CCM-ESP")
-                    st.error("❌ No se pudieron cargar los datos de CCM-ESP")
-                    return None
-                logger.info(f"Datos de CCM-ESP cargados: {len(ccm_esp_data)} registros")
-                
-                # Excluir expedientes que están en CCM-ESP
-                logger.info("Filtrando datos para CCM-LEY...")
-                data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])].copy()
-                logger.info(f"Registros finales para CCM-LEY: {len(data)}")
-                
-                return data
-
-            collection_name = MONGODB_COLLECTIONS.get(module_name)
-            if not collection_name:
-                raise ValueError(f"Módulo no reconocido: {module_name}")
-
-            collection = _self.migraciones_db[collection_name]
-            
-            # Optimizar la consulta usando cursor con batch_size y hint
-            cursor = collection.find(
-                {},
-                {'_id': 0},  # Excluir solo el _id
-                batch_size=5000,  # Tamaño de lote optimizado
-                hint=[("FechaExpendiente", 1)]  # Usar índice existente
-            ).allow_disk_use(True)  # Permitir uso de disco para consultas grandes
-
-            # Procesar datos en chunks para mejor manejo de memoria
-            chunks = []
-            chunk_size = 10000
-            current_chunk = []
-
-            print("Iniciando carga de datos...")
-            records_processed = 0
-            
-            for doc in cursor:
-                current_chunk.append(doc)
-                if len(current_chunk) >= chunk_size:
-                    df_chunk = pd.DataFrame(current_chunk)
-                    # Optimizar tipos de datos inmediatamente
-                    df_chunk = _self._optimize_dtypes(df_chunk)
-                    chunks.append(df_chunk)
-                    records_processed += len(current_chunk)
-                    print(f"Procesados {records_processed} registros...")
-                    current_chunk = []
-
-            if current_chunk:  # Procesar el último chunk
-                df_chunk = pd.DataFrame(current_chunk)
-                df_chunk = _self._optimize_dtypes(df_chunk)
-                chunks.append(df_chunk)
-                records_processed += len(current_chunk)
-
-            if not chunks:
-                st.error(f"No se encontraron datos para el módulo {module_name} en la base de datos.")
-                return None
-
-            # Concatenar chunks eficientemente
-            print("Combinando datos...")
-            data = pd.concat(chunks, ignore_index=True)
-            
-            # Convertir fechas eficientemente
-            print("Procesando fechas...")
-            for col in DATE_COLUMNS:
-                if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
-
-            elapsed_time = time.time() - start_time
-            print(f"Tiempo de carga para {module_name}: {elapsed_time:.2f} segundos")
-            print(f"Total registros cargados: {len(data)}")
-            print(f"Uso de memoria: {data.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
-            
-            return data
-
-        except Exception as e:
-            logger.error(f"Error al cargar datos del módulo {module_name}: {str(e)}")
-            st.error(f"Error al cargar datos del módulo {module_name}: {str(e)}")
-            return None
 
     def _optimize_dtypes(_self, df: pd.DataFrame) -> pd.DataFrame:
         """Optimiza los tipos de datos del DataFrame para reducir uso de memoria."""

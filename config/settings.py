@@ -172,3 +172,25 @@ SPE_CONFIG = {
     'range_name': 'tu_range',
     'local_file': 'descargas/SPE/MATRIZ.xlsx'
 }
+
+# Configuración de Redis
+REDIS_CONFIG = {
+    'host': 'redis-12128.c273.us-east-1-2.ec2.redns.redis-cloud.com',
+    'port': 12128,
+    'username': 'default',
+    'password': os.getenv('REDIS_PASSWORD'),  # La contraseña debe estar en variables de entorno
+    'decode_responses': False,  # Importante: False para poder almacenar datos binarios
+    'socket_timeout': 5,
+    'max_memory': 25 * 1024 * 1024  # 25MB para estar seguros (el límite es 30MB)
+}
+
+# Configuración de TTL para el cache (en segundos)
+CACHE_TTL = {
+    'default': 3600,  # 1 hora por defecto
+    'CCM': 3600,
+    'CCM-ESP': 3600,
+    'CCM-LEY': 3600,
+    'PRR': 3600,
+    'SOL': 3600,
+    'SPE': 3600
+}

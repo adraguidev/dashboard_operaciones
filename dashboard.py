@@ -570,31 +570,21 @@ def generate_data_hash(data):
     
     return hashlib.md5(data_str.encode()).hexdigest()
 
-# Función cacheada para cargar datos del módulo y su timestamp
-@st.cache_data(ttl=None, show_spinner=False)  # Cache permanente sin spinner
+# Función cacheada para cargar datos del módulo
+@st.cache_data(ttl=None, show_spinner=False)
 def load_module_data_with_timestamp(selected_module):
     """
-    Carga y cachea los datos del módulo junto con su timestamp.
+    Carga datos del módulo desde el caché de MongoDB.
     El caché solo se invalida manualmente desde el panel de control.
     """
     data_loader = st.session_state.data_loader
-    
-    # Si hay una actualización forzada desde el panel de control
-    if st.session_state.get('force_refresh', False):
-        # Solo limpiar el caché de este módulo específico
-        cache_key = f"data_{selected_module}"
-        if cache_key in st.session_state:
-            del st.session_state[cache_key]
-        return None
-    
-    # Intentar obtener datos del caché de MongoDB
+    # Usar directamente el caché de MongoDB
     data = data_loader.load_module_data(selected_module)
     
     if data is not None:
         return {
             'data': data,
-            'update_time': get_current_time(),
-            'module': selected_module
+            'update_time': get_current_time()
         }
     return None
 
@@ -602,21 +592,10 @@ def get_module_data(selected_module, collection_name):
     """
     Función que maneja la lógica de carga de datos.
     """
-    cache_key = f"data_{selected_module}"
-    
-    # Si los datos ya están en session_state y no hay actualización forzada
-    if cache_key in st.session_state and not st.session_state.get('force_refresh', False):
-        return st.session_state[cache_key], get_current_time(), False
-    
-    # Intentar cargar datos
+    # Intentar cargar datos desde el caché de MongoDB
     cached_data = load_module_data_with_timestamp(selected_module)
     
     if cached_data is not None:
-        # Guardar en session_state
-        st.session_state[cache_key] = cached_data['data']
-        # Limpiar flag de actualización forzada
-        if 'force_refresh' in st.session_state:
-            del st.session_state['force_refresh']
         return cached_data['data'], cached_data['update_time'], False
     
     return None, None, False
@@ -703,20 +682,13 @@ def main():
                     
                     # Detectar cambio de módulo
                     if previous_module != selected_module:
-                        # Limpiar caché relacionado con el módulo anterior
-                        st.cache_data.clear()
+                        # Solo limpiar el session_state relacionado con la UI
                         if previous_module:
                             keys_to_remove = [k for k in st.session_state.keys() 
-                                            if any(k.startswith(prefix) for prefix in [
-                                                f"data_{previous_module}",
-                                                f"processed_{previous_module}",
-                                                f"tab_{previous_module}_"
-                                            ])]
+                                            if k.startswith(f"tab_{previous_module}_")]
                             for k in keys_to_remove:
                                 del st.session_state[k]
                         
-                        # Forzar recarga del nuevo módulo
-                        st.session_state['force_refresh'] = True
                         st.session_state['last_module'] = selected_module
                         st.rerun()
                     
@@ -766,28 +738,11 @@ def main():
             # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                # Verificar si necesitamos recargar los datos
-                cache_key = f"data_{selected_module}"
-                need_reload = (
-                    cache_key not in st.session_state or 
-                    st.session_state.get('force_refresh', False) or 
-                    st.session_state.get('last_module') != selected_module
-                )
-                
-                if need_reload:
-                    with st.spinner(f"Cargando datos de {MODULES[selected_module]}..."):
-                        data, update_time, _ = get_module_data(selected_module, collection_name)
-                        if data is None:
-                            st.error("No se encontraron datos para este módulo en la base de datos.")
-                            return
-                        st.session_state[cache_key] = data
-                        st.session_state['last_module'] = selected_module
-                        # Limpiar flag de recarga forzada
-                        if 'force_refresh' in st.session_state:
-                            del st.session_state['force_refresh']
-                else:
-                    data = st.session_state[cache_key]
-                    update_time = get_current_time()
+                # Cargar datos desde el caché de MongoDB
+                data, update_time, _ = get_module_data(selected_module, collection_name)
+                if data is None:
+                    st.error("No se encontraron datos para este módulo en la base de datos.")
+                    return
 
                 # Definir las pestañas y sus funciones correspondientes
                 tabs_config = [
@@ -802,8 +757,28 @@ def main():
                 # Crear pestañas usando st.tabs
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
-                # Preparar datos comunes una sola vez por módulo
-                data = prepare_common_data(data, selected_module)
+                # Procesar datos comunes una sola vez
+                @st.cache_data(ttl=None, show_spinner=False)
+                def prepare_common_data(df):
+                    """Preprocesar datos comunes para todas las pestañas"""
+                    # Identificar solo las columnas de fecha que existen
+                    date_columns = {col: df[col] for col in DATE_COLUMNS 
+                                  if col in df.columns and df[col].dtype == 'datetime64[ns]'}
+                    
+                    if not date_columns:
+                        return df
+                    
+                    # Crear todas las columnas formateadas de una vez
+                    formatted_dates = {
+                        f"{col}_formatted": series.dt.strftime('%d/%m/%Y')
+                        for col, series in date_columns.items()
+                    }
+                    
+                    # Usar assign para evitar la copia del DataFrame
+                    return df.assign(**formatted_dates)
+
+                # Procesar datos
+                data = prepare_common_data(data)
 
                 # Renderizar pestañas
                 for i, (tab_name, render_func, args) in enumerate(tabs_config):

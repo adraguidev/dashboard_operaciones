@@ -1,3 +1,6 @@
+# Imports principales
+import streamlit as st
+
 # Configuración de página - DEBE SER LA PRIMERA LLAMADA A STREAMLIT
 st.set_page_config(
     page_title="Dashboard de Operaciones",
@@ -7,7 +10,6 @@ st.set_page_config(
 )
 
 # Imports y configuración
-import streamlit as st
 from config.settings import MODULES, MONGODB_COLLECTIONS
 from src.services.data_loader import DataLoader
 from tabs.pending_reports import render_pending_reports_tab

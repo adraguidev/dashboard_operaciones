@@ -3,7 +3,7 @@ import streamlit as st
 from datetime import datetime
 from pymongo import MongoClient
 import os
-from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS
+from config.settings import MONGODB_COLLECTIONS, DATE_COLUMNS, MODULES, CACHE_TTL
 from dotenv import load_dotenv
 import logging
 import time
@@ -341,28 +341,35 @@ class DataLoader:
             modules_to_update = [mod for mod in MODULES.keys() if mod != 'SPE']
             total_modules = len(modules_to_update)
             
+            logger.info(f"Iniciando actualización de caché para {total_modules} módulos")
+            
             for idx, module in enumerate(modules_to_update):
-                status_text.text(f"Actualizando caché de {module}...")
-                
                 try:
+                    status_text.text(f"Actualizando caché de {MODULES[module]}...")
+                    logger.info(f"Procesando módulo: {module}")
+                    
                     # Limpiar caché existente para este módulo
                     cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
                     cache_collection.delete_one({"module": module})
+                    logger.info(f"Caché limpiado para {module}")
                     
                     # Cargar datos frescos
                     if module == 'CCM-LEY':
                         # Procesar CCM-LEY
+                        logger.info("Cargando datos para CCM-LEY...")
                         ccm_data = _self._load_fresh_data('CCM')
                         ccm_esp_data = _self._load_fresh_data('CCM-ESP')
                         
                         if ccm_data is not None and ccm_esp_data is not None:
                             data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])].copy()
                             _self._save_to_cache(module, data)
+                            logger.info(f"Datos de CCM-LEY procesados: {len(data)} registros")
                     else:
                         # Cargar datos frescos para otros módulos
                         data = _self._load_fresh_data(module)
                         if data is not None:
                             _self._save_to_cache(module, data)
+                            logger.info(f"Datos de {module} procesados: {len(data)} registros")
                     
                     # Actualizar progreso
                     progress = (idx + 1) / total_modules
@@ -370,10 +377,12 @@ class DataLoader:
                     
                 except Exception as e:
                     logger.error(f"Error actualizando caché para {module}: {str(e)}")
+                    st.error(f"Error en módulo {MODULES[module]}: {str(e)}")
                     continue
             
             # Limpiar caché de Streamlit
             st.cache_data.clear()
+            logger.info("Caché de Streamlit limpiado")
             
             status_text.text("✅ Caché actualizado completamente")
             time.sleep(1)  # Pequeña pausa para mostrar el mensaje final

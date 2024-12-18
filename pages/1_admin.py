@@ -246,7 +246,7 @@ if check_password():
         with col1:
             st.markdown("""
             <div style="padding: 1rem; background: rgba(255,75,75,0.05); border-radius: 0.5rem;">
-                <h3 style="color: #1f2937; font-size: 1.1rem; margin-bottom: 0.5rem;">Actualización de Datos</h3>
+                <h3 style="color: #1f2937; font-size: 1.1rem; margin-bottom: 0.5rem;">Actualizaci��n de Datos</h3>
                 <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 1rem;">Actualiza la base de datos del sistema</p>
             </div>
             """, unsafe_allow_html=True)
@@ -371,6 +371,52 @@ if check_password():
 [INFO] Módulos activos: {len(st.session_state.get('visible_modules', []))}
 [INFO] Memoria caché: {round(len(str(st.session_state)) / 1024, 2)}MB
 [INFO] Estado de conexión: Activa
+            """)
+        
+        st.markdown("---")
+        
+        # Nueva sección para gestión de caché
+        st.header("🔄 Gestión de Caché")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown("""
+            ### Control de Caché del Sistema
+            Esta sección permite gestionar el caché de datos del sistema. Al actualizar el caché:
+            - Se cargarán datos frescos de la base de datos
+            - Se actualizará para todos los usuarios
+            - Se optimizará el rendimiento general
+            """)
+            
+            # Input para la contraseña
+            cache_password = st.text_input("Contraseña para actualizar caché", type="password")
+            
+            # Botón para actualizar caché
+            if st.button("🔄 Actualizar Caché del Sistema", type="primary"):
+                if cache_password:
+                    with st.spinner("Actualizando caché del sistema..."):
+                        if data_loader.force_data_refresh(cache_password):
+                            st.success("✅ Caché actualizado exitosamente")
+                        else:
+                            st.error("❌ Error al actualizar el caché")
+                else:
+                    st.warning("⚠️ Por favor, ingrese la contraseña")
+        
+        with col2:
+            st.markdown("""
+            ### Información
+            - La actualización puede tomar varios minutos
+            - Se mostrará el progreso en tiempo real
+            - No interrumpa el proceso
+            """)
+            
+            # Mostrar estado actual del caché
+            st.info("""
+            ℹ️ **Recomendaciones:**
+            - Actualizar al inicio del día
+            - Actualizar después de cambios importantes
+            - Mantener el navegador abierto durante la actualización
             """)
         
         st.markdown("</div>", unsafe_allow_html=True)

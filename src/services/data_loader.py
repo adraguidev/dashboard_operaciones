@@ -187,18 +187,7 @@ class DataLoader:
 
     def force_data_refresh(_self, password: str) -> bool:
         """Fuerza una actualización de datos si la contraseña es correcta."""
-        if not _self.verify_password(password):
-            st.error("Contraseña incorrecta")
-            return False
-        
-        try:
-            # Limpiar solo el caché de Streamlit
-            st.cache_data.clear()
-            st.success("✅ Datos actualizados correctamente")
-            return True
-        except Exception as e:
-            st.error(f"Error al actualizar datos: {str(e)}")
-            return False
+        return _self.refresh_cache_in_background(password)
 
     @st.cache_data(ttl=60)  # Cache de Streamlit por 1 hora como respaldo
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
@@ -336,3 +325,112 @@ class DataLoader:
     def get_rankings_collection(_self):
         """Retorna la colección de rankings de expedientes_db."""
         return _self.expedientes_db['rankings']
+
+    def refresh_cache_in_background(_self, password: str) -> bool:
+        """Actualiza el caché en el backend para todos los módulos."""
+        if not _self.verify_password(password):
+            st.error("Contraseña incorrecta")
+            return False
+        
+        try:
+            # Mostrar barra de progreso
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Lista de módulos a actualizar (excluyendo SPE que tiene su propia lógica)
+            modules_to_update = [mod for mod in MODULES.keys() if mod != 'SPE']
+            total_modules = len(modules_to_update)
+            
+            for idx, module in enumerate(modules_to_update):
+                status_text.text(f"Actualizando caché de {module}...")
+                
+                try:
+                    # Limpiar caché existente para este módulo
+                    cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
+                    cache_collection.delete_one({"module": module})
+                    
+                    # Cargar datos frescos
+                    if module == 'CCM-LEY':
+                        # Procesar CCM-LEY
+                        ccm_data = _self._load_fresh_data('CCM')
+                        ccm_esp_data = _self._load_fresh_data('CCM-ESP')
+                        
+                        if ccm_data is not None and ccm_esp_data is not None:
+                            data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])].copy()
+                            _self._save_to_cache(module, data)
+                    else:
+                        # Cargar datos frescos para otros módulos
+                        data = _self._load_fresh_data(module)
+                        if data is not None:
+                            _self._save_to_cache(module, data)
+                    
+                    # Actualizar progreso
+                    progress = (idx + 1) / total_modules
+                    progress_bar.progress(progress)
+                    
+                except Exception as e:
+                    logger.error(f"Error actualizando caché para {module}: {str(e)}")
+                    continue
+            
+            # Limpiar caché de Streamlit
+            st.cache_data.clear()
+            
+            status_text.text("✅ Caché actualizado completamente")
+            time.sleep(1)  # Pequeña pausa para mostrar el mensaje final
+            status_text.empty()
+            progress_bar.empty()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error en la actualización del caché: {str(e)}")
+            st.error(f"Error en la actualización del caché: {str(e)}")
+            return False
+
+    def _load_fresh_data(_self, module_name: str) -> pd.DataFrame:
+        """Carga datos frescos desde MongoDB sin usar caché."""
+        try:
+            collection_name = MONGODB_COLLECTIONS.get(module_name)
+            if not collection_name:
+                raise ValueError(f"Módulo no reconocido: {module_name}")
+
+            collection = _self.migraciones_db[collection_name]
+            cursor = collection.find(
+                {},
+                {'_id': 0},
+                batch_size=5000,
+                hint=[("FechaExpendiente", 1)]
+            ).allow_disk_use(True)
+
+            chunks = []
+            chunk_size = 10000
+            current_chunk = []
+            
+            for doc in cursor:
+                current_chunk.append(doc)
+                if len(current_chunk) >= chunk_size:
+                    df_chunk = pd.DataFrame(current_chunk)
+                    df_chunk = _self._optimize_dtypes(df_chunk)
+                    chunks.append(df_chunk)
+                    current_chunk = []
+
+            if current_chunk:
+                df_chunk = pd.DataFrame(current_chunk)
+                df_chunk = _self._optimize_dtypes(df_chunk)
+                chunks.append(df_chunk)
+
+            if not chunks:
+                return None
+
+            data = pd.concat(chunks, ignore_index=True)
+            
+            # Procesar fechas
+            for col in DATE_COLUMNS:
+                if col in data.columns:
+                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
+            
+            return data
+
+        except Exception as e:
+            logger.error(f"Error al cargar datos frescos del módulo {module_name}: {str(e)}")
+            return None

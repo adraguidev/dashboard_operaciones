@@ -600,11 +600,8 @@ def process_data_once(data, selected_module):
 def get_module_data(selected_module, collection_name):
     """Carga y cachea los datos del módulo"""
     try:
-        if 'data_loader' not in st.session_state:
-            with st.spinner('Inicializando conexión...'):
-                st.session_state.data_loader = DataLoader()
-        
-        data = st.session_state.data_loader.load_module_data(selected_module)
+        data_loader = get_data_loader()
+        data = data_loader.load_module_data(selected_module)
         if data is not None:
             # Procesar datos una sola vez
             processed_data = process_data_once(data, selected_module)
@@ -615,13 +612,18 @@ def get_module_data(selected_module, collection_name):
         st.error(f"Error cargando datos: {str(e)}")
         return None, None, False
 
+def get_data_loader():
+    """Obtiene o inicializa el DataLoader"""
+    if 'data_loader' not in st.session_state:
+        with st.spinner('Inicializando conexión a la base de datos...'):
+            st.session_state.data_loader = DataLoader()
+    return st.session_state.data_loader
+
 def main():
     try:
-        data_loader = st.session_state.data_loader
-        if data_loader is None:
-            st.error("No se pudo inicializar la conexión a la base de datos.")
-            return
-
+        # Inicializar DataLoader
+        data_loader = get_data_loader()
+        
         # Inicializar estados del menú si no existen
         if 'menu_dashboard' not in st.session_state:
             st.session_state.menu_dashboard = True
@@ -693,7 +695,6 @@ def main():
             update_time = get_current_time()
             
         else:
-            # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
                 # Cargar datos una sola vez por sesión
@@ -723,7 +724,7 @@ def main():
                     ("Cierre de Expedientes", render_closing_analysis_tab, [data]),
                     ("Reporte por Evaluador", render_evaluator_report_tab, [data]),
                     ("Reporte de Asignaciones", render_assignment_report_tab, [data]),
-                    ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, st.session_state.data_loader.get_rankings_collection()])
+                    ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, data_loader.get_rankings_collection()])
                 ]
 
                 # Crear pestañas

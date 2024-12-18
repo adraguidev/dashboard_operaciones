@@ -358,7 +358,18 @@ class DataLoader:
 
         def optimize_object_column(col):
             if df[col].dtype == 'object':
-                if df[col].nunique() / len(df) < 0.5:
+                # Manejo especial para EVALASIGN
+                if col == 'EVALASIGN':
+                    # Primero convertimos a string y llenamos los NaN
+                    series = df[col].fillna('').astype(str)
+                    # Solo convertimos a categórico si hay suficientes valores repetidos
+                    if series.nunique() / len(series) < 0.5:
+                        # Aseguramos que '' esté en las categorías
+                        categories = sorted(series.unique())
+                        return col, pd.Categorical(series, categories=categories)
+                    return col, series
+                # Para otras columnas
+                elif df[col].nunique() / len(df) < 0.5:
                     return col, pd.Categorical(df[col])
             return col, df[col]
 

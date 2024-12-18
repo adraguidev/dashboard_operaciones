@@ -27,9 +27,14 @@ def render_evaluator_report_tab(data: pd.DataFrame):
 
         # Limpiar y preparar la columna EVALASIGN una sola vez
         if 'EVALASIGN' in data.columns:
+            # Convertir a string primero si es categórico
+            if pd.api.types.is_categorical_dtype(data['EVALASIGN']):
+                data['EVALASIGN'] = data['EVALASIGN'].astype(str)
+            
+            # Ahora podemos llenar NaN y filtrar
             data['EVALASIGN'] = data['EVALASIGN'].fillna('').astype(str)
             evaluators = sorted(data[data['EVALASIGN'].str.strip() != '']['EVALASIGN'].unique())
-            evaluators = ['TODOS LOS EVALUADORES'] + evaluators
+            evaluators = ['TODOS LOS EVALUADORES'] + list(evaluators)
         
         # Verificar si es módulo SOL de manera más precisa
         is_sol_module = (

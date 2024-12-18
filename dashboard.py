@@ -570,20 +570,31 @@ def generate_data_hash(data):
     
     return hashlib.md5(data_str.encode()).hexdigest()
 
-# Función cacheada para cargar datos del módulo
+# Función cacheada para cargar datos del módulo y su timestamp
+@st.cache_data(ttl=None, show_spinner=False)  # Cache permanente sin spinner
 def load_module_data_with_timestamp(selected_module):
     """
-    Carga datos del módulo desde el caché de MongoDB.
+    Carga y cachea los datos del módulo junto con su timestamp.
     El caché solo se invalida manualmente desde el panel de control.
     """
     data_loader = st.session_state.data_loader
-    # Usar directamente el caché de MongoDB
+    
+    # Si hay una actualización forzada desde el panel de control
+    if st.session_state.get('force_refresh', False):
+        # Solo limpiar el caché de este módulo específico
+        cache_key = f"data_{selected_module}"
+        if cache_key in st.session_state:
+            del st.session_state[cache_key]
+        return None
+    
+    # Intentar obtener datos del caché de MongoDB
     data = data_loader.load_module_data(selected_module)
     
     if data is not None:
         return {
             'data': data,
-            'update_time': get_current_time()
+            'update_time': get_current_time(),
+            'module': selected_module
         }
     return None
 
@@ -591,10 +602,21 @@ def get_module_data(selected_module, collection_name):
     """
     Función que maneja la lógica de carga de datos.
     """
-    # Intentar cargar datos desde el caché de MongoDB
+    cache_key = f"data_{selected_module}"
+    
+    # Si los datos ya están en session_state y no hay actualización forzada
+    if cache_key in st.session_state and not st.session_state.get('force_refresh', False):
+        return st.session_state[cache_key], get_current_time(), False
+    
+    # Intentar cargar datos
     cached_data = load_module_data_with_timestamp(selected_module)
     
     if cached_data is not None:
+        # Guardar en session_state
+        st.session_state[cache_key] = cached_data['data']
+        # Limpiar flag de actualización forzada
+        if 'force_refresh' in st.session_state:
+            del st.session_state['force_refresh']
         return cached_data['data'], cached_data['update_time'], False
     
     return None, None, False
@@ -642,25 +664,6 @@ def show_loading_progress(message, action, show_fade_in=True):
         progress_bar.empty()
         return result
 
-# Procesar datos comunes una sola vez
-def prepare_common_data(df):
-    """Preprocesar datos comunes para todas las pestañas"""
-    # Identificar solo las columnas de fecha que existen
-    date_columns = {col: df[col] for col in DATE_COLUMNS 
-                    if col in df.columns and df[col].dtype == 'datetime64[ns]'}
-    
-    if not date_columns:
-        return df
-    
-    # Crear todas las columnas formateadas de una vez
-    formatted_dates = {
-        f"{col}_formatted": series.dt.strftime('%d/%m/%Y')
-        for col, series in date_columns.items()
-    }
-    
-    # Usar assign para evitar la copia del DataFrame
-    return df.assign(**formatted_dates)
-
 def main():
     try:
         data_loader = st.session_state.data_loader
@@ -675,6 +678,8 @@ def main():
             st.session_state.menu_admin = False
         if 'selected_module' not in st.session_state:
             st.session_state.selected_module = list(MODULES.keys())[0]
+        if 'active_tab' not in st.session_state:
+            st.session_state.active_tab = 0
 
         # Contenedor para el sidebar con estilo
         with st.sidebar:
@@ -687,7 +692,6 @@ def main():
             if st.session_state.menu_dashboard:
                 with st.container():
                     st.markdown('<div class="submenu">', unsafe_allow_html=True)
-                    previous_module = st.session_state.get('selected_module')
                     selected_module = st.radio(
                         "",
                         options=st.session_state.get('visible_modules', list(MODULES.keys())),
@@ -695,19 +699,6 @@ def main():
                         key="module_selector",
                         label_visibility="collapsed"
                     )
-                    
-                    # Detectar cambio de módulo
-                    if previous_module != selected_module:
-                        # Limpiar el session_state relacionado con el módulo anterior
-                        if previous_module:
-                            keys_to_remove = [k for k in st.session_state.keys() 
-                                            if k.startswith(f"{previous_module}_")]
-                            for k in keys_to_remove:
-                                del st.session_state[k]
-                        
-                        st.session_state['last_module'] = selected_module
-                        st.rerun()
-                    
                     st.session_state.selected_module = selected_module
                     st.markdown('</div>', unsafe_allow_html=True)
             else:
@@ -754,11 +745,23 @@ def main():
             # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                # Cargar datos desde el caché de MongoDB
-                data, update_time, _ = get_module_data(selected_module, collection_name)
-                if data is None:
-                    st.error("No se encontraron datos para este módulo en la base de datos.")
-                    return
+                # Cargar datos solo si no están en session_state o si cambia el módulo
+                cache_key = f"data_{selected_module}"
+                if cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
+                    data, update_time, _ = get_module_data(selected_module, collection_name)
+                    if data is None:
+                        st.error("No se encontraron datos para este módulo en la base de datos.")
+                        return
+                    st.session_state[cache_key] = data
+                    st.session_state['last_module'] = selected_module
+                else:
+                    data = st.session_state[cache_key]
+                    update_time = get_current_time()
+
+                # Agregar elementos adicionales al sidebar después de cargar los datos
+                with st.sidebar:
+                    if 'show_update_form' in st.session_state:
+                        del st.session_state.show_update_form
 
                 # Definir las pestañas y sus funciones correspondientes
                 tabs_config = [
@@ -773,13 +776,61 @@ def main():
                 # Crear pestañas usando st.tabs
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
-                # Procesar datos
-                data = prepare_common_data(data)
+                # Preparar datos comunes para todas las pestañas
+                @st.cache_data(ttl=None, show_spinner=False)
+                def prepare_common_data(df, module_name):
+                    """Preprocesar datos comunes para todas las pestañas"""
+                    cache_key = f"processed_{module_name}"
+                    
+                    # Si ya está procesado, retornar directamente
+                    if cache_key in st.session_state:
+                        return st.session_state[cache_key]
+                    
+                    # Identificar solo las columnas de fecha que existen
+                    date_columns = {col: df[col] for col in DATE_COLUMNS 
+                                  if col in df.columns and df[col].dtype == 'datetime64[ns]'}
+                    
+                    if not date_columns:
+                        st.session_state[cache_key] = df
+                        return df
+                    
+                    # Crear todas las columnas formateadas de una vez
+                    formatted_dates = {
+                        f"{col}_formatted": series.dt.strftime('%d/%m/%Y')
+                        for col, series in date_columns.items()
+                    }
+                    
+                    # Usar assign para evitar la copia del DataFrame
+                    result = df.assign(**formatted_dates)
+                    st.session_state[cache_key] = result
+                    return result
 
-                # Renderizar pestañas
+                # Procesar datos una sola vez por módulo
+                data = prepare_common_data(data, selected_module)
+
+                # Renderizar pestañas de manera eficiente
                 for i, (tab_name, render_func, args) in enumerate(tabs_config):
                     with tabs[i]:
-                        render_func(*args)
+                        tab_cache_key = f"tab_{selected_module}_{i}"
+                        
+                        # Renderizar solo si es necesario
+                        if tab_cache_key not in st.session_state or st.session_state.get('force_refresh', False):
+                            render_func(*args)
+                            st.session_state[tab_cache_key] = True
+                        else:
+                            render_func(*args)
+
+                # Limpiar caché antiguo solo cuando cambia el módulo
+                if st.session_state.get('last_module') != selected_module:
+                    old_module = st.session_state.get('last_module')
+                    if old_module:
+                        # Limpiar solo las claves relacionadas con el módulo anterior
+                        keys_to_remove = [k for k in st.session_state.keys() 
+                                        if k.startswith(f"tab_{old_module}_") or 
+                                           k.startswith(f"processed_{old_module}")]
+                        for k in keys_to_remove:
+                            del st.session_state[k]
+                    st.session_state['last_module'] = selected_module
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

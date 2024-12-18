@@ -230,38 +230,39 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         st.subheader(f"📊 Distribución de Tiempos de Cierre ({selected_range})")
         
         if not cierre_data_range.empty:
-            # Definir categorías de tiempo fijas
-            bins = [float('-inf'), 3, 6, 9, 12, 15, 18, 21, 24, 28, float('inf')]
-            labels = [
-                "1-3 días", 
-                "4-6 días", 
-                "7-9 días", 
-                "10-12 días",
-                "13-15 días", 
-                "16-18 días", 
-                "19-21 días", 
-                "22-24 días",
-                "25-28 días", 
-                "28+ días"
+            # Definir rangos de tiempo
+            rangos = [
+                (0, 3, "1-3 días"),
+                (4, 6, "4-6 días"),
+                (7, 9, "7-9 días"),
+                (10, 12, "10-12 días"),
+                (13, 15, "13-15 días"),
+                (16, 18, "16-18 días"),
+                (19, 21, "19-21 días"),
+                (22, 24, "22-24 días"),
+                (25, 28, "25-28 días")
             ]
             
-            # Categorizar los tiempos de cierre
-            cierre_data_range['CategoríaTiempo'] = pd.cut(
-                cierre_data_range['TiempoCierre'],
-                bins=bins,
-                labels=labels,
-                ordered=True,  # Marcar las categorías como ordenadas
-                include_lowest=True
-            )
-
-            # Calcular distribución de tiempos
-            distribucion_tiempos = (
-                cierre_data_range['CategoríaTiempo']
-                .value_counts()
-                .reindex(labels)  # Asegurar el orden correcto
-                .fillna(0)
-            )
-            distribucion_porcentaje = (distribucion_tiempos / len(cierre_data_range) * 100).round(1)
+            # Inicializar diccionario para contar expedientes por rango
+            conteo = {rango[2]: 0 for rango in rangos}
+            conteo["28+ días"] = 0  # Agregar categoría para más de 28 días
+            
+            # Contar expedientes por rango
+            for tiempo in cierre_data_range['TiempoCierre']:
+                if tiempo > 28:
+                    conteo["28+ días"] += 1
+                else:
+                    for min_dias, max_dias, etiqueta in rangos:
+                        if min_dias <= tiempo <= max_dias:
+                            conteo[etiqueta] += 1
+                            break
+            
+            # Convertir a porcentajes
+            total = sum(conteo.values())
+            distribucion_porcentaje = pd.Series({
+                k: (v / total * 100) if total > 0 else 0 
+                for k, v in conteo.items()
+            }).round(1)
 
             # Crear gráfico de distribución de tiempos mejorado
             fig_tiempos = px.bar(

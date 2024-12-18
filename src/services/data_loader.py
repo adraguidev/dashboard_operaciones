@@ -41,16 +41,16 @@ class DataLoader:
                 'connectTimeoutMS': 5000,
                 'socketTimeoutMS': 10000,
                 'serverSelectionTimeoutMS': 5000,
-                'maxPoolSize': 10,  # Aumentado para mejor concurrencia
-                'minPoolSize': 3,   # Aumentado ligeramente
+                'maxPoolSize': 10,
+                'minPoolSize': 3,
                 'maxIdleTimeMS': 300000,
                 'waitQueueTimeoutMS': 5000,
                 'appName': 'MigracionesApp',
                 'compressors': ['zlib'],
                 'retryWrites': True,
                 'retryReads': True,
-                'w': 'majority',    # Garantizar consistencia
-                'readPreference': 'primaryPreferred'  # Mejor rendimiento en lecturas
+                'w': 'majority',
+                'readPreference': 'primaryPreferred'
             }
             
             _self.client = MongoClient(mongo_uri, **mongo_options)
@@ -66,6 +66,9 @@ class DataLoader:
             
             # Configurar índices para optimizar consultas
             _self.setup_indexes()
+            
+            # Configurar colección de caché
+            _self.setup_cache_collection()
             
             logger.info("Conexión exitosa a MongoDB")
         except Exception as e:
@@ -98,6 +101,85 @@ class DataLoader:
         except Exception as e:
             logger.error(f"Error al crear índices: {str(e)}")
 
+    def setup_cache_collection(_self):
+        """Configura la colección de caché y sus índices."""
+        try:
+            cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
+            
+            # Crear índices para la colección de caché
+            cache_collection.create_index([
+                ("module", 1),
+                ("timestamp", 1)
+            ], background=True)
+            
+            # Crear índice TTL para limpiar datos antiguos
+            cache_collection.create_index(
+                "timestamp",
+                expireAfterSeconds=CACHE_TTL * 60,
+                background=True
+            )
+            
+            logger.info("Colección de caché configurada correctamente")
+        except Exception as e:
+            logger.error(f"Error al configurar colección de caché: {str(e)}")
+
+    def _get_cached_data(_self, module_name: str) -> pd.DataFrame:
+        """Intenta obtener datos cacheados de MongoDB."""
+        try:
+            cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
+            
+            # Buscar datos cacheados
+            cached_data = cache_collection.find_one({
+                "module": module_name,
+                "timestamp": {"$gt": datetime.now() - pd.Timedelta(minutes=CACHE_TTL)}
+            })
+            
+            if cached_data:
+                logger.info(f"Datos encontrados en caché para {module_name}")
+                # Convertir los datos BSON a DataFrame
+                df = pd.DataFrame(cached_data['data'])
+                
+                # Convertir fechas
+                for col in DATE_COLUMNS:
+                    if col in df.columns:
+                        df[col] = pd.to_datetime(df[col])
+                
+                return df
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error al obtener datos cacheados: {str(e)}")
+            return None
+
+    def _save_to_cache(_self, module_name: str, data: pd.DataFrame):
+        """Guarda los datos procesados en el caché de MongoDB."""
+        try:
+            if data is None or data.empty:
+                logger.warning(f"No hay datos para cachear del módulo {module_name}")
+                return
+            
+            cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
+            
+            # Convertir DataFrame a formato serializable
+            data_dict = data.to_dict('records')
+            
+            # Guardar en caché
+            cache_collection.update_one(
+                {"module": module_name},
+                {
+                    "$set": {
+                        "module": module_name,
+                        "timestamp": datetime.now(),
+                        "data": data_dict
+                    }
+                },
+                upsert=True
+            )
+            
+            logger.info(f"Datos guardados en caché para {module_name}")
+        except Exception as e:
+            logger.error(f"Error al guardar en caché: {str(e)}")
+
     def verify_password(_self, password: str) -> bool:
         """Verifica si la contraseña proporcionada es correcta."""
         correct_password = "Ka260314!"
@@ -118,103 +200,79 @@ class DataLoader:
             st.error(f"Error al actualizar datos: {str(e)}")
             return False
 
-    @st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
+    @st.cache_data(ttl=60)  # Cache de Streamlit por 1 hora como respaldo
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos consolidados desde migraciones_db."""
+        """Carga datos consolidados desde migraciones_db con caché en MongoDB."""
         try:
-            # SPE tiene su propia lógica de carga separada y siempre carga datos frescos
+            # SPE tiene su propia lógica de carga
             if module_name == 'SPE':
                 return _self._load_spe_from_sheets()
             
             logger.info(f"Cargando datos para módulo: {module_name}")
-            start_time = time.time()
-
-            # Procesamiento especial para CCM-LEY
+            
+            # Intentar obtener datos del caché
+            cached_data = _self._get_cached_data(module_name)
+            if cached_data is not None:
+                logger.info(f"Usando datos cacheados para {module_name}")
+                return cached_data
+            
+            # Si no hay caché, procesar normalmente
             if module_name == 'CCM-LEY':
-                logger.info("Iniciando carga de CCM-LEY...")
-                
-                # Cargar datos de CCM
-                logger.info("Cargando datos de CCM...")
+                # Procesar CCM-LEY
                 ccm_data = _self.load_module_data('CCM')
-                if ccm_data is None:
-                    logger.error("No se pudieron cargar los datos de CCM")
-                    st.error("❌ No se pudieron cargar los datos de CCM")
-                    return None
-                logger.info(f"Datos de CCM cargados: {len(ccm_data)} registros")
-                
-                # Cargar datos de CCM-ESP
-                logger.info("Cargando datos de CCM-ESP...")
                 ccm_esp_data = _self.load_module_data('CCM-ESP')
-                if ccm_esp_data is None:
-                    logger.error("No se pudieron cargar los datos de CCM-ESP")
-                    st.error("❌ No se pudieron cargar los datos de CCM-ESP")
+                
+                if ccm_data is None or ccm_esp_data is None:
                     return None
-                logger.info(f"Datos de CCM-ESP cargados: {len(ccm_esp_data)} registros")
                 
-                # Excluir expedientes que están en CCM-ESP
-                logger.info("Filtrando datos para CCM-LEY...")
                 data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])].copy()
-                logger.info(f"Registros finales para CCM-LEY: {len(data)}")
                 
+                # Guardar en caché
+                _self._save_to_cache(module_name, data)
                 return data
-
+            
+            # Procesar otros módulos
             collection_name = MONGODB_COLLECTIONS.get(module_name)
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
             collection = _self.migraciones_db[collection_name]
-            
-            # Optimizar la consulta usando cursor con batch_size y hint
             cursor = collection.find(
                 {},
-                {'_id': 0},  # Excluir solo el _id
-                batch_size=5000,  # Tamaño de lote optimizado
-                hint=[("FechaExpendiente", 1)]  # Usar índice existente
-            ).allow_disk_use(True)  # Permitir uso de disco para consultas grandes
+                {'_id': 0},
+                batch_size=5000,
+                hint=[("FechaExpendiente", 1)]
+            ).allow_disk_use(True)
 
-            # Procesar datos en chunks para mejor manejo de memoria
             chunks = []
             chunk_size = 10000
             current_chunk = []
-
-            print("Iniciando carga de datos...")
-            records_processed = 0
             
             for doc in cursor:
                 current_chunk.append(doc)
                 if len(current_chunk) >= chunk_size:
                     df_chunk = pd.DataFrame(current_chunk)
-                    # Optimizar tipos de datos inmediatamente
                     df_chunk = _self._optimize_dtypes(df_chunk)
                     chunks.append(df_chunk)
-                    records_processed += len(current_chunk)
-                    print(f"Procesados {records_processed} registros...")
                     current_chunk = []
 
-            if current_chunk:  # Procesar el último chunk
+            if current_chunk:
                 df_chunk = pd.DataFrame(current_chunk)
                 df_chunk = _self._optimize_dtypes(df_chunk)
                 chunks.append(df_chunk)
-                records_processed += len(current_chunk)
 
             if not chunks:
-                st.error(f"No se encontraron datos para el módulo {module_name} en la base de datos.")
                 return None
 
-            # Concatenar chunks eficientemente
-            print("Combinando datos...")
             data = pd.concat(chunks, ignore_index=True)
             
-            # Convertir fechas eficientemente
-            print("Procesando fechas...")
+            # Procesar fechas
             for col in DATE_COLUMNS:
                 if col in data.columns:
                     data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
-
-            elapsed_time = time.time() - start_time
-            print(f"Tiempo de carga para {module_name}: {elapsed_time:.2f} segundos")
-            print(f"Total registros cargados: {len(data)}")
-            print(f"Uso de memoria: {data.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
+            
+            # Guardar en caché
+            _self._save_to_cache(module_name, data)
             
             return data
 

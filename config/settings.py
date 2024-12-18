@@ -154,7 +154,8 @@ MONGODB_COLLECTIONS = {
     'CCM-LEY': 'consolidado_ccm',
     'SOL': 'consolidado_sol',
     'SPE': 'consolidado_spe',
-    'RANKINGS': 'rankings'
+    'RANKINGS': 'rankings',
+    'CACHE': 'datos_procesados'
 }
 
 # Columnas de fecha que deben ser procesadas
@@ -172,3 +173,6 @@ SPE_CONFIG = {
     'range_name': 'tu_range',
     'local_file': 'descargas/SPE/MATRIZ.xlsx'
 }
+
+# Tiempo máximo de validez del caché (en minutos)
+CACHE_TTL = 60  # 1 hora

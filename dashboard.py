@@ -692,6 +692,7 @@ def main():
             if st.session_state.menu_dashboard:
                 with st.container():
                     st.markdown('<div class="submenu">', unsafe_allow_html=True)
+                    previous_module = st.session_state.get('selected_module')
                     selected_module = st.radio(
                         "",
                         options=st.session_state.get('visible_modules', list(MODULES.keys())),
@@ -699,6 +700,26 @@ def main():
                         key="module_selector",
                         label_visibility="collapsed"
                     )
+                    
+                    # Detectar cambio de módulo
+                    if previous_module != selected_module:
+                        # Limpiar caché relacionado con el módulo anterior
+                        st.cache_data.clear()
+                        if previous_module:
+                            keys_to_remove = [k for k in st.session_state.keys() 
+                                            if any(k.startswith(prefix) for prefix in [
+                                                f"data_{previous_module}",
+                                                f"processed_{previous_module}",
+                                                f"tab_{previous_module}_"
+                                            ])]
+                            for k in keys_to_remove:
+                                del st.session_state[k]
+                        
+                        # Forzar recarga del nuevo módulo
+                        st.session_state['force_refresh'] = True
+                        st.session_state['last_module'] = selected_module
+                        st.rerun()
+                    
                     st.session_state.selected_module = selected_module
                     st.markdown('</div>', unsafe_allow_html=True)
             else:
@@ -745,23 +766,28 @@ def main():
             # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                # Cargar datos solo si no están en session_state o si cambia el módulo
+                # Verificar si necesitamos recargar los datos
                 cache_key = f"data_{selected_module}"
-                if cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
-                    data, update_time, _ = get_module_data(selected_module, collection_name)
-                    if data is None:
-                        st.error("No se encontraron datos para este módulo en la base de datos.")
-                        return
-                    st.session_state[cache_key] = data
-                    st.session_state['last_module'] = selected_module
+                need_reload = (
+                    cache_key not in st.session_state or 
+                    st.session_state.get('force_refresh', False) or 
+                    st.session_state.get('last_module') != selected_module
+                )
+                
+                if need_reload:
+                    with st.spinner(f"Cargando datos de {MODULES[selected_module]}..."):
+                        data, update_time, _ = get_module_data(selected_module, collection_name)
+                        if data is None:
+                            st.error("No se encontraron datos para este módulo en la base de datos.")
+                            return
+                        st.session_state[cache_key] = data
+                        st.session_state['last_module'] = selected_module
+                        # Limpiar flag de recarga forzada
+                        if 'force_refresh' in st.session_state:
+                            del st.session_state['force_refresh']
                 else:
                     data = st.session_state[cache_key]
                     update_time = get_current_time()
-
-                # Agregar elementos adicionales al sidebar después de cargar los datos
-                with st.sidebar:
-                    if 'show_update_form' in st.session_state:
-                        del st.session_state.show_update_form
 
                 # Definir las pestañas y sus funciones correspondientes
                 tabs_config = [
@@ -776,61 +802,13 @@ def main():
                 # Crear pestañas usando st.tabs
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
-                # Preparar datos comunes para todas las pestañas
-                @st.cache_data(ttl=None, show_spinner=False)
-                def prepare_common_data(df, module_name):
-                    """Preprocesar datos comunes para todas las pestañas"""
-                    cache_key = f"processed_{module_name}"
-                    
-                    # Si ya está procesado, retornar directamente
-                    if cache_key in st.session_state:
-                        return st.session_state[cache_key]
-                    
-                    # Identificar solo las columnas de fecha que existen
-                    date_columns = {col: df[col] for col in DATE_COLUMNS 
-                                  if col in df.columns and df[col].dtype == 'datetime64[ns]'}
-                    
-                    if not date_columns:
-                        st.session_state[cache_key] = df
-                        return df
-                    
-                    # Crear todas las columnas formateadas de una vez
-                    formatted_dates = {
-                        f"{col}_formatted": series.dt.strftime('%d/%m/%Y')
-                        for col, series in date_columns.items()
-                    }
-                    
-                    # Usar assign para evitar la copia del DataFrame
-                    result = df.assign(**formatted_dates)
-                    st.session_state[cache_key] = result
-                    return result
-
-                # Procesar datos una sola vez por módulo
+                # Preparar datos comunes una sola vez por módulo
                 data = prepare_common_data(data, selected_module)
 
-                # Renderizar pestañas de manera eficiente
+                # Renderizar pestañas
                 for i, (tab_name, render_func, args) in enumerate(tabs_config):
                     with tabs[i]:
-                        tab_cache_key = f"tab_{selected_module}_{i}"
-                        
-                        # Renderizar solo si es necesario
-                        if tab_cache_key not in st.session_state or st.session_state.get('force_refresh', False):
-                            render_func(*args)
-                            st.session_state[tab_cache_key] = True
-                        else:
-                            render_func(*args)
-
-                # Limpiar caché antiguo solo cuando cambia el módulo
-                if st.session_state.get('last_module') != selected_module:
-                    old_module = st.session_state.get('last_module')
-                    if old_module:
-                        # Limpiar solo las claves relacionadas con el módulo anterior
-                        keys_to_remove = [k for k in st.session_state.keys() 
-                                        if k.startswith(f"tab_{old_module}_") or 
-                                           k.startswith(f"processed_{old_module}")]
-                        for k in keys_to_remove:
-                            del st.session_state[k]
-                    st.session_state['last_module'] = selected_module
+                        render_func(*args)
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

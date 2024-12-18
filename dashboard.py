@@ -675,16 +675,6 @@ def main():
             st.session_state.menu_admin = False
         if 'selected_module' not in st.session_state:
             st.session_state.selected_module = list(MODULES.keys())[0]
-        if 'active_tab' not in st.session_state:
-            st.session_state.active_tab = 0
-        if 'last_tab' not in st.session_state:
-            st.session_state.last_tab = 0
-
-        # Función para manejar el cambio de pestañas
-        def on_tab_change():
-            if st.session_state.active_tab != st.session_state.last_tab:
-                st.session_state.last_tab = st.session_state.active_tab
-                st.rerun()
 
         # Contenedor para el sidebar con estilo
         with st.sidebar:
@@ -708,10 +698,10 @@ def main():
                     
                     # Detectar cambio de módulo
                     if previous_module != selected_module:
-                        # Solo limpiar el session_state relacionado con la UI
+                        # Limpiar el session_state relacionado con el módulo anterior
                         if previous_module:
                             keys_to_remove = [k for k in st.session_state.keys() 
-                                            if k.startswith(f"tab_{previous_module}_")]
+                                            if k.startswith(f"{previous_module}_")]
                             for k in keys_to_remove:
                                 del st.session_state[k]
                         
@@ -783,31 +773,13 @@ def main():
                 # Crear pestañas usando st.tabs
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
-                # Detectar cambio de pestaña
-                current_tab = st.session_state.get('active_tab', 0)
-                for i in range(len(tabs)):
-                    if tabs[i].selectbox(
-                        'Tab Selector',
-                        [''],
-                        key=f'tab_selector_{i}',
-                        label_visibility='collapsed'
-                    ):
-                        st.session_state.active_tab = i
-                        on_tab_change()
-
                 # Procesar datos
                 data = prepare_common_data(data)
 
                 # Renderizar pestañas
                 for i, (tab_name, render_func, args) in enumerate(tabs_config):
                     with tabs[i]:
-                        # Limpiar el contenido anterior de la pestaña
-                        if f'tab_{selected_module}_{i}' not in st.session_state:
-                            st.session_state[f'tab_{selected_module}_{i}'] = True
-                        
-                        # Solo renderizar si es la pestaña activa
-                        if st.session_state.active_tab == i:
-                            render_func(*args)
+                        render_func(*args)
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

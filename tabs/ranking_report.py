@@ -30,9 +30,6 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
             
         st.header("🏆 Ranking de Expedientes Trabajados")
         
-        # Verificar que estamos usando la colección correcta
-        st.write(f"Usando colección: {rankings_collection.database.name}.{rankings_collection.name}")
-        
         if data is None or data.empty:
             st.error("No hay datos disponibles para mostrar")
             return
@@ -228,7 +225,7 @@ def render_ranking_report_tab(data: pd.DataFrame, selected_module: str, rankings
                         ).size().reset_index(name='cantidad')
                         
                         save_rankings_to_db(selected_module, rankings_collection, datos_agrupados)
-                        st.success("��� Datos guardados correctamente")
+                        st.success("✅ Datos guardados correctamente")
                         st.rerun()
 
         # Sección de edición manual

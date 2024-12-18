@@ -600,23 +600,104 @@ def load_module_data_with_timestamp(selected_module):
         }
     return None
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def prepare_common_data(df):
+    """Preprocesar datos comunes para todas las pestañas con optimización agresiva"""
+    try:
+        if df is None or df.empty:
+            return None
+
+        # Crear una vista sin copiar datos
+        processed_df = df.copy(deep=False)
+        
+        # Pre-calcular columnas de fecha para evitar múltiples selects
+        date_cols = processed_df.select_dtypes(include=['datetime64']).columns.tolist()
+        
+        if date_cols:
+            # Procesar fechas en chunks para mejor rendimiento
+            chunk_size = max(1000, len(processed_df) // 4)  # Ajustar según cantidad de datos
+            num_chunks = (len(processed_df) + chunk_size - 1) // chunk_size
+            
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = []
+                
+                def process_date_chunk(chunk_df, cols):
+                    result = {}
+                    for col in cols:
+                        result[col] = chunk_df[col].dt.strftime('%d/%m/%Y')
+                    return result
+                
+                # Dividir en chunks y procesar en paralelo
+                for i in range(num_chunks):
+                    start_idx = i * chunk_size
+                    end_idx = min((i + 1) * chunk_size, len(processed_df))
+                    chunk = processed_df.iloc[start_idx:end_idx]
+                    futures.append(executor.submit(process_date_chunk, chunk, date_cols))
+                
+                # Recolectar resultados
+                formatted_dates = {}
+                for i, future in enumerate(futures):
+                    chunk_result = future.result()
+                    start_idx = i * chunk_size
+                    for col, values in chunk_result.items():
+                        if col not in formatted_dates:
+                            formatted_dates[col] = pd.Series(index=processed_df.index, dtype='object')
+                        formatted_dates[col].iloc[start_idx:start_idx + len(values)] = values.values
+
+                # Asignar resultados optimizadamente
+                for col in date_cols:
+                    processed_df[f"{col}_formatted"] = formatted_dates[col]
+
+        # Optimizar tipos de datos de manera más eficiente
+        object_cols = processed_df.select_dtypes(include=['object']).columns
+        
+        def optimize_column(col):
+            unique_ratio = processed_df[col].nunique() / len(processed_df)
+            if unique_ratio < 0.5:
+                return col, pd.Categorical(processed_df[col])
+            return col, processed_df[col]
+        
+        # Optimizar tipos en paralelo
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            optimized_cols = dict(executor.map(
+                optimize_column,
+                [col for col in object_cols if col not in [f"{c}_formatted" for c in date_cols]]
+            ))
+        
+        # Actualizar columnas optimizadas
+        for col, optimized_series in optimized_cols.items():
+            processed_df[col] = optimized_series
+
+        return processed_df
+    except Exception as e:
+        st.error(f"Error en prepare_common_data: {str(e)}")
+        return df
+
 def get_module_data(selected_module, collection_name):
-    """
-    Función que maneja la lógica de carga de datos.
-    """
-    # Intentar cargar datos cacheados
-    cached_data = load_module_data_with_timestamp(selected_module)
+    """Función optimizada para manejo de caché y carga de datos"""
+    cache_key = f"data_{selected_module}"
+    cache_hash_key = f"{selected_module}_data_hash"
     
-    if cached_data is not None:
-        # Guardar el hash en session_state si no existe
-        cache_key = f"{selected_module}_data_hash"
-        previous_hash = st.session_state.get(cache_key)
-        current_hash = cached_data['data_hash']
-        
-        # Actualizar el hash en session_state
-        st.session_state[cache_key] = current_hash
-        
-        return cached_data['data'], cached_data['update_time'], False  # Siempre False porque no queremos recargar
+    # Verificar si los datos están en caché y son válidos
+    if (cache_key in st.session_state and 
+        st.session_state.get('last_module') == selected_module):
+        cached_data = st.session_state[cache_key]
+        return cached_data['original'], cached_data['update_time'], False
+
+    # Cargar datos frescos
+    try:
+        cached_data = load_module_data_with_timestamp(selected_module)
+        if cached_data is not None:
+            current_hash = cached_data['data_hash']
+            
+            # Actualizar caché solo si los datos han cambiado
+            if current_hash != st.session_state.get(cache_hash_key):
+                st.session_state[cache_hash_key] = current_hash
+                return cached_data['data'], cached_data['update_time'], True
+            
+            return cached_data['data'], cached_data['update_time'], False
+    except Exception as e:
+        st.error(f"Error cargando datos: {str(e)}")
     
     return None, None, False
 
@@ -662,42 +743,6 @@ def show_loading_progress(message, action, show_fade_in=True):
         
         progress_bar.empty()
         return result
-
-@st.cache_data(ttl=3600)  # Cache por 1 hora
-def prepare_common_data(df):
-    """Preprocesar datos comunes para todas las pestañas de manera optimizada"""
-    try:
-        # Solo procesar si df no es None
-        if df is None:
-            return None
-
-        # Crear una copia superficial para evitar modificar el original
-        processed_df = df.copy(deep=False)
-        
-        # Convertir fechas en paralelo usando ThreadPoolExecutor
-        date_columns = processed_df.select_dtypes(include=['datetime64']).columns
-        if len(date_columns) > 0:
-            with ThreadPoolExecutor(max_workers=4) as executor:
-                def format_date_column(col):
-                    return col, processed_df[col].dt.strftime('%d/%m/%Y')
-                
-                # Procesar todas las columnas de fecha en paralelo
-                formatted_dates = dict(executor.map(format_date_column, date_columns))
-                
-                # Asignar resultados de vuelta al DataFrame
-                for col, formatted in formatted_dates.items():
-                    processed_df[f"{col}_formatted"] = formatted
-
-        # Optimizar tipos de datos agresivamente
-        for col in processed_df.select_dtypes(include=['object']).columns:
-            # Solo convertir a categórico si hay menos de 50% de valores únicos
-            if processed_df[col].nunique() / len(processed_df) < 0.5:
-                processed_df[col] = pd.Categorical(processed_df[col])
-
-        return processed_df
-    except Exception as e:
-        st.error(f"Error en prepare_common_data: {str(e)}")
-        return df
 
 def main():
     try:
@@ -780,49 +825,50 @@ def main():
             # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                # Usar un único cache_key para los datos del módulo
                 cache_key = f"data_{selected_module}"
                 
-                # Cargar datos solo si es necesario
+                # Optimizar la lógica de carga
                 if (cache_key not in st.session_state or 
                     st.session_state.get('last_module') != selected_module):
                     
                     with st.spinner(f'Cargando datos de {MODULES[selected_module]}...'):
-                        data, update_time, _ = get_module_data(selected_module, collection_name)
+                        data, update_time, needs_processing = get_module_data(selected_module, collection_name)
                         
                         if data is None:
                             st.error("No se encontraron datos para este módulo.")
                             return
                         
-                        # Procesar datos inmediatamente después de cargarlos
-                        processed_data = prepare_common_data(data)
+                        # Procesar datos solo si es necesario
+                        if needs_processing:
+                            processed_data = prepare_common_data(data)
+                        else:
+                            processed_data = st.session_state[cache_key].get('processed', None)
+                            if processed_data is None:
+                                processed_data = prepare_common_data(data)
                         
-                        # Guardar tanto los datos originales como los procesados
+                        # Actualizar caché
                         st.session_state[cache_key] = {
                             'original': data,
                             'processed': processed_data,
                             'update_time': update_time
                         }
                         st.session_state['last_module'] = selected_module
-                else:
-                    # Usar datos ya procesados del caché
-                    cached_data = st.session_state[cache_key]
-                    data = cached_data['original']
-                    processed_data = cached_data['processed']
-                    update_time = cached_data['update_time']
+                
+                # Usar datos cacheados
+                cached_data = st.session_state[cache_key]
+                data = cached_data['original']
+                processed_data = cached_data['processed']
+                update_time = cached_data['update_time']
 
-                # Limpiar caché de módulos antiguos
+                # Limpiar caché antiguo de forma más eficiente
                 if st.session_state.get('last_module') != selected_module:
                     old_module = st.session_state.get('last_module')
                     if old_module:
-                        old_cache_key = f"data_{old_module}"
-                        if old_cache_key in st.session_state:
-                            del st.session_state[old_cache_key]
-
-                # Agregar elementos adicionales al sidebar después de cargar los datos
-                with st.sidebar:
-                    if 'show_update_form' in st.session_state:
-                        del st.session_state.show_update_form
+                        old_keys = [k for k in st.session_state.keys() 
+                                   if k.startswith(f"data_{old_module}") or 
+                                      k.startswith(f"tab_{old_module}_")]
+                        for k in old_keys:
+                            del st.session_state[k]
 
                 # Definir las pestañas y sus funciones correspondientes
                 tabs_config = [

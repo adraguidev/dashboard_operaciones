@@ -230,39 +230,34 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         st.subheader(f"📊 Distribución de Tiempos de Cierre ({selected_range})")
         
         if not cierre_data_range.empty:
-            # Definir rangos de tiempo
+            # Definir rangos de tiempo y sus etiquetas
             rangos = [
-                (0, 3, "1-3 días"),
-                (4, 6, "4-6 días"),
-                (7, 9, "7-9 días"),
-                (10, 12, "10-12 días"),
-                (13, 15, "13-15 días"),
-                (16, 18, "16-18 días"),
-                (19, 21, "19-21 días"),
-                (22, 24, "22-24 días"),
-                (25, 28, "25-28 días")
+                (0, 3), (4, 6), (7, 9), (10, 12), (13, 15),
+                (16, 18), (19, 21), (22, 24), (25, 28)
             ]
             
-            # Inicializar diccionario para contar expedientes por rango
-            conteo = {rango[2]: 0 for rango in rangos}
-            conteo["28+ días"] = 0  # Agregar categoría para más de 28 días
-            
-            # Contar expedientes por rango
-            for tiempo in cierre_data_range['TiempoCierre']:
+            # Función para asignar etiqueta según el tiempo
+            def asignar_rango(tiempo):
                 if tiempo > 28:
-                    conteo["28+ días"] += 1
-                else:
-                    for min_dias, max_dias, etiqueta in rangos:
-                        if min_dias <= tiempo <= max_dias:
-                            conteo[etiqueta] += 1
-                            break
+                    return "28+ días"
+                for min_dias, max_dias in rangos:
+                    if min_dias <= tiempo <= max_dias:
+                        return f"{min_dias}-{max_dias} días"
+                return "28+ días"  # Por defecto si no cae en ningún rango
             
-            # Convertir a porcentajes
-            total = sum(conteo.values())
-            distribucion_porcentaje = pd.Series({
-                k: (v / total * 100) if total > 0 else 0 
-                for k, v in conteo.items()
-            }).round(1)
+            # Crear una serie con los rangos
+            cierre_data_range['RangoTiempo'] = cierre_data_range['TiempoCierre'].apply(asignar_rango)
+            
+            # Calcular la distribución
+            distribucion = cierre_data_range['RangoTiempo'].value_counts()
+            
+            # Calcular porcentajes
+            total = len(cierre_data_range)
+            distribucion_porcentaje = (distribucion / total * 100).round(1)
+            
+            # Ordenar los rangos correctamente
+            orden_rangos = [f"{min_dias}-{max_dias} días" for min_dias, max_dias in rangos] + ["28+ días"]
+            distribucion_porcentaje = distribucion_porcentaje.reindex(orden_rangos).fillna(0)
 
             # Crear gráfico de distribución de tiempos mejorado
             fig_tiempos = px.bar(
@@ -289,7 +284,7 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             - Los expedientes que se cierran en 1-6 días muestran una gestión muy eficiente
             - El rango de 7-15 días representa el tiempo de procesamiento estándar
             - Expedientes que toman más de 15 días pueden requerir atención especial
-            - Casos de más de 28 días generalmente indican complejidades adicionales
+            - Casos de más de 28 d��as generalmente indican complejidades adicionales
             """)
 
             # Nueva sección: Top 25 expedientes más demorados

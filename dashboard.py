@@ -776,17 +776,30 @@ def main():
                 @st.cache_data(ttl=None)
                 def prepare_common_data(df):
                     """Preprocesar datos comunes para todas las pestañas"""
-                    # Convertir fechas una sola vez
-                    date_columns = df.select_dtypes(include=['datetime64']).columns
+                    # Solo procesar las columnas de fecha que realmente necesitamos
+                    date_columns = [col for col in df.columns if col in DATE_COLUMNS]
+                    result = df.copy()
+                    
+                    # Usar un diccionario para almacenar las columnas formateadas
+                    formatted_dates = {}
                     for col in date_columns:
-                        df[f"{col}_formatted"] = df[col].dt.strftime('%d/%m/%Y')
-                    return df
+                        if col in df.columns and df[col].dtype == 'datetime64[ns]':
+                            formatted_dates[f"{col}_formatted"] = df[col].dt.strftime('%d/%m/%Y')
+                    
+                    # Agregar todas las columnas formateadas de una vez
+                    if formatted_dates:
+                        result = result.assign(**formatted_dates)
+                    
+                    return result
 
-                # Procesar datos comunes una sola vez si no está en caché
+                # Procesar datos comunes solo si es necesario
                 cache_key_processed = f"processed_data_{selected_module}"
                 if cache_key_processed not in st.session_state:
-                    data = prepare_common_data(data)
-                    st.session_state[cache_key_processed] = data
+                    with st.spinner("Preparando datos..."):
+                        data = prepare_common_data(data)
+                        st.session_state[cache_key_processed] = data
+                else:
+                    data = st.session_state[cache_key_processed]
 
                 # Renderizar contenido de las pestañas
                 for i, tab in enumerate(tabs):

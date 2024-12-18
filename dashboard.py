@@ -12,7 +12,6 @@ from src.utils.database import get_google_credentials
 import time
 from datetime import datetime, timedelta
 import pytz
-import pandas as pd
 
 # Configuración de página
 st.set_page_config(
@@ -571,11 +570,14 @@ def generate_data_hash(data):
     
     return hashlib.md5(data_str.encode()).hexdigest()
 
-# Función para cargar datos del módulo de manera optimizada
-@st.cache_data(ttl=None, persist="disk")
+# Función cacheada para cargar datos del módulo y su timestamp
+@st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
 def load_module_data_with_timestamp(selected_module):
-    """Carga y cachea los datos del módulo."""
-    # Solo actualizar si se fuerza desde el panel de control
+    """
+    Carga y cachea los datos del módulo junto con su timestamp.
+    El caché persiste en disco y solo se invalida manualmente desde el panel de control.
+    """
+    # Verificar si hay una actualización forzada desde el panel de control
     if st.session_state.get('force_refresh', False):
         st.cache_data.clear()
         st.session_state.force_refresh = False
@@ -584,32 +586,36 @@ def load_module_data_with_timestamp(selected_module):
     data = data_loader.load_module_data(selected_module)
     
     if data is not None:
+        update_time = get_current_time()
+        data_hash = generate_data_hash(data)
+        
         return {
             'data': data,
-            'update_time': get_current_time(),
-            'data_hash': generate_data_hash(data)
+            'update_time': update_time,
+            'data_hash': data_hash,
+            'load_time': update_time
         }
     return None
 
 def get_module_data(selected_module, collection_name):
-    """Función optimizada para cargar datos."""
-    try:
-        # Usar el cache de Redis primero
-        if 'data_loader' in st.session_state:
-            # Intentar obtener datos preprocesados
-            data = st.session_state.data_loader.get_processed_data(selected_module, "common")
-            if data is not None:
-                return data, get_current_time(), False
-
-        # Si no hay datos procesados, intentar datos sin procesar
-        cached_data = load_module_data_with_timestamp(selected_module)
-        if cached_data is not None:
-            return cached_data['data'], cached_data['update_time'], False
+    """
+    Función que maneja la lógica de carga de datos.
+    """
+    # Intentar cargar datos cacheados
+    cached_data = load_module_data_with_timestamp(selected_module)
+    
+    if cached_data is not None:
+        # Guardar el hash en session_state si no existe
+        cache_key = f"{selected_module}_data_hash"
+        previous_hash = st.session_state.get(cache_key)
+        current_hash = cached_data['data_hash']
         
-        return None, None, False
-    except Exception as e:
-        logger.error(f"Error en get_module_data: {str(e)}")
-        return None, None, False
+        # Actualizar el hash en session_state
+        st.session_state[cache_key] = current_hash
+        
+        return cached_data['data'], cached_data['update_time'], False  # Siempre False porque no queremos recargar
+    
+    return None, None, False
 
 # Alternativa sin cache_resource
 if 'data_loader' not in st.session_state:
@@ -654,13 +660,6 @@ def show_loading_progress(message, action, show_fade_in=True):
         progress_bar.empty()
         return result
 
-def prepare_common_data(data: pd.DataFrame, module_name: str) -> pd.DataFrame:
-    """Prepara los datos comunes para todos los módulos."""
-    if 'data_loader' not in st.session_state:
-        st.session_state.data_loader = DataLoader()
-    
-    return st.session_state.data_loader.prepare_common_data(module_name, data)
-
 def main():
     try:
         data_loader = st.session_state.data_loader
@@ -668,19 +667,17 @@ def main():
             st.error("No se pudo inicializar la conexión a la base de datos.")
             return
 
-        # Inicializar estados
-        for state_var, default_value in {
-            'menu_dashboard': True,
-            'menu_admin': False,
-            'selected_module': list(MODULES.keys())[0],
-            'active_tab': 0,
-            'module_data': {},
-            'processed_data': {}
-        }.items():
-            if state_var not in st.session_state:
-                st.session_state[state_var] = default_value
+        # Inicializar estados del menú si no existen
+        if 'menu_dashboard' not in st.session_state:
+            st.session_state.menu_dashboard = True
+        if 'menu_admin' not in st.session_state:
+            st.session_state.menu_admin = False
+        if 'selected_module' not in st.session_state:
+            st.session_state.selected_module = list(MODULES.keys())[0]
+        if 'active_tab' not in st.session_state:
+            st.session_state.active_tab = 0
 
-        # Sidebar y selección de módulo
+        # Contenedor para el sidebar con estilo
         with st.sidebar:
             # Menú Dashboard
             if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True, type="primary"):
@@ -730,7 +727,7 @@ def main():
         # Mostrar header
         show_header()
 
-        # Cargar datos del módulo seleccionado
+        # Cargar datos según el módulo seleccionado
         if selected_module == 'SPE':
             if google_credentials is None:
                 st.error("No se pueden cargar datos de SPE sin credenciales de Google.")
@@ -741,37 +738,28 @@ def main():
             update_time = get_current_time()
             
         else:
+            # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                # Verificar si necesitamos cargar nuevos datos
-                need_reload = (
-                    selected_module not in st.session_state.processed_data or
-                    st.session_state.get('last_module') != selected_module or
-                    st.session_state.get('force_refresh', False)
-                )
-
-                if need_reload:
+                # Cargar datos solo si no están en session_state o si cambia el módulo
+                cache_key = f"data_{selected_module}"
+                if cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
                     data, update_time, _ = get_module_data(selected_module, collection_name)
                     if data is None:
-                        st.error("No se encontraron datos para este módulo.")
+                        st.error("No se encontraron datos para este módulo en la base de datos.")
                         return
-                    
-                    # Guardar en el cache de sesión
-                    st.session_state.processed_data[selected_module] = {
-                        'data': data,
-                        'update_time': update_time,
-                        'tabs_data': {}  # Cache para datos específicos de cada pestaña
-                    }
+                    st.session_state[cache_key] = data
                     st.session_state['last_module'] = selected_module
-                    if st.session_state.get('force_refresh'):
-                        st.session_state.force_refresh = False
                 else:
-                    # Usar datos cacheados
-                    cached = st.session_state.processed_data[selected_module]
-                    data = cached['data']
-                    update_time = cached['update_time']
+                    data = st.session_state[cache_key]
+                    update_time = get_current_time()
 
-                # Definir pestañas
+                # Agregar elementos adicionales al sidebar después de cargar los datos
+                with st.sidebar:
+                    if 'show_update_form' in st.session_state:
+                        del st.session_state.show_update_form
+
+                # Definir las pestañas y sus funciones correspondientes
                 tabs_config = [
                     ("Reporte de pendientes", render_pending_reports_tab, [data, selected_module]),
                     ("Ingreso de Expedientes", render_entry_analysis_tab, [data]),
@@ -781,30 +769,56 @@ def main():
                     ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, data_loader.get_rankings_collection()])
                 ]
 
-                # Crear pestañas
+                # Crear pestañas usando st.tabs
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
-                # Renderizar pestañas
+                # Preparar datos comunes para todas las pestañas
+                @st.cache_data(ttl=None)
+                def prepare_common_data(df):
+                    """Preprocesar datos comunes para todas las pestañas"""
+                    # Convertir fechas una sola vez
+                    date_columns = df.select_dtypes(include=['datetime64']).columns
+                    for col in date_columns:
+                        df[f"{col}_formatted"] = df[col].dt.strftime('%d/%m/%Y')
+                    return df
+
+                # Procesar datos comunes una sola vez si no está en caché
+                cache_key_processed = f"processed_data_{selected_module}"
+                if cache_key_processed not in st.session_state:
+                    data = prepare_common_data(data)
+                    st.session_state[cache_key_processed] = data
+
+                # Renderizar contenido de las pestañas
                 for i, tab in enumerate(tabs):
                     with tab:
-                        tab_key = f"tab_{selected_module}_{i}"
+                        # Usar el cache_key específico para cada pestaña
+                        tab_cache_key = f"tab_{selected_module}_{i}"
                         
-                        # Verificar si tenemos datos cacheados para esta pestaña
-                        if tab_key not in st.session_state.processed_data[selected_module]['tabs_data']:
-                            _, render_func, args = tabs_config[i]
-                            # Renderizar y cachear resultado
-                            with st.spinner(''):  # Spinner vacío
-                                result = render_func(*args)
-                                st.session_state.processed_data[selected_module]['tabs_data'][tab_key] = result
+                        # Si es la primera vez que se carga esta pestaña o si los datos han cambiado
+                        if tab_cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
+                            with st.spinner(f'Cargando {tabs_config[i][0]}...'):
+                                # Obtener la función y argumentos de la configuración
+                                _, render_func, args = tabs_config[i]
+                                render_func(*args)
+                                st.session_state[tab_cache_key] = True
                         else:
-                            # Usar datos cacheados de la pestaña
-                            cached_tab_data = st.session_state.processed_data[selected_module]['tabs_data'][tab_key]
-                            if cached_tab_data is not None:
-                                st.write(cached_tab_data)
+                            # Obtener la función y argumentos de la configuración
+                            _, render_func, args = tabs_config[i]
+                            render_func(*args)
+
+                # Limpiar caché antiguo si el módulo ha cambiado
+                if st.session_state.get('last_module') != selected_module:
+                    old_module = st.session_state.get('last_module')
+                    if old_module:
+                        keys_to_remove = [k for k in st.session_state.keys() 
+                                        if k.startswith(f"tab_{old_module}_") or 
+                                           k.startswith(f"processed_data_{old_module}")]
+                        for k in keys_to_remove:
+                            del st.session_state[k]
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")
-        logger.error(f"Error detallado: {str(e)}")
+        print(f"Error detallado: {str(e)}")
 
 if __name__ == "__main__":
     main()

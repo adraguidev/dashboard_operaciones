@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from io import BytesIO
 
 def render_assignment_report_tab(data: pd.DataFrame):
     try:
@@ -15,7 +14,7 @@ def render_assignment_report_tab(data: pd.DataFrame):
         # Asegurar que no hay valores None en las columnas críticas
         data['EVALASIGN'] = data['EVALASIGN'].fillna('')
         data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], errors='coerce')
-
+        
         # Información de asignaciones de los últimos 15 días
         st.subheader("📊 Porcentaje de Expedientes Asignados y Sin Asignar por Día")
         

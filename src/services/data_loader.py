@@ -230,13 +230,14 @@ class DataLoader:
 
             data = pd.DataFrame(list(cursor))
             
-            # Procesar fechas y asegurar EVALASIGN
-            if 'EVALASIGN' in data.columns:
-                data['EVALASIGN'] = data['EVALASIGN'].fillna('')
-                
+            # Procesar fechas
             for col in DATE_COLUMNS:
                 if col in data.columns:
                     data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
+            
+            # Asegurar que EVALASIGN tenga el formato correcto
+            if 'EVALASIGN' in data.columns:
+                data['EVALASIGN'] = data['EVALASIGN'].fillna('')
             
             return data
             
@@ -259,6 +260,8 @@ class DataLoader:
             # Si no hay cache, cargar datos frescos
             data = _self._load_fresh_data(module_name)
             if data is not None:
+                # Optimizar antes de cachear
+                data = _self._optimize_dtypes(data)
                 _self._cache_data(module_name, data)
             return data
 
@@ -317,8 +320,9 @@ class DataLoader:
 
         # Optimizar columnas de texto que se repiten frecuentemente
         for col in df.select_dtypes(include=['object']).columns:
-            if df[col].nunique() / len(df) < 0.5:  # Si hay muchos valores repetidos
-                df[col] = pd.Categorical(df[col])
+            if col != 'EVALASIGN':  # No convertir EVALASIGN a categórica
+                if df[col].nunique() / len(df) < 0.5:  # Si hay muchos valores repetidos
+                    df[col] = pd.Categorical(df[col])
 
         return df
 

@@ -90,50 +90,41 @@ def render_evaluator_report_tab(data: pd.DataFrame):
         with col1:
             filtrar = st.button("🔍 Aplicar Filtros", type="primary")
 
-        @st.cache_data  # Cachear los resultados del filtrado
-        def filter_data(df, evaluator, years, estados, etapas, estado_eval, fecha_inicio, fecha_fin):
-            filtered = df.copy()
-            
-            if evaluator == 'TODOS LOS EVALUADORES':
-                filtered = filtered[filtered['EVALASIGN'].str.strip() != '']
-            else:
-                filtered = filtered[filtered['EVALASIGN'] == evaluator]
-            
-            if years:
-                filtered = filtered[filtered['Anio'].isin(years)]
-            
-            if estado_eval == "Pendientes":
-                filtered = filtered[filtered['Evaluado'] == 'NO']
-            elif estado_eval == "Evaluados":
-                filtered = filtered[filtered['Evaluado'] == 'SI']
-            
-            if selected_estados:
-                filtered = filtered[filtered['ESTADO'].isin(selected_estados)]
-            
-            if selected_etapas:
-                filtered = filtered[filtered['UltimaEtapa'].isin(selected_etapas)]
-            
-            if fecha_inicio:
-                filtered = filtered[filtered['FechaExpendiente'].dt.date >= fecha_inicio]
-            if fecha_fin:
-                filtered = filtered[filtered['FechaExpendiente'].dt.date <= fecha_fin]
-            
-            return filtered
-
-        # Usar la función cacheada para el filtrado
         if filtrar:
-            filtered_data = filter_data(
-                data,
-                selected_evaluator,
-                selected_years,
-                selected_estados,
-                selected_etapas,
-                estado_eval,
-                fecha_inicio,
-                fecha_fin
-            )
+            # Aplicar filtros
+            filtered_data = data.copy()
             
-            # Mostrar resumen solo si hay datos filtrados
+            # Filtro por evaluador
+            if selected_evaluator == 'TODOS LOS EVALUADORES':
+                filtered_data = filtered_data[filtered_data['EVALASIGN'].str.strip() != '']
+            else:
+                filtered_data = filtered_data[filtered_data['EVALASIGN'] == selected_evaluator]
+            
+            # Filtro por año
+            if selected_years:
+                filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
+            
+            # Filtro por estado de evaluación
+            if estado_eval == "Pendientes":
+                filtered_data = filtered_data[filtered_data['Evaluado'] == 'NO']
+            elif estado_eval == "Evaluados":
+                filtered_data = filtered_data[filtered_data['Evaluado'] == 'SI']
+            
+            # Filtro por estado del expediente
+            if selected_estados:
+                filtered_data = filtered_data[filtered_data['ESTADO'].isin(selected_estados)]
+            
+            # Filtro por etapa
+            if selected_etapas:
+                filtered_data = filtered_data[filtered_data['UltimaEtapa'].isin(selected_etapas)]
+            
+            # Filtro por fechas
+            if fecha_inicio:
+                filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date >= fecha_inicio]
+            if fecha_fin:
+                filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date <= fecha_fin]
+
+            # Mostrar resultados
             if not filtered_data.empty:
                 st.markdown("### 📊 Resumen")
                 total = len(filtered_data)
@@ -148,15 +139,15 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 # Mostrar datos filtrados
                 st.markdown("### 📋 Detalle de Expedientes")
                 
-                # Usar todas las columnas disponibles
+                # Preparar datos para mostrar
                 display_data = filtered_data.copy()
                 
-                # Formatear fechas donde sea necesario
+                # Formatear fechas
                 date_columns = display_data.select_dtypes(include=['datetime64']).columns
                 for col in date_columns:
                     display_data[col] = display_data[col].dt.strftime('%d/%m/%Y')
                 
-                # Mostrar tabla con todas las columnas
+                # Mostrar tabla
                 st.dataframe(
                     display_data,
                     use_container_width=True

@@ -20,11 +20,14 @@ def render_closing_analysis_tab(data: pd.DataFrame):
         # Crear una copia del DataFrame para no modificar el original
         data = data.copy()
 
-        # Convertir columnas categóricas a string para evitar problemas de comparación
+        # Convertir columnas categóricas a string y asegurar que no sean categóricas
         categorical_columns = ['ESTADO', 'Evaluado', 'EVALASIGN', 'DESCRIPCION']
         for col in categorical_columns:
             if col in data.columns:
-                data[col] = data[col].astype(str)
+                if pd.api.types.is_categorical_dtype(data[col]):
+                    data[col] = data[col].astype(str)
+                elif isinstance(data[col], pd.Series):
+                    data[col] = data[col].fillna('').astype(str)
 
         # Asegurar que las fechas son válidas
         data['FechaPre'] = pd.to_datetime(data['FechaPre'], errors='coerce')
@@ -153,18 +156,18 @@ def render_closing_analysis_tab(data: pd.DataFrame):
                 # Contar cierres por día
                 cierres_por_dia = cierre_data.groupby(['EVALASIGN', 'FechaPre']).size().reset_index(name='Cierres')
 
-                # Agregar columna del día de la semana
+                # Agregar columna del día de la semana como número
                 cierres_por_dia['DiaSemana'] = cierres_por_dia['FechaPre'].dt.dayofweek  # 0 = Lunes, 6 = Domingo
 
-                # Filtrar días válidos
-                cierres_por_dia['Valido'] = (
-                    (cierres_por_dia['DiaSemana'].between(0, 4)) |  # Lunes a Viernes
+                # Filtrar días válidos usando números en lugar de categorías
+                dias_validos = cierres_por_dia[
+                    ((cierres_por_dia['DiaSemana'] >= 0) & (cierres_por_dia['DiaSemana'] <= 4)) |  # Lunes a Viernes
                     ((cierres_por_dia['DiaSemana'] == 5) & (cierres_por_dia['Cierres'] > 10)) |  # Sábados con > 10 cierres
                     ((cierres_por_dia['DiaSemana'] == 6) & (cierres_por_dia['Cierres'] > 10))    # Domingos con > 10 cierres
-                )
+                ]
 
-                # Filtrar solo días válidos
-                dias_validos = cierres_por_dia[cierres_por_dia['Valido'] & (cierres_por_dia['Cierres'] > 0)]
+                # Filtrar solo días con cierres
+                dias_validos = dias_validos[dias_validos['Cierres'] > 0]
 
                 if dias_validos.empty:
                     return pd.DataFrame(columns=['EVALASIGN', 'PromedioDíasCierre'])
@@ -284,7 +287,7 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             - Los expedientes que se cierran en 1-6 días muestran una gestión muy eficiente
             - El rango de 7-15 días representa el tiempo de procesamiento estándar
             - Expedientes que toman más de 15 días pueden requerir atención especial
-            - Casos de más de 28 d��as generalmente indican complejidades adicionales
+            - Casos de más de 28 días generalmente indican complejidades adicionales
             """)
 
             # Nueva sección: Top 25 expedientes más demorados

@@ -189,7 +189,7 @@ class DataLoader:
         """Fuerza una actualización de datos si la contraseña es correcta."""
         return _self.refresh_cache_in_background(password)
 
-    @st.cache_data(ttl=60)  # Cache de Streamlit por 1 hora como respaldo
+    @st.cache_data(ttl=None)  # Cache permanente de Streamlit
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
         """Carga datos consolidados desde migraciones_db con caché en MongoDB."""
         try:
@@ -199,11 +199,13 @@ class DataLoader:
             
             logger.info(f"Cargando datos para módulo: {module_name}")
             
-            # Intentar obtener datos del caché
+            # Intentar obtener datos del caché de MongoDB
             cached_data = _self._get_cached_data(module_name)
             if cached_data is not None:
-                logger.info(f"Usando datos cacheados para {module_name}")
+                logger.info(f"Usando datos cacheados de MongoDB para {module_name}")
                 return cached_data
+            
+            logger.info(f"No se encontró caché en MongoDB para {module_name}, cargando datos frescos...")
             
             # Si no hay caché, procesar normalmente
             if module_name == 'CCM-LEY':
@@ -221,47 +223,9 @@ class DataLoader:
                 return data
             
             # Procesar otros módulos
-            collection_name = MONGODB_COLLECTIONS.get(module_name)
-            if not collection_name:
-                raise ValueError(f"Módulo no reconocido: {module_name}")
-
-            collection = _self.migraciones_db[collection_name]
-            cursor = collection.find(
-                {},
-                {'_id': 0},
-                batch_size=5000,
-                hint=[("FechaExpendiente", 1)]
-            ).allow_disk_use(True)
-
-            chunks = []
-            chunk_size = 10000
-            current_chunk = []
-            
-            for doc in cursor:
-                current_chunk.append(doc)
-                if len(current_chunk) >= chunk_size:
-                    df_chunk = pd.DataFrame(current_chunk)
-                    df_chunk = _self._optimize_dtypes(df_chunk)
-                    chunks.append(df_chunk)
-                    current_chunk = []
-
-            if current_chunk:
-                df_chunk = pd.DataFrame(current_chunk)
-                df_chunk = _self._optimize_dtypes(df_chunk)
-                chunks.append(df_chunk)
-
-            if not chunks:
-                return None
-
-            data = pd.concat(chunks, ignore_index=True)
-            
-            # Procesar fechas
-            for col in DATE_COLUMNS:
-                if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
-            
-            # Guardar en caché
-            _self._save_to_cache(module_name, data)
+            data = _self._load_fresh_data(module_name)
+            if data is not None:
+                _self._save_to_cache(module_name, data)
             
             return data
 
@@ -333,64 +297,87 @@ class DataLoader:
             return False
         
         try:
-            # Mostrar barra de progreso
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
             # Lista de módulos a actualizar (excluyendo SPE que tiene su propia lógica)
             modules_to_update = [mod for mod in MODULES.keys() if mod != 'SPE']
             total_modules = len(modules_to_update)
             
             logger.info(f"Iniciando actualización de caché para {total_modules} módulos")
             
-            for idx, module in enumerate(modules_to_update):
-                try:
-                    status_text.text(f"Actualizando caché de {MODULES[module]}...")
-                    logger.info(f"Procesando módulo: {module}")
-                    
-                    # Limpiar caché existente para este módulo
-                    cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
-                    cache_collection.delete_one({"module": module})
-                    logger.info(f"Caché limpiado para {module}")
-                    
-                    # Cargar datos frescos
-                    if module == 'CCM-LEY':
-                        # Procesar CCM-LEY
-                        logger.info("Cargando datos para CCM-LEY...")
-                        ccm_data = _self._load_fresh_data('CCM')
-                        ccm_esp_data = _self._load_fresh_data('CCM-ESP')
+            # Crear contenedores para la UI
+            progress_container = st.empty()
+            status_container = st.empty()
+            detail_container = st.empty()
+            
+            with st.spinner("Actualizando caché del sistema..."):
+                for idx, module in enumerate(modules_to_update):
+                    try:
+                        # Actualizar mensajes de estado
+                        status_container.info(f"⏳ Actualizando {MODULES[module]}...")
+                        detail_container.text(f"Procesando datos...")
                         
-                        if ccm_data is not None and ccm_esp_data is not None:
-                            data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])].copy()
-                            _self._save_to_cache(module, data)
-                            logger.info(f"Datos de CCM-LEY procesados: {len(data)} registros")
-                    else:
-                        # Cargar datos frescos para otros módulos
-                        data = _self._load_fresh_data(module)
-                        if data is not None:
-                            _self._save_to_cache(module, data)
-                            logger.info(f"Datos de {module} procesados: {len(data)} registros")
-                    
-                    # Actualizar progreso
-                    progress = (idx + 1) / total_modules
-                    progress_bar.progress(progress)
-                    
-                except Exception as e:
-                    logger.error(f"Error actualizando caché para {module}: {str(e)}")
-                    st.error(f"Error en módulo {MODULES[module]}: {str(e)}")
-                    continue
-            
-            # Limpiar caché de Streamlit
-            st.cache_data.clear()
-            logger.info("Caché de Streamlit limpiado")
-            
-            status_text.text("✅ Caché actualizado completamente")
-            time.sleep(1)  # Pequeña pausa para mostrar el mensaje final
-            status_text.empty()
-            progress_bar.empty()
-            
-            return True
-            
+                        # Actualizar barra de progreso
+                        progress = (idx) / total_modules
+                        progress_container.progress(progress)
+                        
+                        logger.info(f"Procesando módulo: {module}")
+                        
+                        # Limpiar caché existente para este módulo
+                        cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
+                        cache_collection.delete_one({"module": module})
+                        logger.info(f"Caché limpiado para {module}")
+                        detail_container.text(f"Caché anterior limpiado...")
+                        
+                        # Cargar datos frescos
+                        if module == 'CCM-LEY':
+                            # Procesar CCM-LEY
+                            logger.info("Cargando datos para CCM-LEY...")
+                            detail_container.text(f"Cargando datos de CCM...")
+                            ccm_data = _self._load_fresh_data('CCM')
+                            detail_container.text(f"Cargando datos de CCM-ESP...")
+                            ccm_esp_data = _self._load_fresh_data('CCM-ESP')
+                            
+                            if ccm_data is not None and ccm_esp_data is not None:
+                                detail_container.text(f"Procesando datos...")
+                                data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])].copy()
+                                _self._save_to_cache(module, data)
+                                detail_container.text(f"Guardando en caché...")
+                                logger.info(f"Datos de CCM-LEY procesados: {len(data)} registros")
+                        else:
+                            # Cargar datos frescos para otros módulos
+                            detail_container.text(f"Cargando datos frescos...")
+                            data = _self._load_fresh_data(module)
+                            if data is not None:
+                                detail_container.text(f"Guardando en caché...")
+                                _self._save_to_cache(module, data)
+                                logger.info(f"Datos de {module} procesados: {len(data)} registros")
+                        
+                        # Actualizar progreso final del módulo
+                        progress = (idx + 1) / total_modules
+                        progress_container.progress(progress)
+                        
+                        # Mostrar éxito del módulo
+                        status_container.success(f"✅ {MODULES[module]} actualizado")
+                        time.sleep(0.5)  # Pequeña pausa para mostrar el éxito
+                        
+                    except Exception as e:
+                        logger.error(f"Error actualizando caché para {module}: {str(e)}")
+                        status_container.error(f"❌ Error en {MODULES[module]}: {str(e)}")
+                        time.sleep(1)  # Pausa para mostrar el error
+                        continue
+                
+                # Limpiar caché de Streamlit
+                st.cache_data.clear()
+                logger.info("Caché de Streamlit limpiado")
+                
+                # Limpiar contenedores
+                progress_container.empty()
+                detail_container.empty()
+                
+                # Mostrar mensaje final
+                status_container.success("✅ Caché actualizado completamente")
+                
+                return True
+                
         except Exception as e:
             logger.error(f"Error en la actualización del caché: {str(e)}")
             st.error(f"Error en la actualización del caché: {str(e)}")

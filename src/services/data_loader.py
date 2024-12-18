@@ -169,9 +169,23 @@ class DataLoader:
             }
             
             collection = _self.migraciones_db[collection_name]
-            # Usar hint para forzar el uso de índices
-            cursor = collection.find({}, projection).hint([("FechaExpendiente", 1), ("FechaPre", 1)])
-            data = pd.DataFrame(list(cursor))
+            
+            # Verificar si existen los índices antes de usarlos
+            existing_indexes = collection.index_information()
+            has_required_indexes = all(
+                f"{field}_1" in existing_indexes 
+                for field in ["FechaExpendiente", "FechaPre"]
+            )
+            
+            # Construir la consulta base
+            query = collection.find({}, projection)
+            
+            # Usar hint solo si existen los índices necesarios
+            if has_required_indexes:
+                query = query.hint([("FechaExpendiente", 1), ("FechaPre", 1)])
+            
+            # Ejecutar la consulta
+            data = pd.DataFrame(list(query))
 
             if data.empty:
                 st.error(f"No se encontraron datos para el módulo {module_name} en la base de datos.")

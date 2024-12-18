@@ -139,36 +139,31 @@ class DataLoader:
             logger.error(f"Error al configurar colección de caché: {str(e)}")
 
     def _get_cached_data(_self, module_name: str) -> pd.DataFrame:
-        """Intenta obtener datos cacheados."""
+        """Intenta obtener datos cacheados de MongoDB."""
         try:
-            # Verificar primero en session_state
-            cache_key = f"cached_data_{module_name}"
-            if cache_key in st.session_state:
-                return st.session_state[cache_key]
-
-            # Si no está en session_state, buscar en MongoDB
+            # Ir directamente a MongoDB para el caché
             cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
             cached_data = cache_collection.find_one(
                 {"module": module_name},
-                {"_id": 0, "data": 1}  # Solo traer los datos necesarios
+                {"_id": 0, "data": 1, "timestamp": 1}
             )
             
             if cached_data and 'data' in cached_data:
-                df = pd.DataFrame(cached_data['data'])
-                if not df.empty:
-                    # Convertir fechas de manera más eficiente
-                    date_cols = [col for col in DATE_COLUMNS if col in df.columns]
-                    if date_cols:
-                        df[date_cols] = df[date_cols].apply(pd.to_datetime, errors='coerce')
-                    
-                    # Guardar en session_state
-                    st.session_state[cache_key] = df
-                    return df
+                # Verificar si el caché es reciente (menos de CACHE_TTL minutos)
+                cache_time = cached_data.get('timestamp')
+                if cache_time and (datetime.now() - cache_time).total_seconds() < CACHE_TTL * 60:
+                    df = pd.DataFrame(cached_data['data'])
+                    if not df.empty:
+                        # Convertir fechas eficientemente
+                        date_cols = [col for col in DATE_COLUMNS if col in df.columns]
+                        if date_cols:
+                            df[date_cols] = df[date_cols].apply(pd.to_datetime, errors='coerce')
+                        return df
             
             return None
             
         except Exception as e:
-            logger.error(f"Error al obtener caché: {str(e)}")
+            logger.error(f"Error al obtener caché de MongoDB: {str(e)}")
             return None
 
     def _save_to_cache(_self, module_name: str, data: pd.DataFrame):
@@ -209,7 +204,6 @@ class DataLoader:
         """Fuerza una actualización de datos si la contraseña es correcta."""
         return _self.refresh_cache_in_background(password)
 
-    @st.cache_data(ttl=None, show_spinner=False)
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
         """Carga datos consolidados desde migraciones_db con caché en MongoDB."""
         try:
@@ -219,9 +213,10 @@ class DataLoader:
             
             logger.info(f"Cargando datos para módulo: {module_name}")
             
-            # Intentar obtener datos del caché
+            # Intentar obtener datos del caché de MongoDB
             cached_data = _self._get_cached_data(module_name)
             if cached_data is not None:
+                logger.info(f"Usando datos de caché para {module_name}")
                 return cached_data
             
             logger.info(f"No se encontró caché para {module_name}, cargando datos frescos...")
@@ -229,8 +224,8 @@ class DataLoader:
             # Si no hay caché, procesar normalmente
             if module_name == 'CCM-LEY':
                 # Procesar CCM-LEY
-                ccm_data = _self.load_module_data('CCM')
-                ccm_esp_data = _self.load_module_data('CCM-ESP')
+                ccm_data = _self._load_fresh_data('CCM')
+                ccm_esp_data = _self._load_fresh_data('CCM-ESP')
                 
                 if ccm_data is None or ccm_esp_data is None:
                     return None
@@ -308,7 +303,6 @@ class DataLoader:
     def get_rankings_collection(_self):
         """Retorna la colección de rankings de expedientes_db."""
         return _self.expedientes_db['rankings']
-
     def refresh_cache_in_background(_self, password: str) -> bool:
         """Actualiza el caché en el backend para todos los módulos."""
         if not _self.verify_password(password):

@@ -8,7 +8,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
         st.header("👨‍💼 Reporte por Evaluador")
         
         # Validar datos de manera más eficiente
-        if data is None or len(data) == 0:  # Usar len en lugar de .empty
+        if data is None or len(data) == 0:
             st.error("No hay datos disponibles para mostrar")
             return
 
@@ -27,15 +27,18 @@ def render_evaluator_report_tab(data: pd.DataFrame):
 
         # Limpiar y preparar la columna EVALASIGN una sola vez
         if 'EVALASIGN' in data.columns:
-            # Convertir a string primero si es categórico
-            if pd.api.types.is_categorical_dtype(data['EVALASIGN']):
-                data['EVALASIGN'] = data['EVALASIGN'].astype(str)
-            
-            # Ahora podemos llenar NaN y filtrar
+            # Asegurarnos que los valores no sean nulos y sean string
             data['EVALASIGN'] = data['EVALASIGN'].fillna('').astype(str)
+            # Filtrar evaluadores válidos (no vacíos)
             evaluators = sorted(data[data['EVALASIGN'].str.strip() != '']['EVALASIGN'].unique())
-            evaluators = ['TODOS LOS EVALUADORES'] + list(evaluators)
-        
+            if not evaluators:
+                st.error("No se encontraron evaluadores en los datos")
+                return
+            evaluators = ['TODOS LOS EVALUADORES'] + evaluators
+        else:
+            st.error("No se encontró la columna de evaluadores")
+            return
+
         # Verificar si es módulo SOL de manera más precisa
         is_sol_module = (
             'EstadoTramite' in data.columns and 
@@ -178,16 +181,6 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                 st.info("No se encontraron expedientes con los filtros seleccionados")
 
         else:
-            # Asegurar que EVALASIGN existe antes de continuar
-            if 'EVALASIGN' not in data.columns:
-                st.error("No se encontró la columna de evaluadores")
-                return
-
-            # Modificación para incluir "TODOS LOS EVALUADORES"
-            data['EVALASIGN'] = data['EVALASIGN'].fillna('')
-            evaluators = sorted(data[data['EVALASIGN'] != '']['EVALASIGN'].unique())
-            evaluators = ['TODOS LOS EVALUADORES'] + evaluators
-            
             # Selección de evaluador
             selected_evaluator = st.selectbox(
                 "Seleccionar Evaluador",
@@ -256,50 +249,41 @@ def render_evaluator_report_tab(data: pd.DataFrame):
             with col1:
                 filtrar = st.button("🔍 Aplicar Filtros", type="primary")
 
-            @st.cache_data  # Cachear los resultados del filtrado
-            def filter_data(df, evaluator, years, estados, etapas, estado_eval, fecha_inicio, fecha_fin):
-                filtered = df.copy()
-                
-                if evaluator == 'TODOS LOS EVALUADORES':
-                    filtered = filtered[filtered['EVALASIGN'].str.strip() != '']
-                else:
-                    filtered = filtered[filtered['EVALASIGN'] == evaluator]
-                
-                if years:
-                    filtered = filtered[filtered['Anio'].isin(years)]
-                
-                if estado_eval == "Pendientes":
-                    filtered = filtered[filtered['Evaluado'] == 'NO']
-                elif estado_eval == "Evaluados":
-                    filtered = filtered[filtered['Evaluado'] == 'SI']
-                
-                if selected_estados:
-                    filtered = filtered[filtered['ESTADO'].isin(selected_estados)]
-                
-                if selected_etapas:
-                    filtered = filtered[filtered['UltimaEtapa'].isin(selected_etapas)]
-                
-                if fecha_inicio:
-                    filtered = filtered[filtered['FechaExpendiente'].dt.date >= fecha_inicio]
-                if fecha_fin:
-                    filtered = filtered[filtered['FechaExpendiente'].dt.date <= fecha_fin]
-                
-                return filtered
-
-            # Usar la función cacheada para el filtrado
             if filtrar:
-                filtered_data = filter_data(
-                    data,
-                    selected_evaluator,
-                    selected_years,
-                    selected_estados,
-                    selected_etapas,
-                    estado_eval,
-                    fecha_inicio,
-                    fecha_fin
-                )
+                # Aplicar filtros
+                filtered_data = data.copy()
                 
-                # Mostrar resumen solo si hay datos filtrados
+                # Filtro por evaluador
+                if selected_evaluator != 'TODOS LOS EVALUADORES':
+                    filtered_data = filtered_data[filtered_data['EVALASIGN'] == selected_evaluator]
+                else:
+                    filtered_data = filtered_data[filtered_data['EVALASIGN'].str.strip() != '']
+                
+                # Filtro por año
+                if selected_years:
+                    filtered_data = filtered_data[filtered_data['Anio'].isin(selected_years)]
+                
+                # Filtro por estado de evaluación
+                if estado_eval == "Pendientes":
+                    filtered_data = filtered_data[filtered_data['Evaluado'] == 'NO']
+                elif estado_eval == "Evaluados":
+                    filtered_data = filtered_data[filtered_data['Evaluado'] == 'SI']
+                
+                # Filtro por estado del expediente
+                if selected_estados:
+                    filtered_data = filtered_data[filtered_data['ESTADO'].isin(selected_estados)]
+                
+                # Filtro por etapa
+                if selected_etapas:
+                    filtered_data = filtered_data[filtered_data['UltimaEtapa'].isin(selected_etapas)]
+                
+                # Filtro por fechas
+                if fecha_inicio:
+                    filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date >= fecha_inicio]
+                if fecha_fin:
+                    filtered_data = filtered_data[filtered_data['FechaExpendiente'].dt.date <= fecha_fin]
+
+                # Mostrar resultados
                 if not filtered_data.empty:
                     st.markdown("### 📊 Resumen")
                     total = len(filtered_data)
@@ -314,15 +298,15 @@ def render_evaluator_report_tab(data: pd.DataFrame):
                     # Mostrar datos filtrados
                     st.markdown("### 📋 Detalle de Expedientes")
                     
-                    # Usar todas las columnas disponibles
+                    # Preparar datos para mostrar
                     display_data = filtered_data.copy()
                     
-                    # Formatear fechas donde sea necesario
+                    # Formatear fechas
                     date_columns = display_data.select_dtypes(include=['datetime64']).columns
                     for col in date_columns:
                         display_data[col] = display_data[col].dt.strftime('%d/%m/%Y')
                     
-                    # Mostrar tabla con todas las columnas
+                    # Mostrar tabla
                     st.dataframe(
                         display_data,
                         use_container_width=True
@@ -349,7 +333,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
 
                     with col2:
                         # Botón de descarga formateado
-                        excel_data_evaluador = create_excel_download(
+                        excel_data = create_excel_download(
                             display_data,
                             f"{filename_prefix}_formateado.xlsx",
                             "Reporte_Evaluador",
@@ -358,7 +342,7 @@ def render_evaluator_report_tab(data: pd.DataFrame):
 
                         st.download_button(
                             label="📥 Descargar Reporte Formateado",
-                            data=excel_data_evaluador,
+                            data=excel_data,
                             file_name=f"{filename_prefix}_formateado.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )

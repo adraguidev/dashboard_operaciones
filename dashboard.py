@@ -667,32 +667,54 @@ def show_loading_progress(message, action, show_fade_in=True):
 def prepare_common_data(df):
     """Preprocesar datos comunes para todas las pestañas de manera optimizada"""
     try:
-        # Solo procesar si df no es None
         if df is None:
             return None
 
-        # Crear una copia superficial para evitar modificar el original
-        processed_df = df.copy(deep=False)
-        
-        # Convertir fechas en paralelo usando ThreadPoolExecutor
+        # No crear copia del DataFrame completo, solo modificar las columnas necesarias
+        processed_df = df
+
+        # Procesar fechas en chunks para mejor rendimiento de memoria
         date_columns = processed_df.select_dtypes(include=['datetime64']).columns
         if len(date_columns) > 0:
+            chunk_size = max(1, len(date_columns) // 4)  # Dividir en 4 chunks o menos
+            date_column_chunks = [date_columns[i:i + chunk_size] for i in range(0, len(date_columns), chunk_size)]
+            
             with ThreadPoolExecutor(max_workers=4) as executor:
-                def format_date_column(col):
-                    return col, processed_df[col].dt.strftime('%d/%m/%Y')
+                def format_date_columns(columns):
+                    formatted = {}
+                    for col in columns:
+                        # Usar método más rápido de formateo
+                        formatted[col] = processed_df[col].map(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
+                    return formatted
                 
-                # Procesar todas las columnas de fecha en paralelo
-                formatted_dates = dict(executor.map(format_date_column, date_columns))
+                # Procesar chunks en paralelo
+                results = list(executor.map(format_date_columns, date_column_chunks))
                 
-                # Asignar resultados de vuelta al DataFrame
-                for col, formatted in formatted_dates.items():
-                    processed_df[f"{col}_formatted"] = formatted
+                # Combinar resultados
+                for result in results:
+                    for col, formatted in result.items():
+                        processed_df[f"{col}_formatted"] = formatted
 
-        # Optimizar tipos de datos agresivamente
-        for col in processed_df.select_dtypes(include=['object']).columns:
-            # Solo convertir a categórico si hay menos de 50% de valores únicos
-            if processed_df[col].nunique() / len(processed_df) < 0.5:
-                processed_df[col] = pd.Categorical(processed_df[col])
+        # Optimizar tipos de datos de manera más eficiente
+        object_columns = processed_df.select_dtypes(include=['object']).columns
+        
+        def optimize_column(col):
+            unique_ratio = processed_df[col].nunique() / len(processed_df)
+            if unique_ratio < 0.5:
+                # Usar categorías solo si hay suficientes repeticiones
+                if len(processed_df) > 1000:  # Para datasets grandes
+                    return col, pd.Categorical(processed_df[col])
+                else:
+                    return col, processed_df[col]
+            return col, processed_df[col]
+        
+        # Procesar columnas en paralelo
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            results = list(executor.map(lambda col: optimize_column(col), object_columns))
+            
+            # Aplicar optimizaciones en batch
+            for col, optimized in results:
+                processed_df[col] = optimized
 
         return processed_df
     except Exception as e:
@@ -794,10 +816,22 @@ def main():
                             st.error("No se encontraron datos para este módulo.")
                             return
                         
-                        # Procesar datos inmediatamente después de cargarlos
-                        processed_data = prepare_common_data(data)
+                        # Procesar datos en chunks si el dataset es grande
+                        if len(data) > 10000:
+                            chunk_size = 5000
+                            chunks = [data[i:i + chunk_size] for i in range(0, len(data), chunk_size)]
+                            
+                            processed_chunks = []
+                            for i, chunk in enumerate(chunks):
+                                with st.spinner(f'Procesando datos ({i+1}/{len(chunks)})...'):
+                                    processed_chunk = prepare_common_data(chunk)
+                                    processed_chunks.append(processed_chunk)
+                            
+                            processed_data = pd.concat(processed_chunks, ignore_index=True)
+                        else:
+                            processed_data = prepare_common_data(data)
                         
-                        # Guardar tanto los datos originales como los procesados
+                        # Guardar en caché
                         st.session_state[cache_key] = {
                             'original': data,
                             'processed': processed_data,

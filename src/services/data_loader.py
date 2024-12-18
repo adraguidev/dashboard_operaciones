@@ -381,38 +381,141 @@ class DataLoader:
         """Limpia el cache de manera inteligente."""
         try:
             # Obtener todas las claves y sus metadatos
-            all_keys = _self.redis_client.keys("migraciones:*:data")
+            all_keys = _self.redis_client.keys("migraciones:*:data") + _self.redis_client.keys("migraciones:*:processed_*")
             modules_info = []
             
             for key in all_keys:
-                module = key.decode().split(':')[1]
-                metadata_key = _self._get_cache_key(module, 'metadata')
+                key_parts = key.decode().split(':')
+                module = key_parts[1]
+                operation = key_parts[2] if len(key_parts) > 2 else 'data'
+                
+                metadata_key = _self._get_cache_key(module, f"{operation}_meta")
                 metadata = _self.redis_client.get(metadata_key)
                 
                 if metadata:
                     metadata = json.loads(metadata)
                     modules_info.append({
                         'module': module,
+                        'operation': operation,
                         'size': metadata.get('size_mb', 0),
-                        'last_access': metadata.get('cached_at')
+                        'last_access': metadata.get('cached_at'),
+                        'is_processed': 'processed' in operation
                     })
             
-            # Ordenar por tamaño y fecha de último acceso
-            modules_info.sort(key=lambda x: (x['last_access'], -x['size']))
+            # Ordenar dando prioridad a datos sin procesar y más recientes
+            modules_info.sort(key=lambda x: (
+                x['is_processed'],  # Primero eliminar datos procesados
+                x['last_access'],   # Luego los más antiguos
+                -x['size']          # Finalmente los más grandes
+            ))
             
-            # Eliminar módulos menos usados hasta liberar suficiente espacio
+            # Eliminar módulos hasta liberar suficiente espacio
             for module_info in modules_info:
                 module = module_info['module']
+                operation = module_info['operation']
                 _self.redis_client.delete(
-                    _self._get_cache_key(module, 'data'),
-                    _self._get_cache_key(module, 'metadata')
+                    _self._get_cache_key(module, operation),
+                    _self._get_cache_key(module, f"{operation}_meta")
                 )
-                logger.info(f"Cache limpiado para {module}")
+                logger.info(f"Cache limpiado para {module}:{operation}")
                 
                 current_size = _self._get_cache_size()
-                if current_size < (REDIS_MEMORY_LIMIT * 0.7):  # 70% del límite
+                if current_size < (REDIS_MEMORY_LIMIT * 0.7):
                     break
                     
         except Exception as e:
             logger.error(f"Error al limpiar cache: {str(e)}")
             _self.redis_client.flushdb()  # Si algo falla, limpiar todo
+
+    def cache_processed_data(_self, module_name: str, data: pd.DataFrame, process_type: str) -> bool:
+        """Almacena datos procesados en Redis."""
+        try:
+            cache_key = _self._get_cache_key(module_name, f"processed_{process_type}")
+            
+            # Verificar espacio disponible
+            current_size = _self._get_cache_size()
+            if current_size > (REDIS_MEMORY_LIMIT * 0.9):
+                logger.warning("Cache casi lleno, limpiando datos antiguos...")
+                _self._clear_old_cache()
+            
+            # Optimizar y serializar DataFrame
+            data = _self._optimize_dtypes(data)
+            import zlib
+            serialized_data = zlib.compress(pickle.dumps(data))
+            
+            # TTL más corto para datos procesados
+            ttl = min(CACHE_TTL.get(module_name, CACHE_TTL['default']), 1800)  # máximo 30 minutos
+            success = _self.redis_client.setex(cache_key, ttl, serialized_data)
+            
+            if success:
+                metadata = {
+                    'rows': len(data),
+                    'process_type': process_type,
+                    'cached_at': datetime.now().isoformat(),
+                    'ttl': ttl,
+                    'size_mb': len(serialized_data) / 1024 / 1024
+                }
+                metadata_key = _self._get_cache_key(module_name, f"processed_{process_type}_meta")
+                _self.redis_client.setex(metadata_key, ttl, json.dumps(metadata))
+                
+                logger.info(f"Datos procesados cacheados para {module_name}:{process_type}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error al cachear datos procesados: {str(e)}")
+            return False
+
+    def get_processed_data(_self, module_name: str, process_type: str) -> pd.DataFrame:
+        """Recupera datos procesados del cache."""
+        try:
+            cache_key = _self._get_cache_key(module_name, f"processed_{process_type}")
+            cached_data = _self.redis_client.get(cache_key)
+            
+            if cached_data:
+                # Descomprimir y deserializar
+                import zlib
+                data = pickle.loads(zlib.decompress(cached_data))
+                
+                # Verificar metadata
+                metadata_key = _self._get_cache_key(module_name, f"processed_{process_type}_meta")
+                metadata = _self.redis_client.get(metadata_key)
+                if metadata:
+                    metadata = json.loads(metadata)
+                    logger.info(f"Usando cache procesado para {module_name}:{process_type}")
+                
+                return data
+            return None
+        except Exception as e:
+            logger.error(f"Error al recuperar datos procesados: {str(e)}")
+            return None
+
+    def prepare_common_data(_self, module_name: str, data: pd.DataFrame) -> pd.DataFrame:
+        """Prepara los datos comunes con soporte de cache."""
+        try:
+            # Intentar obtener datos preprocesados del cache
+            processed_data = _self.get_processed_data(module_name, "common")
+            if processed_data is not None:
+                return processed_data
+
+            # Si no hay cache, procesar los datos
+            logger.info(f"Procesando datos comunes para {module_name}...")
+            
+            # Aquí va tu lógica de procesamiento común
+            # Por ejemplo:
+            data = data.copy()
+            
+            # Procesar fechas
+            for col in DATE_COLUMNS:
+                if col in data.columns:
+                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
+            
+            # Otras transformaciones comunes...
+            
+            # Cachear los resultados
+            _self.cache_processed_data(module_name, data, "common")
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error en prepare_common_data: {str(e)}")
+            return data  # Retornar datos sin procesar en caso de error

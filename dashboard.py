@@ -12,6 +12,7 @@ from src.utils.database import get_google_credentials
 import time
 from datetime import datetime, timedelta
 import pytz
+import pandas as pd
 
 # Configuración de página
 st.set_page_config(
@@ -659,6 +660,13 @@ def show_loading_progress(message, action, show_fade_in=True):
         
         progress_bar.empty()
         return result
+
+def prepare_common_data(data: pd.DataFrame, module_name: str) -> pd.DataFrame:
+    """Prepara los datos comunes para todos los módulos."""
+    if 'data_loader' not in st.session_state:
+        st.session_state.data_loader = DataLoader()
+    
+    return st.session_state.data_loader.prepare_common_data(module_name, data)
 
 def main():
     try:

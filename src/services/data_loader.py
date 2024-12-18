@@ -103,34 +103,19 @@ class DataLoader:
     def _cache_data(_self, module_name: str, data: pd.DataFrame) -> bool:
         """Almacena datos en Redis con compresión."""
         try:
-            start_time = time.time()
             cache_key = _self._get_cache_key(module_name)
             
             # Verificar espacio disponible
             current_size = _self._get_cache_size()
-            logger.info(f"Tamaño actual del cache: {current_size:.2f}MB")
-            
             if current_size > (REDIS_MEMORY_LIMIT * 0.9):  # 90% del límite
-                logger.warning(f"Cache casi lleno ({current_size:.2f}MB), limpiando datos antiguos...")
+                logger.warning("Cache casi lleno, limpiando datos antiguos...")
                 _self.redis_client.flushdb()
-                logger.info("Cache limpiado")
-            
-            # Optimizar DataFrame antes de serializar
-            data = _self._optimize_dtypes(data)
             
             # Serializar DataFrame
-            logger.info("Serializando datos...")
-            serialized_data = pickle.dumps(data, protocol=4)  # Usar protocolo más eficiente
-            data_size = len(serialized_data) / 1024 / 1024
-            logger.info(f"Tamaño de datos serializados: {data_size:.2f}MB")
-            
-            if data_size > REDIS_MEMORY_LIMIT:
-                logger.error(f"Datos demasiado grandes para cache ({data_size:.2f}MB > {REDIS_MEMORY_LIMIT/1024/1024}MB)")
-                return False
+            serialized_data = pickle.dumps(data)
             
             # Guardar en Redis con TTL
             ttl = CACHE_TTL.get(module_name, CACHE_TTL['default'])
-            logger.info(f"Guardando en Redis con TTL de {ttl} segundos...")
             success = _self.redis_client.setex(cache_key, ttl, serialized_data)
             
             if success:
@@ -139,18 +124,13 @@ class DataLoader:
                     'rows': len(data),
                     'columns': list(data.columns),
                     'cached_at': datetime.now().isoformat(),
-                    'ttl': ttl,
-                    'size_mb': data_size
+                    'ttl': ttl
                 }
                 metadata_key = _self._get_cache_key(module_name, 'metadata')
                 _self.redis_client.setex(metadata_key, ttl, json.dumps(metadata))
                 
-                elapsed = time.time() - start_time
-                logger.info(f"Datos cacheados para {module_name}: {len(data)} registros, {data_size:.2f}MB en {elapsed:.2f} segundos")
+                logger.info(f"Datos cacheados para {module_name}: {len(data)} registros")
                 return True
-            return False
-        except redis.ResponseError as e:
-            logger.error(f"Error de Redis al cachear datos: {str(e)}")
             return False
         except Exception as e:
             logger.error(f"Error al cachear datos: {str(e)}")
@@ -159,16 +139,7 @@ class DataLoader:
     def _get_cached_data(_self, module_name: str) -> pd.DataFrame:
         """Recupera datos cacheados de Redis."""
         try:
-            start_time = time.time()
             cache_key = _self._get_cache_key(module_name)
-            
-            # Verificar si existe la clave
-            if not _self.redis_client.exists(cache_key):
-                logger.info(f"No se encontró cache para {module_name}")
-                return None
-            
-            # Obtener datos
-            logger.info(f"Recuperando datos de {module_name} desde Redis...")
             cached_data = _self.redis_client.get(cache_key)
             
             if cached_data:
@@ -177,18 +148,9 @@ class DataLoader:
                 metadata = _self.redis_client.get(metadata_key)
                 if metadata:
                     metadata = json.loads(metadata)
-                    logger.info(f"Metadata del cache: {metadata}")
+                    logger.info(f"Usando cache para {module_name} - {metadata['rows']} registros")
                 
-                # Deserializar datos
-                logger.info("Deserializando datos...")
-                data = pickle.loads(cached_data)
-                
-                elapsed = time.time() - start_time
-                logger.info(f"Datos recuperados del cache en {elapsed:.2f} segundos")
-                return data
-            return None
-        except redis.ResponseError as e:
-            logger.error(f"Error de Redis al recuperar cache: {str(e)}")
+                return pickle.loads(cached_data)
             return None
         except Exception as e:
             logger.error(f"Error al recuperar cache: {str(e)}")
@@ -202,48 +164,26 @@ class DataLoader:
         
         try:
             # Limpiar cache de Redis
-            logger.info("Limpiando cache de Redis...")
             _self.redis_client.flushdb()
             logger.info("Cache de Redis limpiado")
             
             # Cargar datos frescos para cada módulo
             modules = ['CCM', 'CCM-ESP', 'PRR', 'SOL']
-            total_start = time.time()
-            
             with st.spinner("Actualizando datos..."):
                 for module in modules:
-                    logger.info(f"Procesando módulo {module}...")
-                    module_start = time.time()
-                    
                     data = _self._load_fresh_data(module)
                     if data is not None:
-                        if _self._cache_data(module, data):
-                            module_elapsed = time.time() - module_start
-                            logger.info(f"Módulo {module} procesado en {module_elapsed:.2f} segundos")
-                        else:
-                            logger.error(f"Error al cachear datos de {module}")
-                    else:
-                        logger.error(f"Error al cargar datos frescos de {module}")
+                        _self._cache_data(module, data)
                         
                 # CCM-LEY se procesa después de CCM y CCM-ESP
-                logger.info("Procesando CCM-LEY...")
                 ccm_data = _self._get_cached_data('CCM')
                 ccm_esp_data = _self._get_cached_data('CCM-ESP')
-                
                 if ccm_data is not None and ccm_esp_data is not None:
                     ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
-                    if _self._cache_data('CCM-LEY', ccm_ley_data):
-                        logger.info("CCM-LEY procesado exitosamente")
-                    else:
-                        logger.error("Error al cachear CCM-LEY")
-                else:
-                    logger.error("No se pudo procesar CCM-LEY por falta de datos de CCM o CCM-ESP")
+                    _self._cache_data('CCM-LEY', ccm_ley_data)
             
-            total_elapsed = time.time() - total_start
-            logger.info(f"Actualización completa en {total_elapsed:.2f} segundos")
             st.success("✅ Datos actualizados y cacheados correctamente")
             return True
-            
         except Exception as e:
             logger.error(f"Error en actualización: {str(e)}")
             st.error(f"Error al actualizar datos: {str(e)}")
@@ -275,79 +215,27 @@ class DataLoader:
             logger.error(f"Error cargando datos frescos: {str(e)}")
             return None
 
-    @st.cache_data(ttl=3600, show_spinner=False)  # Cache por 1 hora
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos con soporte de cache Redis y Streamlit."""
+        """Carga datos con soporte de cache Redis."""
         try:
-            start_time = time.time()
-            logger.info(f"Iniciando carga de datos para {module_name}")
-            
             # SPE siempre se carga fresco
             if module_name == 'SPE':
                 return _self._load_spe_from_sheets()
             
-            # Intentar obtener del cache de Redis
-            logger.info(f"Intentando obtener {module_name} desde Redis...")
+            # Intentar obtener del cache
             cached_data = _self._get_cached_data(module_name)
-            
             if cached_data is not None:
-                elapsed = time.time() - start_time
-                logger.info(f"Datos de {module_name} recuperados de Redis en {elapsed:.2f} segundos")
                 return cached_data
 
-            # Si no hay cache en Redis, cargar datos frescos
-            logger.info(f"Cache no encontrado para {module_name}, cargando datos frescos...")
+            # Si no hay cache, cargar datos frescos
             data = _self._load_fresh_data(module_name)
-            
             if data is not None:
-                logger.info(f"Cacheando datos de {module_name} en Redis...")
-                if _self._cache_data(module_name, data):
-                    logger.info(f"Datos de {module_name} cacheados exitosamente en Redis")
-                else:
-                    logger.warning(f"No se pudo cachear los datos de {module_name} en Redis")
-                
-                elapsed = time.time() - start_time
-                logger.info(f"Carga total de {module_name} completada en {elapsed:.2f} segundos")
-                return data
-            else:
-                logger.error(f"No se pudieron cargar datos frescos para {module_name}")
-                return None
+                _self._cache_data(module_name, data)
+            return data
 
         except Exception as e:
-            logger.error(f"Error al cargar datos de {module_name}: {str(e)}")
+            logger.error(f"Error al cargar datos: {str(e)}")
             return None
-
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def prepare_common_data(_self) -> dict:
-        """Prepara y cachea datos comunes para todos los módulos."""
-        try:
-            logger.info("Preparando datos comunes...")
-            start_time = time.time()
-            
-            # Cargar datos base
-            ccm_data = _self.load_module_data('CCM')
-            ccm_esp_data = _self.load_module_data('CCM-ESP')
-            
-            # Preparar CCM-LEY
-            if ccm_data is not None and ccm_esp_data is not None:
-                ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
-            else:
-                ccm_ley_data = None
-            
-            # Preparar diccionario de datos
-            common_data = {
-                'CCM': ccm_data,
-                'CCM-ESP': ccm_esp_data,
-                'CCM-LEY': ccm_ley_data
-            }
-            
-            elapsed = time.time() - start_time
-            logger.info(f"Datos comunes preparados en {elapsed:.2f} segundos")
-            return common_data
-            
-        except Exception as e:
-            logger.error(f"Error preparando datos comunes: {str(e)}")
-            return {}
 
     def setup_indexes(_self):
         """Configura índices para optimizar consultas frecuentes."""

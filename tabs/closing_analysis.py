@@ -17,6 +17,12 @@ def render_closing_analysis_tab(data: pd.DataFrame):
             st.error(f"Faltan las siguientes columnas necesarias: {', '.join(missing_columns)}")
             return
 
+        # Convertir columnas categóricas a string para evitar problemas de comparación
+        categorical_columns = ['ESTADO', 'Evaluado', 'EVALASIGN']
+        for col in categorical_columns:
+            if col in data.columns and isinstance(data[col].dtype, pd.CategoricalDtype):
+                data[col] = data[col].astype(str)
+
         # Asegurar que las fechas son válidas
         data['FechaPre'] = pd.to_datetime(data['FechaPre'], errors='coerce')
         data['FechaExpendiente'] = pd.to_datetime(data['FechaExpendiente'], errors='coerce')

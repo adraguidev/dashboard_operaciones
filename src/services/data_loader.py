@@ -36,20 +36,24 @@ class DataLoader:
                     raise ValueError("No se encontró la URI de MongoDB en secrets ni en variables de entorno")
                 logger.info("Usando URI de MongoDB desde variables de entorno")
 
-            _self.client = MongoClient(
-                mongo_uri,
-                connectTimeoutMS=5000,
-                socketTimeoutMS=10000,
-                serverSelectionTimeoutMS=5000,
-                maxPoolSize=5,
-                minPoolSize=2,
-                maxIdleTimeMS=300000,
-                waitQueueTimeoutMS=5000,
-                appName='MigracionesApp',
-                compressors=['zlib'],
-                retryWrites=True,
-                retryReads=True
-            )
+            # Configuración optimizada de MongoDB
+            mongo_options = {
+                'connectTimeoutMS': 5000,
+                'socketTimeoutMS': 10000,
+                'serverSelectionTimeoutMS': 5000,
+                'maxPoolSize': 10,  # Aumentado para mejor concurrencia
+                'minPoolSize': 3,   # Aumentado ligeramente
+                'maxIdleTimeMS': 300000,
+                'waitQueueTimeoutMS': 5000,
+                'appName': 'MigracionesApp',
+                'compressors': ['zlib'],
+                'retryWrites': True,
+                'retryReads': True,
+                'w': 'majority',    # Garantizar consistencia
+                'readPreference': 'primaryPreferred'  # Mejor rendimiento en lecturas
+            }
+            
+            _self.client = MongoClient(mongo_uri, **mongo_options)
             
             # Base de datos para datos consolidados
             _self.migraciones_db = _self.client['migraciones_db']
@@ -60,11 +64,39 @@ class DataLoader:
             _self.migraciones_db.command('ping', maxTimeMS=5000)
             _self.expedientes_db.command('ping', maxTimeMS=5000)
             
+            # Configurar índices para optimizar consultas
+            _self.setup_indexes()
+            
             logger.info("Conexión exitosa a MongoDB")
         except Exception as e:
             logger.error(f"Error detallado de conexión: {str(e)}")
             st.error(f"Error al conectar con MongoDB: {str(e)}")
             raise
+
+    def setup_indexes(_self):
+        """Configura índices para optimizar consultas frecuentes."""
+        try:
+            for collection_name in MONGODB_COLLECTIONS.values():
+                collection = _self.migraciones_db[collection_name]
+                # Crear índices solo si no existen
+                existing_indexes = collection.index_information()
+                
+                # Índices necesarios para las consultas más frecuentes
+                required_indexes = [
+                    [("FechaExpendiente", 1)],
+                    [("FechaPre", 1)],
+                    [("EVALASIGN", 1)],
+                    [("NumeroTramite", 1)]
+                ]
+                
+                for index in required_indexes:
+                    index_name = "_".join([f"{field}_{direction}" for field, direction in index])
+                    if index_name not in existing_indexes:
+                        collection.create_index(index, background=True)
+                        logger.info(f"Índice {index_name} creado en {collection_name}")
+                        
+        except Exception as e:
+            logger.error(f"Error al crear índices: {str(e)}")
 
     def verify_password(_self, password: str) -> bool:
         """Verifica si la contraseña proporcionada es correcta."""
@@ -78,7 +110,7 @@ class DataLoader:
             return False
         
         try:
-            # Limpiar todo el caché de Streamlit
+            # Limpiar solo el caché de Streamlit
             st.cache_data.clear()
             st.success("✅ Datos actualizados correctamente")
             return True
@@ -86,7 +118,7 @@ class DataLoader:
             st.error(f"Error al actualizar datos: {str(e)}")
             return False
 
-    @st.cache_data(ttl=None)  # Cache permanente hasta actualización manual
+    @st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
         """Carga datos consolidados desde migraciones_db."""
         try:
@@ -137,13 +169,14 @@ class DataLoader:
             }
             
             collection = _self.migraciones_db[collection_name]
-            cursor = collection.find({}, projection)
+            # Usar hint para forzar el uso de índices
+            cursor = collection.find({}, projection).hint([("FechaExpendiente", 1), ("FechaPre", 1)])
             data = pd.DataFrame(list(cursor))
 
             if data.empty:
                 return None
 
-            # Convertir fechas
+            # Convertir fechas eficientemente
             for col in DATE_COLUMNS:
                 if col in data.columns:
                     data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
@@ -152,7 +185,7 @@ class DataLoader:
             return data
 
         except Exception as e:
-            st.error(f"Error al cargar datos: {str(e)}")
+            logger.error(f"Error al cargar datos del módulo {module_name}: {str(e)}")
             return None
 
     def _load_spe_from_sheets(_self):

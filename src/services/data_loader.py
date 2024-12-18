@@ -22,7 +22,9 @@ MONGODB_PASSWORD = os.getenv('MONGODB_PASSWORD')
 class DataLoader:
     _instance = None
     _is_initialized = False
-    _connection_initialized = False
+    _client = None
+    _migraciones_db = None
+    _expedientes_db = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -31,58 +33,49 @@ class DataLoader:
 
     def __init__(_self):
         """Inicializa las conexiones a MongoDB usando los secrets de Streamlit o variables de entorno."""
-        # Solo inicializar una vez
         if DataLoader._is_initialized:
             return
             
         try:
-            logger.info("Iniciando conexión a MongoDB...")
             # Primero intentar obtener la URI desde secrets de Streamlit
             try:
                 mongo_uri = st.secrets["connections"]["mongodb"]["uri"]
-                logger.info("Usando URI de MongoDB desde Streamlit secrets")
             except:
-                # Si no está en secrets, usar variables de entorno
                 load_dotenv()
                 mongo_uri = os.getenv('MONGODB_URI')
                 if not mongo_uri:
-                    raise ValueError("No se encontró la URI de MongoDB en secrets ni en variables de entorno")
-                logger.info("Usando URI de MongoDB desde variables de entorno")
+                    raise ValueError("No se encontró la URI de MongoDB")
 
-            # Configuración optimizada de MongoDB
+            # Configuración mínima para conexión inicial
             mongo_options = {
-                'connectTimeoutMS': 2000,        # Reducido aún más
-                'socketTimeoutMS': 3000,         # Reducido aún más
-                'serverSelectionTimeoutMS': 2000, # Reducido aún más
-                'maxPoolSize': 5,                # Reducido para evitar sobrecarga
+                'connectTimeoutMS': 1000,
+                'socketTimeoutMS': 2000,
+                'serverSelectionTimeoutMS': 1000,
+                'maxPoolSize': 3,
                 'minPoolSize': 1,
                 'maxIdleTimeMS': 300000,
-                'waitQueueTimeoutMS': 2000,      # Reducido aún más
+                'waitQueueTimeoutMS': 1000,
                 'appName': 'MigracionesApp',
-                'compressors': ['zlib'],
                 'retryWrites': True,
                 'retryReads': True,
                 'w': 'majority',
                 'readPreference': 'primaryPreferred'
             }
             
-            _self.client = MongoClient(mongo_uri, **mongo_options)
+            if not DataLoader._client:
+                DataLoader._client = MongoClient(mongo_uri, **mongo_options)
+                DataLoader._migraciones_db = DataLoader._client['migraciones_db']
+                DataLoader._expedientes_db = DataLoader._client['expedientes_db']
             
-            # Base de datos para datos consolidados
-            _self.migraciones_db = _self.client['migraciones_db']
-            # Base de datos para rankings
-            _self.expedientes_db = _self.client['expedientes_db']
-            
-            # Verificar conexión básica sin ping
-            _self.migraciones_db.list_collection_names()
+            _self.client = DataLoader._client
+            _self.migraciones_db = DataLoader._migraciones_db
+            _self.expedientes_db = DataLoader._expedientes_db
             
             DataLoader._is_initialized = True
-            DataLoader._connection_initialized = True
-            logger.info("Conexión básica a MongoDB establecida")
             
         except Exception as e:
-            logger.error(f"Error detallado de conexión: {str(e)}")
-            st.error(f"Error al conectar con MongoDB: {str(e)}")
+            logger.error(f"Error de conexión: {str(e)}")
+            st.error("Error al conectar con la base de datos")
             raise
 
     def ensure_background_init(_self):
@@ -146,39 +139,36 @@ class DataLoader:
             logger.error(f"Error al configurar colección de caché: {str(e)}")
 
     def _get_cached_data(_self, module_name: str) -> pd.DataFrame:
-        """Intenta obtener datos cacheados de MongoDB."""
+        """Intenta obtener datos cacheados."""
         try:
-            # Verificar si hay datos en memoria
+            # Verificar primero en session_state
             cache_key = f"cached_data_{module_name}"
-            if cache_key in st.session_state and not st.session_state.get('force_refresh', False):
-                logger.info(f"Usando datos de memoria para {module_name}")
+            if cache_key in st.session_state:
                 return st.session_state[cache_key]
 
+            # Si no está en session_state, buscar en MongoDB
             cache_collection = _self.migraciones_db[MONGODB_COLLECTIONS['CACHE']]
+            cached_data = cache_collection.find_one(
+                {"module": module_name},
+                {"_id": 0, "data": 1}  # Solo traer los datos necesarios
+            )
             
-            # Buscar datos cacheados
-            cached_data = cache_collection.find_one({
-                "module": module_name,
-                "timestamp": {"$gt": datetime.now() - pd.Timedelta(minutes=CACHE_TTL)}
-            })
-            
-            if cached_data:
-                logger.info(f"Datos encontrados en caché MongoDB para {module_name}")
-                # Convertir los datos BSON a DataFrame
+            if cached_data and 'data' in cached_data:
                 df = pd.DataFrame(cached_data['data'])
-                
-                # Convertir fechas
-                for col in DATE_COLUMNS:
-                    if col in df.columns:
-                        df[col] = pd.to_datetime(df[col])
-                
-                # Guardar en memoria
-                st.session_state[cache_key] = df
-                return df
+                if not df.empty:
+                    # Convertir fechas de manera más eficiente
+                    date_cols = [col for col in DATE_COLUMNS if col in df.columns]
+                    if date_cols:
+                        df[date_cols] = df[date_cols].apply(pd.to_datetime, errors='coerce')
+                    
+                    # Guardar en session_state
+                    st.session_state[cache_key] = df
+                    return df
             
             return None
+            
         except Exception as e:
-            logger.error(f"Error al obtener datos cacheados: {str(e)}")
+            logger.error(f"Error al obtener caché: {str(e)}")
             return None
 
     def _save_to_cache(_self, module_name: str, data: pd.DataFrame):
@@ -413,26 +403,28 @@ class DataLoader:
             return False
 
     def _load_fresh_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos frescos desde MongoDB sin usar caché."""
+        """Carga datos frescos desde MongoDB."""
         try:
             collection_name = MONGODB_COLLECTIONS.get(module_name)
             if not collection_name:
-                raise ValueError(f"Módulo no reconocido: {module_name}")
+                return None
 
             collection = _self.migraciones_db[collection_name]
             
-            # Proyección para reducir datos transferidos
+            # Proyección optimizada
             projection = {'_id': 0}
             
+            # Usar cursor con batch_size grande
             cursor = collection.find(
                 {},
                 projection,
-                batch_size=10000,  # Aumentado para reducir viajes a la BD
+                batch_size=20000,
                 hint=[("FechaExpendiente", 1)]
             ).allow_disk_use(True)
 
+            # Procesar en chunks más grandes
             chunks = []
-            chunk_size = 20000  # Aumentado para procesar más datos por vez
+            chunk_size = 50000
             current_chunk = []
             
             for doc in cursor:
@@ -451,15 +443,16 @@ class DataLoader:
             if not chunks:
                 return None
 
-            data = pd.concat(chunks, ignore_index=True)
+            # Concatenar chunks eficientemente
+            data = pd.concat(chunks, ignore_index=True, copy=False)
             
-            # Procesar fechas eficientemente
-            date_columns = [col for col in DATE_COLUMNS if col in data.columns]
-            if date_columns:
-                data[date_columns] = data[date_columns].apply(pd.to_datetime, format='%d/%m/%Y', errors='coerce')
+            # Procesar fechas en un solo paso
+            date_cols = [col for col in DATE_COLUMNS if col in data.columns]
+            if date_cols:
+                data[date_cols] = data[date_cols].apply(pd.to_datetime, errors='coerce')
             
             return data
 
         except Exception as e:
-            logger.error(f"Error al cargar datos frescos del módulo {module_name}: {str(e)}")
+            logger.error(f"Error cargando datos frescos: {str(e)}")
             return None

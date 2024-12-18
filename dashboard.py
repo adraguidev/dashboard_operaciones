@@ -12,6 +12,7 @@ from src.utils.database import get_google_credentials
 import time
 from datetime import datetime, timedelta
 import pytz
+import pandas as pd
 
 # Configuración de página
 st.set_page_config(
@@ -659,6 +660,34 @@ def show_loading_progress(message, action, show_fade_in=True):
         
         progress_bar.empty()
         return result
+
+def prepare_common_data(data):
+    """
+    Prepara los datos comunes necesarios para todas las pestañas.
+    Esta función se ejecuta una sola vez por módulo y los resultados se cachean.
+    """
+    try:
+        # Calcular tiempos de procesamiento solo si es necesario
+        if 'FechaExpendiente' in data.columns and 'FechaPre' in data.columns:
+            data['TiempoProcesamiento'] = (data['FechaPre'] - data['FechaExpendiente']).dt.days
+        
+        # Calcular estado de evaluación
+        if 'EVALASIGN' in data.columns:
+            data['Evaluado'] = data.apply(
+                lambda x: 'SI' if pd.notna(x.get('FECHA DE TRABAJO')) else 'NO',
+                axis=1
+            )
+        
+        # Optimizar tipos de datos para columnas categóricas
+        categorical_columns = ['EVALASIGN', 'Evaluado', 'ESTADO', 'DESCRIPCION']
+        for col in categorical_columns:
+            if col in data.columns:
+                data[col] = data[col].astype('category')
+        
+        return data
+    except Exception as e:
+        st.error(f"Error al preparar datos comunes: {str(e)}")
+        return data
 
 def main():
     try:

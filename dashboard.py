@@ -630,6 +630,8 @@ def main():
             st.session_state.menu_admin = False
         if 'selected_module' not in st.session_state:
             st.session_state.selected_module = list(MODULES.keys())[0]
+        if 'active_tab' not in st.session_state:
+            st.session_state.active_tab = 0
 
         # Contenedor para el sidebar con estilo
         with st.sidebar:
@@ -673,11 +675,7 @@ def main():
 
         # Obtener credenciales de Google
         try:
-            google_credentials = show_loading_progress(
-                'Verificando credenciales',
-                get_google_credentials,
-                show_fade_in=False
-            )
+            google_credentials = get_google_credentials()
         except Exception as e:
             st.warning(f"No se pudieron obtener las credenciales de Google. SPE podría no funcionar correctamente.")
             google_credentials = None
@@ -691,10 +689,7 @@ def main():
                 st.error("No se pueden cargar datos de SPE sin credenciales de Google.")
                 return
             
-            spe = show_loading_progress(
-                'Cargando módulo SPE',
-                lambda: SPEModule()
-            )
+            spe = SPEModule()
             spe.render_module()
             update_time = get_current_time()
             
@@ -702,72 +697,55 @@ def main():
             # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                data, update_time, _ = show_loading_progress(
-                    f'📊 Cargando datos del módulo {MODULES[selected_module]}',
-                    lambda: get_module_data(selected_module, collection_name),
-                    show_fade_in=False
-                )
+                # Cargar datos solo si no están en session_state o si cambia el módulo
+                cache_key = f"data_{selected_module}"
+                if cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
+                    data, update_time, _ = get_module_data(selected_module, collection_name)
+                    if data is None:
+                        st.error("No se encontraron datos para este módulo en la base de datos.")
+                        return
+                    st.session_state[cache_key] = data
+                    st.session_state['last_module'] = selected_module
+                else:
+                    data = st.session_state[cache_key]
+                    update_time = get_current_time()
+
+                # Agregar elementos adicionales al sidebar después de cargar los datos
+                with st.sidebar:
+                    if 'show_update_form' in st.session_state:
+                        del st.session_state.show_update_form
+
+                # Definir las pestañas y sus funciones correspondientes
+                tabs_config = [
+                    ("Reporte de pendientes", render_pending_reports_tab, [data, selected_module]),
+                    ("Ingreso de Expedientes", render_entry_analysis_tab, [data]),
+                    ("Cierre de Expedientes", render_closing_analysis_tab, [data]),
+                    ("Reporte por Evaluador", render_evaluator_report_tab, [data]),
+                    ("Reporte de Asignaciones", render_assignment_report_tab, [data]),
+                    ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, data_loader.get_rankings_collection()])
+                ]
+
+                # Crear pestañas
+                tabs = st.tabs([tab[0] for tab in tabs_config])
                 
-                if data is None:
-                    st.error("No se encontraron datos para este módulo en la base de datos.")
-                    return
+                # Renderizar contenido solo de la pestaña activa
+                for i, (tab, render_func, args) in enumerate(zip(tabs, *zip(*tabs_config))):
+                    with tab:
+                        if st.session_state.active_tab == i:
+                            # Usar el cache_key específico para cada pestaña
+                            tab_cache_key = f"tab_{selected_module}_{i}"
+                            if tab_cache_key not in st.session_state:
+                                with st.spinner(f'Cargando {tabs_config[i][0]}...'):
+                                    render_func(*args)
+                                    st.session_state[tab_cache_key] = True
+                            else:
+                                render_func(*args)
 
-        # Agregar elementos adicionales al sidebar después de cargar los datos
-        with st.sidebar:
-            if 'show_update_form' in st.session_state:
-                del st.session_state.show_update_form
-
-        if selected_module != 'SPE':
-            # Crear pestañas
-            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-                "Reporte de pendientes",
-                "Ingreso de Expedientes",
-                "Cierre de Expedientes",
-                "Reporte por Evaluador",
-                "Reporte de Asignaciones",
-                "Ranking de Expedientes Trabajados"
-            ])
-            
-            # Renderizar cada pestaña usando la función helper
-            with tab1:
-                show_loading_progress(
-                    '📋 Cargando reporte de pendientes',
-                    lambda: render_pending_reports_tab(data, selected_module)
-                )
-            
-            with tab2:
-                show_loading_progress(
-                    '📈 Cargando análisis de ingresos',
-                    lambda: render_entry_analysis_tab(data)
-                )
-            
-            with tab3:
-                show_loading_progress(
-                    '📉 Cargando análisis de cierres',
-                    lambda: render_closing_analysis_tab(data)
-                )
-            
-            with tab4:
-                show_loading_progress(
-                    '👥 Cargando reporte por evaluador',
-                    lambda: render_evaluator_report_tab(data)
-                )
-            
-            with tab5:
-                show_loading_progress(
-                    '📋 Cargando reporte de asignaciones',
-                    lambda: render_assignment_report_tab(data)
-                )
-            
-            with tab6:
-                show_loading_progress(
-                    '🏆 Cargando ranking de expedientes',
-                    lambda: ranking_report.render_ranking_report_tab(
-                        data, 
-                        selected_module, 
-                        data_loader.get_rankings_collection()
-                    )
-                )
+                # Actualizar la pestaña activa
+                for i, tab in enumerate(tabs):
+                    if tab.is_active():
+                        st.session_state.active_tab = i
+                        break
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

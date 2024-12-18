@@ -11,7 +11,7 @@ from modules.spe.spe_module import SPEModule
 from src.utils.database import get_google_credentials
 from src.utils.styles import apply_global_styles
 from src.utils.state_manager import StateManager
-from src.utils.display_utils import show_loading_progress, show_success_message, show_error_message
+from src.utils.display_utils import show_loading_progress
 import time
 from datetime import datetime, timedelta
 import pytz
@@ -372,9 +372,9 @@ def main():
             if st.button("Actualizar"):
                 with st.spinner("Actualizando datos..."):
                     if data_loader.force_data_refresh(password):
-                        show_success_message("Datos actualizados correctamente")
+                        st.success("✅ Datos actualizados correctamente")
                     else:
-                        show_error_message("Error al actualizar los datos")
+                        st.error("❌ Error al actualizar los datos")
     
     # Contenido principal
     if selected_module == 'SPE':
@@ -408,7 +408,7 @@ def main():
             with tabs[5]:
                 ranking_report.render_ranking_tab(data_loader, selected_module)
         else:
-            show_error_message(f"No se pudieron cargar los datos para {MODULES[selected_module]}")
+            st.error(f"No se pudieron cargar los datos para {MODULES[selected_module]}")
 
 if __name__ == "__main__":
     main()

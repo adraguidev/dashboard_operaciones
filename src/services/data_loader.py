@@ -220,13 +220,34 @@ class DataLoader:
 
     def _process_chunk(_self, chunk: pd.DataFrame) -> pd.DataFrame:
         """Procesa un chunk de datos en paralelo."""
-        # Convertir fechas
-        for col in DATE_COLUMNS:
-            if col in chunk.columns:
-                chunk[col] = pd.to_datetime(chunk[col], format='%d/%m/%Y', errors='coerce')
-        
-        # Optimizar tipos de datos
-        return _self._optimize_dtypes(chunk)
+        try:
+            # Convertir fechas eficientemente usando vectorización
+            for col in DATE_COLUMNS:
+                if col in chunk.columns:
+                    # Primero intentar formato estándar
+                    try:
+                        chunk[col] = pd.to_datetime(chunk[col], format='%d/%m/%Y')
+                    except:
+                        # Si falla, usar el parser más flexible
+                        chunk[col] = pd.to_datetime(chunk[col], errors='coerce')
+            
+            # Optimizar tipos de datos
+            chunk = _self._optimize_dtypes(chunk)
+            
+            # Asegurar tipos de datos específicos para columnas críticas
+            if 'NumeroTramite' in chunk.columns:
+                chunk['NumeroTramite'] = chunk['NumeroTramite'].astype(str)
+            if 'EVALASIGN' in chunk.columns:
+                chunk['EVALASIGN'] = chunk['EVALASIGN'].fillna('').astype(str)
+            if 'Evaluado' in chunk.columns:
+                chunk['Evaluado'] = chunk['Evaluado'].fillna('NO').astype(str)
+            if 'ESTADO' in chunk.columns:
+                chunk['ESTADO'] = chunk['ESTADO'].fillna('').astype(str)
+            
+            return chunk
+        except Exception as e:
+            logger.error(f"Error procesando chunk: {str(e)}")
+            return None
 
     def _load_fresh_data(_self, module_name: str) -> pd.DataFrame:
         """Carga datos frescos desde MongoDB usando procesamiento paralelo."""
@@ -239,37 +260,79 @@ class DataLoader:
             
             # Obtener total de documentos
             total_docs = collection.count_documents({})
-            chunk_size = max(5000, total_docs // (NUM_WORKERS * 2))
             
-            # Dividir la consulta en chunks
+            # Ajustar chunk_size basado en el total de documentos
+            chunk_size = min(
+                max(5000, total_docs // (NUM_WORKERS * 2)),
+                50000  # Límite máximo para evitar problemas de memoria
+            )
+            
+            # Definir campos requeridos (excluir _id por defecto)
+            required_fields = {
+                '_id': 0,
+                'NumeroTramite': 1,
+                'FechaExpendiente': 1,
+                'FechaPre': 1,
+                'FechaTramite': 1,
+                'FechaAsignacion': 1,
+                'EVALASIGN': 1,
+                'Evaluado': 1,
+                'ESTADO': 1,
+                'UltimaEtapa': 1,
+                'Anio': 1,
+                'Mes': 1
+            }
+            
+            # Dividir la consulta en chunks usando hint para el índice
             chunks = []
             cursor = collection.find(
                 {},
-                {'_id': 0},
-                batch_size=chunk_size
+                required_fields,
+                batch_size=chunk_size,
+                hint=[("FechaExpendiente", 1)]  # Usar índice existente
             ).allow_disk_use(True)
 
-            # Procesar documentos en chunks
+            # Procesar documentos en chunks con mejor manejo de memoria
             current_chunk = []
             for doc in cursor:
                 current_chunk.append(doc)
                 if len(current_chunk) >= chunk_size:
-                    chunks.append(pd.DataFrame(current_chunk))
+                    df_chunk = pd.DataFrame(current_chunk)
+                    chunks.append(df_chunk)
                     current_chunk = []
+                    # Limpiar memoria explícitamente
+                    del df_chunk
 
             if current_chunk:
                 chunks.append(pd.DataFrame(current_chunk))
+                current_chunk = []  # Limpiar memoria
 
-            # Procesar chunks en paralelo
+            # Procesar chunks en paralelo si hay datos
             if chunks:
                 # Usar ProcessPoolExecutor para procesamiento CPU-intensivo
                 with _self.process_pool as executor:
-                    processed_chunks = list(executor.map(_self._process_chunk, chunks))
+                    # Procesar chunks en paralelo con timeout
+                    processed_chunks = []
+                    futures = [executor.submit(_self._process_chunk, chunk) for chunk in chunks]
+                    
+                    for future in futures:
+                        try:
+                            result = future.result(timeout=300)  # 5 minutos timeout
+                            if result is not None:
+                                processed_chunks.append(result)
+                        except Exception as e:
+                            logger.error(f"Error procesando chunk: {str(e)}")
                 
-                # Combinar resultados
-                data = pd.concat(processed_chunks, ignore_index=True)
-                return data
-            
+                # Limpiar chunks originales para liberar memoria
+                chunks = None
+                
+                # Combinar resultados si hay chunks procesados
+                if processed_chunks:
+                    data = pd.concat(processed_chunks, ignore_index=True)
+                    # Limpiar processed_chunks para liberar memoria
+                    processed_chunks = None
+                    return data
+                
             return None
 
         except Exception as e:

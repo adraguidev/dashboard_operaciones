@@ -571,7 +571,6 @@ def generate_data_hash(data):
     return hashlib.md5(data_str.encode()).hexdigest()
 
 # Función cacheada para cargar datos del módulo
-@st.cache_data(ttl=None, show_spinner=False)
 def load_module_data_with_timestamp(selected_module):
     """
     Carga datos del módulo desde el caché de MongoDB.
@@ -643,6 +642,25 @@ def show_loading_progress(message, action, show_fade_in=True):
         progress_bar.empty()
         return result
 
+# Procesar datos comunes una sola vez
+def prepare_common_data(df):
+    """Preprocesar datos comunes para todas las pestañas"""
+    # Identificar solo las columnas de fecha que existen
+    date_columns = {col: df[col] for col in DATE_COLUMNS 
+                    if col in df.columns and df[col].dtype == 'datetime64[ns]'}
+    
+    if not date_columns:
+        return df
+    
+    # Crear todas las columnas formateadas de una vez
+    formatted_dates = {
+        f"{col}_formatted": series.dt.strftime('%d/%m/%Y')
+        for col, series in date_columns.items()
+    }
+    
+    # Usar assign para evitar la copia del DataFrame
+    return df.assign(**formatted_dates)
+
 def main():
     try:
         data_loader = st.session_state.data_loader
@@ -659,6 +677,14 @@ def main():
             st.session_state.selected_module = list(MODULES.keys())[0]
         if 'active_tab' not in st.session_state:
             st.session_state.active_tab = 0
+        if 'last_tab' not in st.session_state:
+            st.session_state.last_tab = 0
+
+        # Función para manejar el cambio de pestañas
+        def on_tab_change():
+            if st.session_state.active_tab != st.session_state.last_tab:
+                st.session_state.last_tab = st.session_state.active_tab
+                st.rerun()
 
         # Contenedor para el sidebar con estilo
         with st.sidebar:
@@ -757,25 +783,17 @@ def main():
                 # Crear pestañas usando st.tabs
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
-                # Procesar datos comunes una sola vez
-                @st.cache_data(ttl=None, show_spinner=False)
-                def prepare_common_data(df):
-                    """Preprocesar datos comunes para todas las pestañas"""
-                    # Identificar solo las columnas de fecha que existen
-                    date_columns = {col: df[col] for col in DATE_COLUMNS 
-                                  if col in df.columns and df[col].dtype == 'datetime64[ns]'}
-                    
-                    if not date_columns:
-                        return df
-                    
-                    # Crear todas las columnas formateadas de una vez
-                    formatted_dates = {
-                        f"{col}_formatted": series.dt.strftime('%d/%m/%Y')
-                        for col, series in date_columns.items()
-                    }
-                    
-                    # Usar assign para evitar la copia del DataFrame
-                    return df.assign(**formatted_dates)
+                # Detectar cambio de pestaña
+                current_tab = st.session_state.get('active_tab', 0)
+                for i in range(len(tabs)):
+                    if tabs[i].selectbox(
+                        'Tab Selector',
+                        [''],
+                        key=f'tab_selector_{i}',
+                        label_visibility='collapsed'
+                    ):
+                        st.session_state.active_tab = i
+                        on_tab_change()
 
                 # Procesar datos
                 data = prepare_common_data(data)
@@ -783,7 +801,13 @@ def main():
                 # Renderizar pestañas
                 for i, (tab_name, render_func, args) in enumerate(tabs_config):
                     with tabs[i]:
-                        render_func(*args)
+                        # Limpiar el contenido anterior de la pestaña
+                        if f'tab_{selected_module}_{i}' not in st.session_state:
+                            st.session_state[f'tab_{selected_module}_{i}'] = True
+                        
+                        # Solo renderizar si es la pestaña activa
+                        if st.session_state.active_tab == i:
+                            render_func(*args)
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

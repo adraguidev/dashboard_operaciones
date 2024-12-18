@@ -147,47 +147,92 @@ class DataLoader:
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
-            # Obtener datos con proyección optimizada
-            projection = {
-                "NumeroTramite": 1,
-                "EVALASIGN": 1,
-                "Evaluado": 1,
-                "ESTADO": 1,
-                "UltimaEtapa": 1,
-                "FechaExpendiente": 1,
-                "FechaPre": 1,
-                "FechaTramite": 1,
-                "FechaAsignacion": 1,
-                "FechaEtapaAprobacionMasivaFin": 1,
-                "FECHA DE TRABAJO": 1,
-                "TipoTramite": 1,
-                "Proceso": 1,
-                "Etapa": 1,
-                "Anio": 1,
-                "Mes": 1,
-                "_id": 0
-            }
-            
             collection = _self.migraciones_db[collection_name]
-            # Ejecutar consulta simple sin hint
-            data = pd.DataFrame(list(collection.find({}, projection)))
+            
+            # Optimizar la consulta usando cursor con batch_size y hint
+            cursor = collection.find(
+                {},
+                {'_id': 0},  # Excluir solo el _id
+                batch_size=5000,  # Tamaño de lote optimizado
+                hint=[("FechaExpendiente", 1)]  # Usar índice existente
+            ).allow_disk_use(True)  # Permitir uso de disco para consultas grandes
 
-            if data.empty:
+            # Procesar datos en chunks para mejor manejo de memoria
+            chunks = []
+            chunk_size = 10000
+            current_chunk = []
+
+            print("Iniciando carga de datos...")
+            records_processed = 0
+            
+            for doc in cursor:
+                current_chunk.append(doc)
+                if len(current_chunk) >= chunk_size:
+                    df_chunk = pd.DataFrame(current_chunk)
+                    # Optimizar tipos de datos inmediatamente
+                    df_chunk = _self._optimize_dtypes(df_chunk)
+                    chunks.append(df_chunk)
+                    records_processed += len(current_chunk)
+                    print(f"Procesados {records_processed} registros...")
+                    current_chunk = []
+
+            if current_chunk:  # Procesar el último chunk
+                df_chunk = pd.DataFrame(current_chunk)
+                df_chunk = _self._optimize_dtypes(df_chunk)
+                chunks.append(df_chunk)
+                records_processed += len(current_chunk)
+
+            if not chunks:
                 st.error(f"No se encontraron datos para el módulo {module_name} en la base de datos.")
                 return None
 
+            # Concatenar chunks eficientemente
+            print("Combinando datos...")
+            data = pd.concat(chunks, ignore_index=True)
+            
             # Convertir fechas eficientemente
+            print("Procesando fechas...")
             for col in DATE_COLUMNS:
                 if col in data.columns:
                     data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
 
-            print(f"Tiempo de carga para {module_name}: {time.time() - start_time:.2f} segundos")
+            elapsed_time = time.time() - start_time
+            print(f"Tiempo de carga para {module_name}: {elapsed_time:.2f} segundos")
+            print(f"Total registros cargados: {len(data)}")
+            print(f"Uso de memoria: {data.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
+            
             return data
 
         except Exception as e:
             logger.error(f"Error al cargar datos del módulo {module_name}: {str(e)}")
             st.error(f"Error al cargar datos del módulo {module_name}: {str(e)}")
             return None
+
+    def _optimize_dtypes(_self, df: pd.DataFrame) -> pd.DataFrame:
+        """Optimiza los tipos de datos del DataFrame para reducir uso de memoria."""
+        # Convertir columnas numéricas a tipos más eficientes
+        for col in df.select_dtypes(include=['int64']).columns:
+            if df[col].min() >= 0:  # Si son todos positivos
+                if df[col].max() < 255:
+                    df[col] = df[col].astype('uint8')
+                elif df[col].max() < 65535:
+                    df[col] = df[col].astype('uint16')
+                else:
+                    df[col] = df[col].astype('uint32')
+            else:
+                if df[col].min() > -128 and df[col].max() < 127:
+                    df[col] = df[col].astype('int8')
+                elif df[col].min() > -32768 and df[col].max() < 32767:
+                    df[col] = df[col].astype('int16')
+                else:
+                    df[col] = df[col].astype('int32')
+
+        # Optimizar columnas de texto que se repiten frecuentemente
+        for col in df.select_dtypes(include=['object']).columns:
+            if df[col].nunique() / len(df) < 0.5:  # Si hay muchos valores repetidos
+                df[col] = pd.Categorical(df[col])
+
+        return df
 
     # Método separado para SPE sin caché - siempre carga datos frescos
     def _load_spe_from_sheets(_self):

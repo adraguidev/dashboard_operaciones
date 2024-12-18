@@ -250,7 +250,7 @@ class DataLoader:
             return None
 
     def _load_fresh_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos frescos desde MongoDB usando procesamiento paralelo."""
+        """Carga datos frescos desde MongoDB usando pipeline de agregación."""
         try:
             collection_name = MONGODB_COLLECTIONS.get(module_name)
             if not collection_name:
@@ -258,81 +258,74 @@ class DataLoader:
 
             collection = _self.migraciones_db[collection_name]
             
-            # Obtener total de documentos
-            total_docs = collection.count_documents({})
+            # Pipeline de agregación para pre-procesar datos en MongoDB
+            pipeline = [
+                # Proyectar solo los campos necesarios y convertir tipos
+                {
+                    "$project": {
+                        "NumeroTramite": {"$toString": "$NumeroTramite"},
+                        "FechaExpendiente": 1,
+                        "FechaPre": 1,
+                        "FechaTramite": 1,
+                        "FechaAsignacion": 1,
+                        "EVALASIGN": {"$ifNull": ["$EVALASIGN", ""]},
+                        "Evaluado": {"$ifNull": ["$Evaluado", "NO"]},
+                        "ESTADO": {"$ifNull": ["$ESTADO", ""]},
+                        "UltimaEtapa": 1,
+                        "Anio": {"$ifNull": ["$Anio", 0]},
+                        "Mes": {"$ifNull": ["$Mes", 0]}
+                    }
+                },
+                # Usar allowDiskUse para grandes conjuntos de datos
+                {"$allowDiskUse": True}
+            ]
             
-            # Ajustar chunk_size basado en el total de documentos
-            chunk_size = min(
-                max(5000, total_docs // (NUM_WORKERS * 2)),
-                50000  # Límite máximo para evitar problemas de memoria
-            )
+            # Ejecutar agregación en chunks
+            chunk_size = 50000
+            data_chunks = []
             
-            # Definir campos requeridos (excluir _id por defecto)
-            required_fields = {
-                '_id': 0,
-                'NumeroTramite': 1,
-                'FechaExpendiente': 1,
-                'FechaPre': 1,
-                'FechaTramite': 1,
-                'FechaAsignacion': 1,
-                'EVALASIGN': 1,
-                'Evaluado': 1,
-                'ESTADO': 1,
-                'UltimaEtapa': 1,
-                'Anio': 1,
-                'Mes': 1
-            }
+            with _self.thread_pool as executor:
+                futures = []
+                
+                def process_cursor(cursor):
+                    chunk_data = list(cursor)
+                    if chunk_data:
+                        df = pd.DataFrame(chunk_data)
+                        # Convertir fechas de manera más eficiente
+                        for col in DATE_COLUMNS:
+                            if col in df.columns:
+                                df[col] = pd.to_datetime(df[col], format='%Y-%m-%d', errors='coerce')
+                        return df
+                    return None
+
+                # Dividir la consulta en chunks usando skip/limit
+                total_docs = collection.count_documents({})
+                for skip in range(0, total_docs, chunk_size):
+                    chunk_pipeline = pipeline + [
+                        {"$skip": skip},
+                        {"$limit": chunk_size}
+                    ]
+                    cursor = collection.aggregate(chunk_pipeline)
+                    futures.append(executor.submit(process_cursor, cursor))
+
+                # Procesar resultados
+                for future in futures:
+                    try:
+                        chunk_df = future.result(timeout=300)
+                        if chunk_df is not None and not chunk_df.empty:
+                            data_chunks.append(chunk_df)
+                    except Exception as e:
+                        logger.error(f"Error procesando chunk: {str(e)}")
+
+            # Combinar chunks si hay datos
+            if data_chunks:
+                final_df = pd.concat(data_chunks, ignore_index=True)
+                
+                # Optimizar tipos de datos una sola vez al final
+                final_df = _self._optimize_dtypes(final_df)
+                
+                return final_df
             
-            # Dividir la consulta en chunks usando hint para el índice
-            chunks = []
-            cursor = collection.find(
-                {},
-                required_fields,
-                batch_size=chunk_size,
-                hint=[("FechaExpendiente", 1)]  # Usar índice existente
-            ).allow_disk_use(True)
-
-            # Procesar documentos en chunks con mejor manejo de memoria
-            current_chunk = []
-            for doc in cursor:
-                current_chunk.append(doc)
-                if len(current_chunk) >= chunk_size:
-                    df_chunk = pd.DataFrame(current_chunk)
-                    chunks.append(df_chunk)
-                    current_chunk = []
-                    # Limpiar memoria explícitamente
-                    del df_chunk
-
-            if current_chunk:
-                chunks.append(pd.DataFrame(current_chunk))
-                current_chunk = []  # Limpiar memoria
-
-            # Procesar chunks en paralelo si hay datos
-            if chunks:
-                # Usar ProcessPoolExecutor para procesamiento CPU-intensivo
-                with _self.process_pool as executor:
-                    # Procesar chunks en paralelo con timeout
-                    processed_chunks = []
-                    futures = [executor.submit(_self._process_chunk, chunk) for chunk in chunks]
-                    
-                    for future in futures:
-                        try:
-                            result = future.result(timeout=300)  # 5 minutos timeout
-                            if result is not None:
-                                processed_chunks.append(result)
-                        except Exception as e:
-                            logger.error(f"Error procesando chunk: {str(e)}")
-                
-                # Limpiar chunks originales para liberar memoria
-                chunks = None
-                
-                # Combinar resultados si hay chunks procesados
-                if processed_chunks:
-                    data = pd.concat(processed_chunks, ignore_index=True)
-                    # Limpiar processed_chunks para liberar memoria
-                    processed_chunks = None
-                    return data
-                
             return None
 
         except Exception as e:
@@ -392,44 +385,46 @@ class DataLoader:
         return password == correct_password
 
     def _optimize_dtypes(_self, df: pd.DataFrame) -> pd.DataFrame:
-        """Optimiza los tipos de datos del DataFrame para reducir uso de memoria."""
+        """Optimiza los tipos de datos del DataFrame de manera más eficiente."""
         try:
-            # Dividir el DataFrame en chunks para procesamiento paralelo
-            num_chunks = NUM_WORKERS
-            chunk_size = len(df) // num_chunks
-            chunks = np.array_split(df, num_chunks)
-            
-            def optimize_chunk(chunk):
-                # Optimizar tipos numéricos
-                for col in chunk.select_dtypes(include=['int64']).columns:
-                    if chunk[col].min() >= 0:
-                        if chunk[col].max() < 255:
-                            chunk[col] = chunk[col].astype('uint8')
-                        elif chunk[col].max() < 65535:
-                            chunk[col] = chunk[col].astype('uint16')
-                        else:
-                            chunk[col] = chunk[col].astype('uint32')
-                    else:
-                        if chunk[col].min() > -128 and chunk[col].max() < 127:
-                            chunk[col] = chunk[col].astype('int8')
-                        elif chunk[col].min() > -32768 and chunk[col].max() < 32767:
-                            chunk[col] = chunk[col].astype('int16')
-                        else:
-                            chunk[col] = chunk[col].astype('int32')
-
-                # Optimizar columnas de texto
-                for col in chunk.select_dtypes(include=['object']).columns:
-                    if chunk[col].nunique() / len(chunk) < 0.5:
-                        chunk[col] = pd.Categorical(chunk[col])
+            # Optimizar tipos numéricos de manera vectorizada
+            int_cols = df.select_dtypes(include=['int64']).columns
+            if not int_cols.empty:
+                # Calcular min/max una sola vez por columna
+                mins = df[int_cols].min()
+                maxs = df[int_cols].max()
                 
-                return chunk
+                for col in int_cols:
+                    min_val = mins[col]
+                    max_val = maxs[col]
+                    
+                    if min_val >= 0:
+                        if max_val < 255:
+                            df[col] = df[col].astype('uint8')
+                        elif max_val < 65535:
+                            df[col] = df[col].astype('uint16')
+                        else:
+                            df[col] = df[col].astype('uint32')
+                    else:
+                        if min_val > -128 and max_val < 127:
+                            df[col] = df[col].astype('int8')
+                        elif min_val > -32768 and max_val < 32767:
+                            df[col] = df[col].astype('int16')
+                        else:
+                            df[col] = df[col].astype('int32')
 
-            # Procesar chunks en paralelo
-            with _self.process_pool as executor:
-                optimized_chunks = list(executor.map(optimize_chunk, chunks))
-            
-            # Combinar resultados
-            return pd.concat(optimized_chunks, ignore_index=True)
+            # Optimizar columnas de texto de manera vectorizada
+            obj_cols = df.select_dtypes(include=['object']).columns
+            if not obj_cols.empty:
+                # Calcular proporción de valores únicos una sola vez
+                nunique = df[obj_cols].nunique()
+                total_rows = len(df)
+                
+                for col in obj_cols:
+                    if nunique[col] / total_rows < 0.5:
+                        df[col] = pd.Categorical(df[col])
+
+            return df
             
         except Exception as e:
             logger.error(f"Error en optimización de tipos: {str(e)}")

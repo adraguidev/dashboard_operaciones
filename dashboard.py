@@ -1,4 +1,13 @@
 import streamlit as st
+
+# Configuración de página - DEBE SER EL PRIMER COMANDO DE STREAMLIT
+st.set_page_config(
+    page_title="Dashboard USM",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 from config.settings import MODULES, MONGODB_COLLECTIONS
 from src.services.data_loader import DataLoader
 from tabs.pending_reports import render_pending_reports_tab
@@ -19,14 +28,6 @@ import pytz
 # Inicializar el estado y los estilos
 StateManager.init_session_state()
 apply_global_styles()
-
-# Configuración de página
-st.set_page_config(
-    page_title="Dashboard USM",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # CSS personalizado para mejorar la interfaz
 st.markdown("""

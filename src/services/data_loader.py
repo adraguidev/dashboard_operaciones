@@ -16,6 +16,9 @@ import time
 import redis
 import pickle
 import json
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from multiprocessing import cpu_count
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,11 +26,14 @@ logger = logging.getLogger(__name__)
 # Cargar variables de entorno
 load_dotenv()
 
+# Número de workers para procesamiento paralelo
+NUM_WORKERS = min(cpu_count(), 2)  # Usar máximo 2 cores
+
 class DataLoader:
     def __init__(_self):
         """Inicializa las conexiones a MongoDB y Redis."""
         try:
-            logger.info("Iniciando conexiones...")
+            logger.info(f"Iniciando conexiones con {NUM_WORKERS} workers...")
             
             # Configuración de Redis
             _self.redis_client = redis.Redis(
@@ -79,6 +85,10 @@ class DataLoader:
             
             # Configurar índices
             _self.setup_indexes()
+            
+            # Inicializar Pool de workers
+            _self.thread_pool = ThreadPoolExecutor(max_workers=NUM_WORKERS)
+            _self.process_pool = ProcessPoolExecutor(max_workers=NUM_WORKERS)
             
             logger.info("Todas las conexiones establecidas correctamente")
         except redis.ConnectionError as e:
@@ -157,7 +167,7 @@ class DataLoader:
             return None
 
     def force_data_refresh(_self, password: str) -> bool:
-        """Fuerza actualización limpiando el cache."""
+        """Fuerza actualización limpiando el cache y recargando datos en paralelo."""
         if not _self.verify_password(password):
             st.error("Contraseña incorrecta")
             return False
@@ -167,50 +177,101 @@ class DataLoader:
             _self.redis_client.flushdb()
             logger.info("Cache de Redis limpiado")
             
-            # Cargar datos frescos para cada módulo
+            # Cargar datos frescos para cada módulo en paralelo
             modules = ['CCM', 'CCM-ESP', 'PRR', 'SOL']
+            
             with st.spinner("Actualizando datos..."):
-                for module in modules:
-                    data = _self._load_fresh_data(module)
-                    if data is not None:
-                        _self._cache_data(module, data)
-                        
-                # CCM-LEY se procesa después de CCM y CCM-ESP
-                ccm_data = _self._get_cached_data('CCM')
-                ccm_esp_data = _self._get_cached_data('CCM-ESP')
-                if ccm_data is not None and ccm_esp_data is not None:
-                    ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
-                    _self._cache_data('CCM-LEY', ccm_ley_data)
+                # Usar ThreadPoolExecutor para operaciones I/O
+                with _self.thread_pool as executor:
+                    # Cargar módulos en paralelo
+                    future_to_module = {
+                        executor.submit(_self._load_fresh_data, module): module 
+                        for module in modules
+                    }
+                    
+                    # Procesar resultados
+                    results = {}
+                    for future in future_to_module:
+                        module = future_to_module[future]
+                        try:
+                            data = future.result()
+                            if data is not None:
+                                results[module] = data
+                                _self._cache_data(module, data)
+                        except Exception as e:
+                            logger.error(f"Error procesando {module}: {str(e)}")
+                    
+                    # Procesar CCM-LEY después de tener CCM y CCM-ESP
+                    if 'CCM' in results and 'CCM-ESP' in results:
+                        ccm_ley_data = results['CCM'][
+                            ~results['CCM']['NumeroTramite'].isin(
+                                results['CCM-ESP']['NumeroTramite']
+                            )
+                        ]
+                        _self._cache_data('CCM-LEY', ccm_ley_data)
             
             st.success("✅ Datos actualizados y cacheados correctamente")
             return True
+            
         except Exception as e:
             logger.error(f"Error en actualización: {str(e)}")
             st.error(f"Error al actualizar datos: {str(e)}")
             return False
 
+    def _process_chunk(_self, chunk: pd.DataFrame) -> pd.DataFrame:
+        """Procesa un chunk de datos en paralelo."""
+        # Convertir fechas
+        for col in DATE_COLUMNS:
+            if col in chunk.columns:
+                chunk[col] = pd.to_datetime(chunk[col], format='%d/%m/%Y', errors='coerce')
+        
+        # Optimizar tipos de datos
+        return _self._optimize_dtypes(chunk)
+
     def _load_fresh_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos frescos desde MongoDB."""
+        """Carga datos frescos desde MongoDB usando procesamiento paralelo."""
         try:
             collection_name = MONGODB_COLLECTIONS.get(module_name)
             if not collection_name:
                 raise ValueError(f"Módulo no reconocido: {module_name}")
 
             collection = _self.migraciones_db[collection_name]
+            
+            # Obtener total de documentos
+            total_docs = collection.count_documents({})
+            chunk_size = max(5000, total_docs // (NUM_WORKERS * 2))
+            
+            # Dividir la consulta en chunks
+            chunks = []
             cursor = collection.find(
                 {},
                 {'_id': 0},
-                batch_size=5000
+                batch_size=chunk_size
             ).allow_disk_use(True)
 
-            data = pd.DataFrame(list(cursor))
+            # Procesar documentos en chunks
+            current_chunk = []
+            for doc in cursor:
+                current_chunk.append(doc)
+                if len(current_chunk) >= chunk_size:
+                    chunks.append(pd.DataFrame(current_chunk))
+                    current_chunk = []
+
+            if current_chunk:
+                chunks.append(pd.DataFrame(current_chunk))
+
+            # Procesar chunks en paralelo
+            if chunks:
+                # Usar ProcessPoolExecutor para procesamiento CPU-intensivo
+                with _self.process_pool as executor:
+                    processed_chunks = list(executor.map(_self._process_chunk, chunks))
+                
+                # Combinar resultados
+                data = pd.concat(processed_chunks, ignore_index=True)
+                return data
             
-            # Procesar fechas
-            for col in DATE_COLUMNS:
-                if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
-            
-            return data
+            return None
+
         except Exception as e:
             logger.error(f"Error cargando datos frescos: {str(e)}")
             return None
@@ -269,29 +330,47 @@ class DataLoader:
 
     def _optimize_dtypes(_self, df: pd.DataFrame) -> pd.DataFrame:
         """Optimiza los tipos de datos del DataFrame para reducir uso de memoria."""
-        # Convertir columnas numéricas a tipos más eficientes
-        for col in df.select_dtypes(include=['int64']).columns:
-            if df[col].min() >= 0:  # Si son todos positivos
-                if df[col].max() < 255:
-                    df[col] = df[col].astype('uint8')
-                elif df[col].max() < 65535:
-                    df[col] = df[col].astype('uint16')
-                else:
-                    df[col] = df[col].astype('uint32')
-            else:
-                if df[col].min() > -128 and df[col].max() < 127:
-                    df[col] = df[col].astype('int8')
-                elif df[col].min() > -32768 and df[col].max() < 32767:
-                    df[col] = df[col].astype('int16')
-                else:
-                    df[col] = df[col].astype('int32')
+        try:
+            # Dividir el DataFrame en chunks para procesamiento paralelo
+            num_chunks = NUM_WORKERS
+            chunk_size = len(df) // num_chunks
+            chunks = np.array_split(df, num_chunks)
+            
+            def optimize_chunk(chunk):
+                # Optimizar tipos numéricos
+                for col in chunk.select_dtypes(include=['int64']).columns:
+                    if chunk[col].min() >= 0:
+                        if chunk[col].max() < 255:
+                            chunk[col] = chunk[col].astype('uint8')
+                        elif chunk[col].max() < 65535:
+                            chunk[col] = chunk[col].astype('uint16')
+                        else:
+                            chunk[col] = chunk[col].astype('uint32')
+                    else:
+                        if chunk[col].min() > -128 and chunk[col].max() < 127:
+                            chunk[col] = chunk[col].astype('int8')
+                        elif chunk[col].min() > -32768 and chunk[col].max() < 32767:
+                            chunk[col] = chunk[col].astype('int16')
+                        else:
+                            chunk[col] = chunk[col].astype('int32')
 
-        # Optimizar columnas de texto que se repiten frecuentemente
-        for col in df.select_dtypes(include=['object']).columns:
-            if df[col].nunique() / len(df) < 0.5:  # Si hay muchos valores repetidos
-                df[col] = pd.Categorical(df[col])
+                # Optimizar columnas de texto
+                for col in chunk.select_dtypes(include=['object']).columns:
+                    if chunk[col].nunique() / len(chunk) < 0.5:
+                        chunk[col] = pd.Categorical(chunk[col])
+                
+                return chunk
 
-        return df
+            # Procesar chunks en paralelo
+            with _self.process_pool as executor:
+                optimized_chunks = list(executor.map(optimize_chunk, chunks))
+            
+            # Combinar resultados
+            return pd.concat(optimized_chunks, ignore_index=True)
+            
+        except Exception as e:
+            logger.error(f"Error en optimización de tipos: {str(e)}")
+            return df
 
     # Método separado para SPE sin caché - siempre carga datos frescos
     def _load_spe_from_sheets(_self):

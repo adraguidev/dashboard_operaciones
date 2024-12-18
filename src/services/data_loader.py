@@ -80,6 +80,9 @@ class DataLoader:
             # Configurar índices
             _self.setup_indexes()
             
+            # Iniciar precarga asíncrona de datos
+            _self._start_async_preload()
+            
             logger.info("Todas las conexiones establecidas correctamente")
         except redis.ConnectionError as e:
             logger.error(f"Error al conectar con Redis: {str(e)}")
@@ -101,35 +104,40 @@ class DataLoader:
             return 0
 
     def _cache_data(_self, module_name: str, data: pd.DataFrame) -> bool:
-        """Almacena datos en Redis con compresión."""
+        """Almacena datos en Redis con compresión optimizada."""
         try:
             cache_key = _self._get_cache_key(module_name)
             
             # Verificar espacio disponible
             current_size = _self._get_cache_size()
-            if current_size > (REDIS_MEMORY_LIMIT * 0.9):  # 90% del límite
+            if current_size > (REDIS_MEMORY_LIMIT * 0.9):
                 logger.warning("Cache casi lleno, limpiando datos antiguos...")
-                _self.redis_client.flushdb()
+                _self._clear_old_cache()
             
-            # Serializar DataFrame
-            serialized_data = pickle.dumps(data)
+            # Optimizar DataFrame antes de serializar
+            data = _self._optimize_dtypes(data)
+            
+            # Serializar DataFrame con compresión
+            import zlib
+            serialized_data = zlib.compress(pickle.dumps(data))
             
             # Guardar en Redis con TTL
             ttl = CACHE_TTL.get(module_name, CACHE_TTL['default'])
             success = _self.redis_client.setex(cache_key, ttl, serialized_data)
             
             if success:
-                # Guardar metadata del cache
+                # Guardar metadata
                 metadata = {
                     'rows': len(data),
                     'columns': list(data.columns),
                     'cached_at': datetime.now().isoformat(),
-                    'ttl': ttl
+                    'ttl': ttl,
+                    'size_mb': len(serialized_data) / 1024 / 1024
                 }
                 metadata_key = _self._get_cache_key(module_name, 'metadata')
                 _self.redis_client.setex(metadata_key, ttl, json.dumps(metadata))
                 
-                logger.info(f"Datos cacheados para {module_name}: {len(data)} registros")
+                logger.info(f"Datos cacheados para {module_name}: {len(data)} registros, {metadata['size_mb']:.2f}MB")
                 return True
             return False
         except Exception as e:
@@ -137,20 +145,24 @@ class DataLoader:
             return False
 
     def _get_cached_data(_self, module_name: str) -> pd.DataFrame:
-        """Recupera datos cacheados de Redis."""
+        """Recupera datos cacheados de Redis con descompresión."""
         try:
             cache_key = _self._get_cache_key(module_name)
             cached_data = _self.redis_client.get(cache_key)
             
             if cached_data:
+                # Descomprimir y deserializar
+                import zlib
+                data = pickle.loads(zlib.decompress(cached_data))
+                
                 # Obtener metadata
                 metadata_key = _self._get_cache_key(module_name, 'metadata')
                 metadata = _self.redis_client.get(metadata_key)
                 if metadata:
                     metadata = json.loads(metadata)
-                    logger.info(f"Usando cache para {module_name} - {metadata['rows']} registros")
+                    logger.info(f"Usando cache para {module_name} - {metadata['rows']} registros, {metadata['size_mb']:.2f}MB")
                 
-                return pickle.loads(cached_data)
+                return data
             return None
         except Exception as e:
             logger.error(f"Error al recuperar cache: {str(e)}")
@@ -216,7 +228,7 @@ class DataLoader:
             return None
 
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos con soporte de cache Redis."""
+        """Carga datos con soporte de cache Redis optimizado."""
         try:
             # SPE siempre se carga fresco
             if module_name == 'SPE':
@@ -322,3 +334,85 @@ class DataLoader:
     def get_rankings_collection(_self):
         """Retorna la colección de rankings de expedientes_db."""
         return _self.expedientes_db['rankings']
+
+    def _start_async_preload(_self):
+        """Inicia la precarga asíncrona de datos en Redis."""
+        import threading
+        thread = threading.Thread(target=_self._preload_data)
+        thread.daemon = True
+        thread.start()
+
+    def _preload_data(_self):
+        """Precarga datos en Redis de manera optimizada."""
+        try:
+            # Orden de prioridad de módulos (basado en uso común)
+            priority_modules = ['CCM', 'CCM-ESP', 'PRR', 'SOL']
+            
+            for module in priority_modules:
+                if not _self._is_module_cached(module):
+                    data = _self._load_fresh_data(module)
+                    if data is not None:
+                        # Optimizar tipos de datos antes de cachear
+                        data = _self._optimize_dtypes(data)
+                        _self._cache_data(module, data)
+                        
+            # Procesar CCM-LEY después de CCM y CCM-ESP
+            if not _self._is_module_cached('CCM-LEY'):
+                ccm_data = _self._get_cached_data('CCM')
+                ccm_esp_data = _self._get_cached_data('CCM-ESP')
+                if ccm_data is not None and ccm_esp_data is not None:
+                    ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
+                    ccm_ley_data = _self._optimize_dtypes(ccm_ley_data)
+                    _self._cache_data('CCM-LEY', ccm_ley_data)
+            
+            logger.info("Precarga de datos completada")
+        except Exception as e:
+            logger.error(f"Error en precarga: {str(e)}")
+
+    def _is_module_cached(_self, module_name: str) -> bool:
+        """Verifica si un módulo está en cache y es válido."""
+        try:
+            cache_key = _self._get_cache_key(module_name)
+            return _self.redis_client.exists(cache_key) == 1
+        except:
+            return False
+
+    def _clear_old_cache(_self):
+        """Limpia el cache de manera inteligente."""
+        try:
+            # Obtener todas las claves y sus metadatos
+            all_keys = _self.redis_client.keys("migraciones:*:data")
+            modules_info = []
+            
+            for key in all_keys:
+                module = key.decode().split(':')[1]
+                metadata_key = _self._get_cache_key(module, 'metadata')
+                metadata = _self.redis_client.get(metadata_key)
+                
+                if metadata:
+                    metadata = json.loads(metadata)
+                    modules_info.append({
+                        'module': module,
+                        'size': metadata.get('size_mb', 0),
+                        'last_access': metadata.get('cached_at')
+                    })
+            
+            # Ordenar por tamaño y fecha de último acceso
+            modules_info.sort(key=lambda x: (x['last_access'], -x['size']))
+            
+            # Eliminar módulos menos usados hasta liberar suficiente espacio
+            for module_info in modules_info:
+                module = module_info['module']
+                _self.redis_client.delete(
+                    _self._get_cache_key(module, 'data'),
+                    _self._get_cache_key(module, 'metadata')
+                )
+                logger.info(f"Cache limpiado para {module}")
+                
+                current_size = _self._get_cache_size()
+                if current_size < (REDIS_MEMORY_LIMIT * 0.7):  # 70% del límite
+                    break
+                    
+        except Exception as e:
+            logger.error(f"Error al limpiar cache: {str(e)}")
+            _self.redis_client.flushdb()  # Si algo falla, limpiar todo

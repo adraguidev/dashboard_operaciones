@@ -226,7 +226,7 @@ class DataLoader:
             cursor = collection.find(
                 {},
                 {'_id': 0},
-                batch_size=10000  # Aumentado para mejor rendimiento
+                batch_size=10000
             ).allow_disk_use(True)
 
             # Procesar documentos en chunks para mejor rendimiento
@@ -252,6 +252,11 @@ class DataLoader:
                 return None
                 
             data = pd.concat(dfs, ignore_index=True)
+            
+            # Asegurar que EVALASIGN tenga el formato correcto
+            if 'EVALASIGN' in data.columns:
+                data['EVALASIGN'] = data['EVALASIGN'].fillna('')
+            
             return data
             
         except Exception as e:
@@ -360,10 +365,7 @@ class DataLoader:
             if df[col].dtype == 'object':
                 # Manejo especial para EVALASIGN
                 if col == 'EVALASIGN':
-                    # Asegurarnos que los valores no sean nulos
-                    series = df[col].fillna('')
-                    # No convertir a categórico para evitar problemas
-                    return col, series
+                    return col, df[col]  # Mantener EVALASIGN sin modificar
                 # Para otras columnas
                 elif df[col].nunique() / len(df) < 0.5:
                     return col, pd.Categorical(df[col])

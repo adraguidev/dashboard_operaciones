@@ -122,7 +122,7 @@ class DataLoader:
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
         """Carga datos consolidados desde migraciones_db."""
         try:
-            # SPE siempre se carga fresco (sin cache)
+            # SPE tiene su propia lógica de carga separada y siempre carga datos frescos
             if module_name == 'SPE':
                 return _self._load_spe_from_sheets()
             
@@ -174,6 +174,7 @@ class DataLoader:
             data = pd.DataFrame(list(cursor))
 
             if data.empty:
+                st.error(f"No se encontraron datos para el módulo {module_name} en la base de datos.")
                 return None
 
             # Convertir fechas eficientemente
@@ -186,19 +187,33 @@ class DataLoader:
 
         except Exception as e:
             logger.error(f"Error al cargar datos del módulo {module_name}: {str(e)}")
+            st.error(f"Error al cargar datos del módulo {module_name}: {str(e)}")
             return None
 
+    # Método separado para SPE sin caché - siempre carga datos frescos
     def _load_spe_from_sheets(_self):
-        """Carga datos de SPE desde Google Sheets."""
+        """Carga datos de SPE desde Google Sheets. Sin caché para mantener datos frescos."""
         try:
+            print("Cargando datos frescos de SPE desde archivo...")
             folder = "descargas/SPE"
             file_path = os.path.join(folder, "MATRIZ.xlsx")
-            if os.path.exists(file_path):
-                data = pd.read_excel(file_path)
-                return data
-            return None
+            
+            if not os.path.exists(file_path):
+                st.error(f"No se encontró el archivo de SPE en {file_path}")
+                return None
+                
+            data = pd.read_excel(file_path)
+            if data.empty:
+                st.error("El archivo de SPE está vacío")
+                return None
+                
+            print(f"Datos frescos de SPE cargados exitosamente: {len(data)} registros")
+            return data
+            
         except Exception as e:
-            st.error(f"Error al cargar datos de SPE: {str(e)}")
+            error_msg = f"Error al cargar datos de SPE: {str(e)}"
+            logger.error(error_msg)
+            st.error(error_msg)
             return None
 
     def get_rankings_collection(_self):

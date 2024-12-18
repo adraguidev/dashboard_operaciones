@@ -773,31 +773,29 @@ def main():
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
                 # Preparar datos comunes para todas las pestañas
-                @st.cache_data(ttl=None)
+                @st.cache_data(ttl=None, show_spinner=False)
                 def prepare_common_data(df):
                     """Preprocesar datos comunes para todas las pestañas"""
-                    # Solo procesar las columnas de fecha que realmente necesitamos
-                    date_columns = [col for col in df.columns if col in DATE_COLUMNS]
-                    result = df.copy()
+                    # Identificar solo las columnas de fecha que existen en el DataFrame
+                    date_columns = {col: df[col] for col in DATE_COLUMNS if col in df.columns and df[col].dtype == 'datetime64[ns]'}
                     
-                    # Usar un diccionario para almacenar las columnas formateadas
-                    formatted_dates = {}
-                    for col in date_columns:
-                        if col in df.columns and df[col].dtype == 'datetime64[ns]':
-                            formatted_dates[f"{col}_formatted"] = df[col].dt.strftime('%d/%m/%Y')
+                    if not date_columns:
+                        return df
                     
-                    # Agregar todas las columnas formateadas de una vez
-                    if formatted_dates:
-                        result = result.assign(**formatted_dates)
+                    # Crear todas las columnas formateadas de una vez
+                    formatted_dates = {
+                        f"{col}_formatted": series.dt.strftime('%d/%m/%Y')
+                        for col, series in date_columns.items()
+                    }
                     
-                    return result
+                    # Usar assign para evitar la copia del DataFrame
+                    return df.assign(**formatted_dates)
 
-                # Procesar datos comunes solo si es necesario
+                # Procesar datos comunes solo si es necesario y no están en caché
                 cache_key_processed = f"processed_data_{selected_module}"
                 if cache_key_processed not in st.session_state:
-                    with st.spinner("Preparando datos..."):
-                        data = prepare_common_data(data)
-                        st.session_state[cache_key_processed] = data
+                    data = prepare_common_data(data)
+                    st.session_state[cache_key_processed] = data
                 else:
                     data = st.session_state[cache_key_processed]
 

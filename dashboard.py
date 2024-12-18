@@ -571,14 +571,11 @@ def generate_data_hash(data):
     
     return hashlib.md5(data_str.encode()).hexdigest()
 
-# Función cacheada para cargar datos del módulo y su timestamp
-@st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
+# Función para cargar datos del módulo de manera optimizada
+@st.cache_data(ttl=None, persist="disk")
 def load_module_data_with_timestamp(selected_module):
-    """
-    Carga y cachea los datos del módulo junto con su timestamp.
-    El caché persiste en disco y solo se invalida manualmente desde el panel de control.
-    """
-    # Verificar si hay una actualización forzada desde el panel de control
+    """Carga y cachea los datos del módulo."""
+    # Solo actualizar si se fuerza desde el panel de control
     if st.session_state.get('force_refresh', False):
         st.cache_data.clear()
         st.session_state.force_refresh = False
@@ -587,34 +584,25 @@ def load_module_data_with_timestamp(selected_module):
     data = data_loader.load_module_data(selected_module)
     
     if data is not None:
-        update_time = get_current_time()
-        data_hash = generate_data_hash(data)
-        
         return {
             'data': data,
-            'update_time': update_time,
-            'data_hash': data_hash,
-            'load_time': update_time
+            'update_time': get_current_time(),
+            'data_hash': generate_data_hash(data)
         }
     return None
 
 def get_module_data(selected_module, collection_name):
-    """
-    Función que maneja la lógica de carga de datos.
-    """
-    # Intentar cargar datos cacheados
+    """Función optimizada para cargar datos."""
+    # Usar el cache de Redis primero
+    if 'data_loader' in st.session_state:
+        data = st.session_state.data_loader.get_processed_data(selected_module, "common")
+        if data is not None:
+            return data, get_current_time(), False
+
+    # Si no hay datos procesados en Redis, intentar cargar datos cacheados de Streamlit
     cached_data = load_module_data_with_timestamp(selected_module)
-    
     if cached_data is not None:
-        # Guardar el hash en session_state si no existe
-        cache_key = f"{selected_module}_data_hash"
-        previous_hash = st.session_state.get(cache_key)
-        current_hash = cached_data['data_hash']
-        
-        # Actualizar el hash en session_state
-        st.session_state[cache_key] = current_hash
-        
-        return cached_data['data'], cached_data['update_time'], False  # Siempre False porque no queremos recargar
+        return cached_data['data'], cached_data['update_time'], False
     
     return None, None, False
 
@@ -675,7 +663,7 @@ def main():
             st.error("No se pudo inicializar la conexión a la base de datos.")
             return
 
-        # Inicializar estados del menú si no existen
+        # Inicializar estados si no existen
         if 'menu_dashboard' not in st.session_state:
             st.session_state.menu_dashboard = True
         if 'menu_admin' not in st.session_state:
@@ -684,8 +672,10 @@ def main():
             st.session_state.selected_module = list(MODULES.keys())[0]
         if 'active_tab' not in st.session_state:
             st.session_state.active_tab = 0
+        if 'module_data' not in st.session_state:
+            st.session_state.module_data = {}
 
-        # Contenedor para el sidebar con estilo
+        # Sidebar y selección de módulo
         with st.sidebar:
             # Menú Dashboard
             if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True, type="primary"):
@@ -735,7 +725,7 @@ def main():
         # Mostrar header
         show_header()
 
-        # Cargar datos según el módulo seleccionado
+        # Cargar datos del módulo seleccionado
         if selected_module == 'SPE':
             if google_credentials is None:
                 st.error("No se pueden cargar datos de SPE sin credenciales de Google.")
@@ -746,26 +736,29 @@ def main():
             update_time = get_current_time()
             
         else:
-            # Para otros módulos
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                # Cargar datos solo si no están en session_state o si cambia el módulo
-                cache_key = f"data_{selected_module}"
-                if cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
-                    data, update_time, _ = get_module_data(selected_module, collection_name)
-                    if data is None:
-                        st.error("No se encontraron datos para este módulo en la base de datos.")
-                        return
-                    st.session_state[cache_key] = data
-                    st.session_state['last_module'] = selected_module
+                # Cargar datos solo si no están en cache o si cambia el módulo
+                if (selected_module not in st.session_state.module_data or 
+                    st.session_state.get('last_module') != selected_module):
+                    
+                    with st.spinner(''):  # Spinner vacío para evitar mensaje estresante
+                        data, update_time, _ = get_module_data(selected_module, collection_name)
+                        if data is None:
+                            st.error("No se encontraron datos para este módulo.")
+                            return
+                        
+                        # Guardar en el cache de sesión
+                        st.session_state.module_data[selected_module] = {
+                            'data': data,
+                            'update_time': update_time
+                        }
+                        st.session_state['last_module'] = selected_module
                 else:
-                    data = st.session_state[cache_key]
-                    update_time = get_current_time()
-
-                # Agregar elementos adicionales al sidebar después de cargar los datos
-                with st.sidebar:
-                    if 'show_update_form' in st.session_state:
-                        del st.session_state.show_update_form
+                    # Usar datos cacheados
+                    cached = st.session_state.module_data[selected_module]
+                    data = cached['data']
+                    update_time = cached['update_time']
 
                 # Definir las pestañas y sus funciones correspondientes
                 tabs_config = [
@@ -799,20 +792,8 @@ def main():
                 # Renderizar contenido de las pestañas
                 for i, tab in enumerate(tabs):
                     with tab:
-                        # Usar el cache_key específico para cada pestaña
-                        tab_cache_key = f"tab_{selected_module}_{i}"
-                        
-                        # Si es la primera vez que se carga esta pestaña o si los datos han cambiado
-                        if tab_cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
-                            with st.spinner(f'Cargando {tabs_config[i][0]}...'):
-                                # Obtener la función y argumentos de la configuración
-                                _, render_func, args = tabs_config[i]
-                                render_func(*args)
-                                st.session_state[tab_cache_key] = True
-                        else:
-                            # Obtener la función y argumentos de la configuración
-                            _, render_func, args = tabs_config[i]
-                            render_func(*args)
+                        _, render_func, args = tabs_config[i]
+                        render_func(*args)
 
                 # Limpiar caché antiguo si el módulo ha cambiado
                 if st.session_state.get('last_module') != selected_module:

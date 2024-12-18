@@ -104,7 +104,7 @@ class DataLoader:
             return 0
 
     def _cache_data(_self, module_name: str, data: pd.DataFrame) -> bool:
-        """Almacena datos en Redis con compresión optimizada."""
+        """Almacena datos en Redis con compresión optimizada y persistente."""
         try:
             cache_key = _self._get_cache_key(module_name)
             
@@ -117,13 +117,12 @@ class DataLoader:
             # Optimizar DataFrame antes de serializar
             data = _self._optimize_dtypes(data)
             
-            # Serializar DataFrame con compresión
+            # Serializar DataFrame con compresión máxima
             import zlib
-            serialized_data = zlib.compress(pickle.dumps(data))
+            serialized_data = zlib.compress(pickle.dumps(data), level=9)
             
-            # Guardar en Redis con TTL
-            ttl = CACHE_TTL.get(module_name, CACHE_TTL['default'])
-            success = _self.redis_client.setex(cache_key, ttl, serialized_data)
+            # Guardar en Redis sin TTL (persistente hasta actualización manual)
+            success = _self.redis_client.set(cache_key, serialized_data)
             
             if success:
                 # Guardar metadata
@@ -131,11 +130,11 @@ class DataLoader:
                     'rows': len(data),
                     'columns': list(data.columns),
                     'cached_at': datetime.now().isoformat(),
-                    'ttl': ttl,
-                    'size_mb': len(serialized_data) / 1024 / 1024
+                    'size_mb': len(serialized_data) / 1024 / 1024,
+                    'version': '1.0'  # Para control de versiones del cache
                 }
                 metadata_key = _self._get_cache_key(module_name, 'metadata')
-                _self.redis_client.setex(metadata_key, ttl, json.dumps(metadata))
+                _self.redis_client.set(metadata_key, json.dumps(metadata))
                 
                 logger.info(f"Datos cacheados para {module_name}: {len(data)} registros, {metadata['size_mb']:.2f}MB")
                 return True
@@ -179,20 +178,32 @@ class DataLoader:
             _self.redis_client.flushdb()
             logger.info("Cache de Redis limpiado")
             
-            # Cargar datos frescos para cada módulo
+            # Cargar datos frescos en paralelo
+            import concurrent.futures
             modules = ['CCM', 'CCM-ESP', 'PRR', 'SOL']
+            
             with st.spinner("Actualizando datos..."):
-                for module in modules:
-                    data = _self._load_fresh_data(module)
-                    if data is not None:
-                        _self._cache_data(module, data)
-                        
-                # CCM-LEY se procesa después de CCM y CCM-ESP
-                ccm_data = _self._get_cached_data('CCM')
-                ccm_esp_data = _self._get_cached_data('CCM-ESP')
-                if ccm_data is not None and ccm_esp_data is not None:
-                    ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
-                    _self._cache_data('CCM-LEY', ccm_ley_data)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    # Cargar módulos en paralelo
+                    future_to_module = {
+                        executor.submit(_self._load_and_cache_module, module): module 
+                        for module in modules
+                    }
+                    
+                    # Esperar resultados
+                    for future in concurrent.futures.as_completed(future_to_module):
+                        module = future_to_module[future]
+                        try:
+                            future.result()
+                        except Exception as e:
+                            logger.error(f"Error actualizando {module}: {str(e)}")
+                    
+                    # Procesar CCM-LEY después de que CCM y CCM-ESP estén listos
+                    ccm_data = _self._get_cached_data('CCM')
+                    ccm_esp_data = _self._get_cached_data('CCM-ESP')
+                    if ccm_data is not None and ccm_esp_data is not None:
+                        ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
+                        _self._cache_data('CCM-LEY', ccm_ley_data)
             
             st.success("✅ Datos actualizados y cacheados correctamente")
             return True
@@ -428,35 +439,28 @@ class DataLoader:
             _self.redis_client.flushdb()  # Si algo falla, limpiar todo
 
     def cache_processed_data(_self, module_name: str, data: pd.DataFrame, process_type: str) -> bool:
-        """Almacena datos procesados en Redis."""
+        """Almacena datos procesados en Redis de manera persistente."""
         try:
             cache_key = _self._get_cache_key(module_name, f"processed_{process_type}")
-            
-            # Verificar espacio disponible
-            current_size = _self._get_cache_size()
-            if current_size > (REDIS_MEMORY_LIMIT * 0.9):
-                logger.warning("Cache casi lleno, limpiando datos antiguos...")
-                _self._clear_old_cache()
             
             # Optimizar y serializar DataFrame
             data = _self._optimize_dtypes(data)
             import zlib
-            serialized_data = zlib.compress(pickle.dumps(data))
+            serialized_data = zlib.compress(pickle.dumps(data), level=9)
             
-            # TTL más corto para datos procesados
-            ttl = min(CACHE_TTL.get(module_name, CACHE_TTL['default']), 1800)  # máximo 30 minutos
-            success = _self.redis_client.setex(cache_key, ttl, serialized_data)
+            # Guardar en Redis sin TTL (persistente)
+            success = _self.redis_client.set(cache_key, serialized_data)
             
             if success:
                 metadata = {
                     'rows': len(data),
                     'process_type': process_type,
                     'cached_at': datetime.now().isoformat(),
-                    'ttl': ttl,
-                    'size_mb': len(serialized_data) / 1024 / 1024
+                    'size_mb': len(serialized_data) / 1024 / 1024,
+                    'version': '1.0'
                 }
                 metadata_key = _self._get_cache_key(module_name, f"processed_{process_type}_meta")
-                _self.redis_client.setex(metadata_key, ttl, json.dumps(metadata))
+                _self.redis_client.set(metadata_key, json.dumps(metadata))
                 
                 logger.info(f"Datos procesados cacheados para {module_name}:{process_type}")
                 return True
@@ -490,7 +494,7 @@ class DataLoader:
             return None
 
     def prepare_common_data(_self, module_name: str, data: pd.DataFrame) -> pd.DataFrame:
-        """Prepara los datos comunes con soporte de cache."""
+        """Prepara los datos comunes con soporte de cache persistente."""
         try:
             # Intentar obtener datos preprocesados del cache
             processed_data = _self.get_processed_data(module_name, "common")
@@ -500,16 +504,16 @@ class DataLoader:
             # Si no hay cache, procesar los datos
             logger.info(f"Procesando datos comunes para {module_name}...")
             
-            # Aquí va tu lógica de procesamiento común
-            # Por ejemplo:
+            # Procesar datos de manera más eficiente
             data = data.copy()
             
-            # Procesar fechas
+            # Convertir fechas usando un método más rápido
             for col in DATE_COLUMNS:
                 if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
+                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce', cache=True)
             
-            # Otras transformaciones comunes...
+            # Optimizar tipos de datos
+            data = _self._optimize_dtypes(data)
             
             # Cachear los resultados
             _self.cache_processed_data(module_name, data, "common")
@@ -518,4 +522,12 @@ class DataLoader:
             
         except Exception as e:
             logger.error(f"Error en prepare_common_data: {str(e)}")
-            return data  # Retornar datos sin procesar en caso de error
+            return data
+
+    def _load_and_cache_module(_self, module_name: str) -> None:
+        """Helper para cargar y cachear un módulo en paralelo."""
+        data = _self._load_fresh_data(module_name)
+        if data is not None:
+            _self._cache_data(module_name, data)
+            # Pre-procesar datos comunes
+            _self.prepare_common_data(module_name, data)

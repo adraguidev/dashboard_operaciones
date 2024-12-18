@@ -39,7 +39,7 @@ class DataLoader:
             _self.redis_client.ping()
             logger.info("Conexión a Redis establecida")
             
-            # Resto de la inicialización de MongoDB...
+            # Inicialización de MongoDB
             try:
                 mongo_uri = st.secrets["connections"]["mongodb"]["uri"]
                 logger.info("Usando URI de MongoDB desde Streamlit secrets")
@@ -50,7 +50,35 @@ class DataLoader:
                     raise ValueError("No se encontró la URI de MongoDB")
                 logger.info("Usando URI de MongoDB desde variables de entorno")
 
-            # Resto del código de inicialización de MongoDB...
+            # Configuración optimizada de MongoDB
+            mongo_options = {
+                'connectTimeoutMS': 5000,
+                'socketTimeoutMS': 10000,
+                'serverSelectionTimeoutMS': 5000,
+                'maxPoolSize': 10,
+                'minPoolSize': 3,
+                'maxIdleTimeMS': 300000,
+                'waitQueueTimeoutMS': 5000,
+                'appName': 'MigracionesApp',
+                'retryWrites': True,
+                'retryReads': True,
+                'w': 'majority',
+                'readPreference': 'primaryPreferred'
+            }
+            
+            # Inicializar cliente MongoDB
+            _self.client = MongoClient(mongo_uri, **mongo_options)
+            
+            # Inicializar bases de datos
+            _self.migraciones_db = _self.client['migraciones_db']
+            _self.expedientes_db = _self.client['expedientes_db']
+            
+            # Verificar conexiones
+            _self.migraciones_db.command('ping')
+            _self.expedientes_db.command('ping')
+            
+            # Configurar índices
+            _self.setup_indexes()
             
             logger.info("Todas las conexiones establecidas correctamente")
         except redis.ConnectionError as e:

@@ -1,4 +1,5 @@
 import os
+import streamlit as st
 
 # Configuración de módulos
 MODULES = {
@@ -175,10 +176,10 @@ SPE_CONFIG = {
 
 # Configuración de Redis
 REDIS_CONFIG = {
-    'host': 'redis-12128.c273.us-east-1-2.ec2.redns.redis-cloud.com',
-    'port': 12128,
-    'username': 'default',
-    'password': os.getenv('REDIS_PASSWORD'),  # La contraseña debe estar en variables de entorno
+    'host': st.secrets["connections"]["redis"]["host"],
+    'port': st.secrets["connections"]["redis"]["port"],
+    'username': st.secrets["connections"]["redis"]["username"],
+    'password': st.secrets["connections"]["redis"]["password"],
     'decode_responses': False,  # Importante: False para poder almacenar datos binarios
     'socket_timeout': 5,
     'max_memory': 25 * 1024 * 1024  # 25MB para estar seguros (el límite es 30MB)

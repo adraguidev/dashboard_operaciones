@@ -111,25 +111,23 @@ class DataLoader:
             return 0
 
     def _cache_data(_self, module_name: str, data: pd.DataFrame) -> bool:
-        """Almacena datos en Redis con compresión."""
+        """Almacena datos en Redis con versión simplificada."""
         try:
             cache_key = _self._get_cache_key(module_name)
             
             # Verificar espacio disponible
             current_size = _self._get_cache_size()
-            if current_size > (REDIS_MEMORY_LIMIT * 0.9):  # 90% del límite
+            if current_size > (REDIS_MEMORY_LIMIT * 0.9):
                 logger.warning("Cache casi lleno, limpiando datos antiguos...")
                 _self.redis_client.flushdb()
             
-            # Serializar DataFrame
+            # Guardar datos completos
             serialized_data = pickle.dumps(data)
-            
-            # Guardar en Redis con TTL
             ttl = CACHE_TTL.get(module_name, CACHE_TTL['default'])
             success = _self.redis_client.setex(cache_key, ttl, serialized_data)
             
             if success:
-                # Guardar metadata del cache
+                # Guardar metadata
                 metadata = {
                     'rows': len(data),
                     'columns': list(data.columns),
@@ -139,6 +137,22 @@ class DataLoader:
                 metadata_key = _self._get_cache_key(module_name, 'metadata')
                 _self.redis_client.setex(metadata_key, ttl, json.dumps(metadata))
                 
+                # Crear y guardar versión simplificada
+                simple_data = data[[
+                    'NumeroTramite', 'FechaExpendiente', 'EVALASIGN', 
+                    'Evaluado', 'ESTADO'
+                ]].copy() if all(col in data.columns for col in [
+                    'NumeroTramite', 'FechaExpendiente', 'EVALASIGN', 
+                    'Evaluado', 'ESTADO'
+                ]) else data
+                
+                simple_key = _self._get_cache_key(module_name, 'simple')
+                _self.redis_client.setex(
+                    simple_key, 
+                    ttl, 
+                    pickle.dumps(simple_data)
+                )
+                
                 logger.info(f"Datos cacheados para {module_name}: {len(data)} registros")
                 return True
             return False
@@ -147,7 +161,7 @@ class DataLoader:
             return False
 
     def _get_cached_data(_self, module_name: str) -> pd.DataFrame:
-        """Recupera datos cacheados de Redis."""
+        """Recupera datos cacheados de Redis con fallback a versión simplificada."""
         try:
             cache_key = _self._get_cache_key(module_name)
             cached_data = _self.redis_client.get(cache_key)
@@ -161,61 +175,55 @@ class DataLoader:
                     logger.info(f"Usando cache para {module_name} - {metadata['rows']} registros")
                 
                 return pickle.loads(cached_data)
+            
+            # Si no hay cache, intentar obtener versión simplificada
+            simple_key = _self._get_cache_key(module_name, 'simple')
+            simple_data = _self.redis_client.get(simple_key)
+            if simple_data:
+                logger.info(f"Usando versión simplificada para {module_name}")
+                # Iniciar actualización en background
+                _self.thread_pool.submit(_self._background_refresh, module_name)
+                return pickle.loads(simple_data)
+                
             return None
         except Exception as e:
             logger.error(f"Error al recuperar cache: {str(e)}")
             return None
 
+    def _background_refresh(_self, module_name: str):
+        """Actualiza los datos en segundo plano."""
+        try:
+            # Cargar datos frescos
+            fresh_data = _self._load_fresh_data(module_name)
+            if fresh_data is not None:
+                # Actualizar cache
+                _self._cache_data(module_name, fresh_data)
+                logger.info(f"Actualización en segundo plano completada para {module_name}")
+        except Exception as e:
+            logger.error(f"Error en actualización en segundo plano de {module_name}: {str(e)}")
+
     def force_data_refresh(_self, password: str) -> bool:
-        """Fuerza actualización limpiando el cache y recargando datos en paralelo."""
+        """Fuerza actualización iniciando procesos en segundo plano."""
         if not _self.verify_password(password):
             st.error("Contraseña incorrecta")
             return False
         
         try:
-            # Limpiar cache de Redis
-            _self.redis_client.flushdb()
-            logger.info("Cache de Redis limpiado")
-            
-            # Cargar datos frescos para cada módulo en paralelo
             modules = ['CCM', 'CCM-ESP', 'PRR', 'SOL']
             
-            with st.spinner("Actualizando datos..."):
-                # Usar ThreadPoolExecutor para operaciones I/O
-                with _self.thread_pool as executor:
-                    # Cargar módulos en paralelo
-                    future_to_module = {
-                        executor.submit(_self._load_fresh_data, module): module 
-                        for module in modules
-                    }
-                    
-                    # Procesar resultados
-                    results = {}
-                    for future in future_to_module:
-                        module = future_to_module[future]
-                        try:
-                            data = future.result()
-                            if data is not None:
-                                results[module] = data
-                                _self._cache_data(module, data)
-                        except Exception as e:
-                            logger.error(f"Error procesando {module}: {str(e)}")
-                    
-                    # Procesar CCM-LEY después de tener CCM y CCM-ESP
-                    if 'CCM' in results and 'CCM-ESP' in results:
-                        ccm_ley_data = results['CCM'][
-                            ~results['CCM']['NumeroTramite'].isin(
-                                results['CCM-ESP']['NumeroTramite']
-                            )
-                        ]
-                        _self._cache_data('CCM-LEY', ccm_ley_data)
+            # Iniciar actualizaciones en segundo plano
+            with _self.thread_pool as executor:
+                futures = {
+                    executor.submit(_self._background_refresh, module): module 
+                    for module in modules
+                }
             
-            st.success("✅ Datos actualizados y cacheados correctamente")
+            st.success("✅ Actualización iniciada en segundo plano")
             return True
             
         except Exception as e:
-            logger.error(f"Error en actualización: {str(e)}")
-            st.error(f"Error al actualizar datos: {str(e)}")
+            logger.error(f"Error iniciando actualización: {str(e)}")
+            st.error(f"Error al iniciar actualización: {str(e)}")
             return False
 
     def _process_chunk(_self, chunk: pd.DataFrame) -> pd.DataFrame:
@@ -333,15 +341,24 @@ class DataLoader:
             return None
 
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos con soporte de cache Redis."""
+        """Carga datos con prioridad en el cache."""
         try:
             # SPE siempre se carga fresco
             if module_name == 'SPE':
                 return _self._load_spe_from_sheets()
             
-            # Intentar obtener del cache
+            # Intentar obtener del cache primero
             cached_data = _self._get_cached_data(module_name)
             if cached_data is not None:
+                # Iniciar actualización en segundo plano si los datos tienen más de 1 hora
+                metadata_key = _self._get_cache_key(module_name, 'metadata')
+                metadata = _self.redis_client.get(metadata_key)
+                if metadata:
+                    metadata = json.loads(metadata)
+                    cached_time = datetime.fromisoformat(metadata['cached_at'])
+                    if (datetime.now() - cached_time).seconds > 3600:
+                        # Iniciar actualización en background
+                        _self.thread_pool.submit(_self._background_refresh, module_name)
                 return cached_data
 
             # Si no hay cache, cargar datos frescos

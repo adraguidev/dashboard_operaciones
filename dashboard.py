@@ -573,57 +573,59 @@ def generate_data_hash(data):
     
     return hashlib.md5(data_str.encode()).hexdigest()
 
-# Cache global para datos procesados
-@st.cache_data(ttl=3600)
-def process_data_once(data, selected_module):
-    """Procesa los datos una sola vez y los guarda en caché"""
-    if data is None:
-        return None
+# Función cacheada para cargar datos del módulo y su timestamp
+@st.cache_data(ttl=None, persist="disk")  # Cache permanente y persistente en disco
+def load_module_data_with_timestamp(selected_module):
+    """
+    Carga y cachea los datos del módulo junto con su timestamp.
+    El caché persiste en disco y solo se invalida manualmente desde el panel de control.
+    """
+    # Verificar si hay una actualización forzada desde el panel de control
+    if st.session_state.get('force_refresh', False):
+        st.cache_data.clear()
+        st.session_state.force_refresh = False
     
-    try:
-        # Procesar fechas de manera eficiente
-        date_columns = data.select_dtypes(include=['datetime64']).columns
-        for col in date_columns:
-            data[f"{col}_formatted"] = data[col].dt.strftime('%d/%m/%Y')
-        
-        # Optimizar tipos de datos solo para columnas grandes
-        for col in data.select_dtypes(include=['object']).columns:
-            if len(data) > 1000 and data[col].nunique() / len(data) < 0.5:
-                data[col] = pd.Categorical(data[col])
-        
-        return data
-    except Exception as e:
-        st.error(f"Error procesando datos: {str(e)}")
-        return data
-
-@st.cache_data(ttl=3600)
-def get_module_data(selected_module, collection_name):
-    """Carga y cachea los datos del módulo"""
-    try:
-        data_loader = get_data_loader()
-        data = data_loader.load_module_data(selected_module)
-        if data is not None:
-            # Procesar datos una sola vez
-            processed_data = process_data_once(data, selected_module)
-            update_time = get_current_time()
-            return processed_data, update_time, False
-        return None, None, False
-    except Exception as e:
-        st.error(f"Error cargando datos: {str(e)}")
-        return None, None, False
-
-def get_data_loader():
-    """Obtiene o inicializa el DataLoader"""
     if 'data_loader' not in st.session_state:
-        with st.spinner('Inicializando conexión a la base de datos...'):
+        with st.spinner('🔄 Inicializando conexión a la base de datos...'):
             st.session_state.data_loader = DataLoader()
-    return st.session_state.data_loader
+    
+    data_loader = st.session_state.data_loader
+    data = data_loader.load_module_data(selected_module)
+    
+    if data is not None:
+        update_time = get_current_time()
+        data_hash = generate_data_hash(data)
+        
+        return {
+            'data': data,
+            'update_time': update_time,
+            'data_hash': data_hash,
+            'load_time': update_time
+        }
+    return None
+
+def get_module_data(selected_module, collection_name):
+    """
+    Función que maneja la lógica de carga de datos.
+    """
+    # Intentar cargar datos cacheados
+    cached_data = load_module_data_with_timestamp(selected_module)
+    
+    if cached_data is not None:
+        # Guardar el hash en session_state si no existe
+        cache_key = f"{selected_module}_data_hash"
+        previous_hash = st.session_state.get(cache_key)
+        current_hash = cached_data['data_hash']
+        
+        # Actualizar el hash en session_state
+        st.session_state[cache_key] = current_hash
+        
+        return cached_data['data'], cached_data['update_time'], False
+    
+    return None, None, False
 
 def main():
     try:
-        # Inicializar DataLoader
-        data_loader = get_data_loader()
-        
         # Inicializar estados del menú si no existen
         if 'menu_dashboard' not in st.session_state:
             st.session_state.menu_dashboard = True
@@ -697,17 +699,14 @@ def main():
         else:
             collection_name = MONGODB_COLLECTIONS.get(selected_module)
             if collection_name:
-                # Cargar datos una sola vez por sesión
+                # Cargar datos solo si no están en caché o si cambia el módulo
                 cache_key = f"data_{selected_module}"
-                
                 if cache_key not in st.session_state:
                     with st.spinner(f'Cargando datos de {MODULES[selected_module]}...'):
                         data, update_time, _ = get_module_data(selected_module, collection_name)
-                        
                         if data is None:
-                            st.error("No se encontraron datos para este módulo.")
+                            st.error("No se pudieron cargar los datos del módulo.")
                             return
-                        
                         st.session_state[cache_key] = {
                             'data': data,
                             'update_time': update_time
@@ -724,13 +723,13 @@ def main():
                     ("Cierre de Expedientes", render_closing_analysis_tab, [data]),
                     ("Reporte por Evaluador", render_evaluator_report_tab, [data]),
                     ("Reporte de Asignaciones", render_assignment_report_tab, [data]),
-                    ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, data_loader.get_rankings_collection()])
+                    ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, st.session_state.data_loader.get_rankings_collection()])
                 ]
 
                 # Crear pestañas
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
-                # Renderizar pestañas sin recargar datos
+                # Renderizar pestañas
                 for i, tab in enumerate(tabs):
                     with tab:
                         _, render_func, args = tabs_config[i]

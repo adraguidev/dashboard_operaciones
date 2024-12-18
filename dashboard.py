@@ -489,6 +489,50 @@ st.markdown("""
     section[data-testid="stSidebar"] button:first-of-type {
         margin-top: 0 !important;
     }
+    
+    /* Mejoras para las pestañas */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        background-color: transparent;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        height: 3rem;
+        white-space: nowrap;
+        transition: all 200ms ease-in-out;
+        padding: 0 1.5rem;
+        margin-right: -1px;
+        color: #666;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-bottom: none;
+        border-radius: 4px 4px 0 0;
+        position: relative;
+        z-index: 1;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: white !important;
+        color: #FF4B4B !important;
+        border-bottom: 2px solid #FF4B4B !important;
+        z-index: 2;
+    }
+
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 1.5rem 0.5rem;
+        border-top: 1px solid #dee2e6;
+        margin-top: -1px;
+    }
+
+    /* Animación de carga */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .stTabs [data-baseweb="tab-panel"] > div {
+        animation: fadeIn 0.3s ease-in-out;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -725,23 +769,30 @@ def main():
                     ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, data_loader.get_rankings_collection()])
                 ]
 
-                # Crear pestañas
-                tab_names = [tab[0] for tab in tabs_config]
-                current_tab = st.radio("", tab_names, key="tab_selector", label_visibility="collapsed", horizontal=True)
-                st.session_state.active_tab = tab_names.index(current_tab)
+                # Crear pestañas usando st.tabs
+                tabs = st.tabs([name for name, _, _ in tabs_config])
+
+                # Detectar qué pestaña está seleccionada
+                for i, tab in enumerate(tabs):
+                    with tab:
+                        # Si hay contenido visible en esta pestaña, está activa
+                        if st.container().id != "":
+                            st.session_state.active_tab = i
+                            break
 
                 # Renderizar contenido solo de la pestaña activa
-                tab_cache_key = f"tab_{selected_module}_{st.session_state.active_tab}"
-                if tab_cache_key not in st.session_state:
-                    with st.spinner(f'Cargando {current_tab}...'):
+                with tabs[st.session_state.active_tab]:
+                    tab_cache_key = f"tab_{selected_module}_{st.session_state.active_tab}"
+                    if tab_cache_key not in st.session_state:
+                        with st.spinner(f'Cargando {tabs_config[st.session_state.active_tab][0]}...'):
+                            # Obtener la función y argumentos de la configuración
+                            _, render_func, args = tabs_config[st.session_state.active_tab]
+                            render_func(*args)
+                            st.session_state[tab_cache_key] = True
+                    else:
                         # Obtener la función y argumentos de la configuración
                         _, render_func, args = tabs_config[st.session_state.active_tab]
                         render_func(*args)
-                        st.session_state[tab_cache_key] = True
-                else:
-                    # Obtener la función y argumentos de la configuración
-                    _, render_func, args = tabs_config[st.session_state.active_tab]
-                    render_func(*args)
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

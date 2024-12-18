@@ -772,6 +772,24 @@ def main():
                 # Crear pestañas usando st.tabs
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
+                # Preparar datos comunes para todas las pestañas
+                @st.cache_data(ttl=None)
+                def prepare_common_data(data):
+                    """Preprocesar datos comunes para todas las pestañas"""
+                    common_data = {}
+                    # Convertir fechas una sola vez
+                    date_columns = data.select_dtypes(include=['datetime64']).columns
+                    for col in date_columns:
+                        common_data[f"{col}_formatted"] = data[col].dt.strftime('%d/%m/%Y')
+                    # Calcular estadísticas comunes
+                    common_data['total_expedientes'] = len(data)
+                    common_data['expedientes_evaluados'] = len(data[data['Evaluado'] == 'SI'])
+                    common_data['expedientes_pendientes'] = len(data[data['Evaluado'] == 'NO'])
+                    return common_data
+
+                # Procesar datos comunes una sola vez
+                common_data = prepare_common_data(data)
+
                 # Renderizar contenido de las pestañas
                 for i, tab in enumerate(tabs):
                     with tab:
@@ -783,12 +801,24 @@ def main():
                             with st.spinner(f'Cargando {tabs_config[i][0]}...'):
                                 # Obtener la función y argumentos de la configuración
                                 _, render_func, args = tabs_config[i]
+                                # Agregar datos comunes a los argumentos
+                                args = [*args, common_data]
                                 render_func(*args)
                                 st.session_state[tab_cache_key] = True
                         else:
                             # Obtener la función y argumentos de la configuración
                             _, render_func, args = tabs_config[i]
+                            # Agregar datos comunes a los argumentos
+                            args = [*args, common_data]
                             render_func(*args)
+
+                # Limpiar caché antiguo si el módulo ha cambiado
+                if st.session_state.get('last_module') != selected_module:
+                    old_module = st.session_state.get('last_module')
+                    if old_module:
+                        keys_to_remove = [k for k in st.session_state.keys() if k.startswith(f"tab_{old_module}_")]
+                        for k in keys_to_remove:
+                            del st.session_state[k]
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")

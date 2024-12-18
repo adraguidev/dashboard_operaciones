@@ -214,7 +214,7 @@ class DataLoader:
             return False
 
     def _load_fresh_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos frescos desde MongoDB con procesamiento paralelo."""
+        """Carga datos frescos desde MongoDB."""
         try:
             collection_name = MONGODB_COLLECTIONS.get(module_name)
             if not collection_name:
@@ -222,40 +222,18 @@ class DataLoader:
 
             collection = _self.migraciones_db[collection_name]
             
-            # Usar cursor con batch_size optimizado
             cursor = collection.find(
                 {},
                 {'_id': 0},
-                batch_size=10000
+                batch_size=5000
             ).allow_disk_use(True)
 
-            # Procesar documentos en chunks para mejor rendimiento
-            chunk_size = 20000
-            chunks = []
-            current_chunk = []
+            data = pd.DataFrame(list(cursor))
             
-            for doc in cursor:
-                current_chunk.append(doc)
-                if len(current_chunk) >= chunk_size:
-                    chunks.append(current_chunk)
-                    current_chunk = []
-            
-            if current_chunk:
-                chunks.append(current_chunk)
-            
-            # Convertir chunks a DataFrames en paralelo
-            with concurrent.futures.ThreadPoolExecutor(max_workers=_self.max_workers) as executor:
-                dfs = list(executor.map(pd.DataFrame, chunks))
-            
-            # Concatenar resultados
-            if not dfs:
-                return None
-                
-            data = pd.concat(dfs, ignore_index=True)
-            
-            # Asegurar que EVALASIGN tenga el formato correcto
-            if 'EVALASIGN' in data.columns:
-                data['EVALASIGN'] = data['EVALASIGN'].fillna('')
+            # Procesar fechas
+            for col in DATE_COLUMNS:
+                if col in data.columns:
+                    data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
             
             return data
             
@@ -363,11 +341,7 @@ class DataLoader:
 
         def optimize_object_column(col):
             if df[col].dtype == 'object':
-                # Manejo especial para EVALASIGN
-                if col == 'EVALASIGN':
-                    return col, df[col]  # Mantener EVALASIGN sin modificar
-                # Para otras columnas
-                elif df[col].nunique() / len(df) < 0.5:
+                if df[col].nunique() / len(df) < 0.5:  # Si hay muchos valores repetidos
                     return col, pd.Categorical(df[col])
             return col, df[col]
 

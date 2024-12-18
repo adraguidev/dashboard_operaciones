@@ -729,16 +729,20 @@ def main():
                 tabs = st.tabs([tab[0] for tab in tabs_config])
                 
                 # Renderizar contenido solo de la pestaña activa
-                for i, (tab, render_func, args) in enumerate(zip(tabs, *zip(*tabs_config))):
+                for i, tab in enumerate(tabs):
                     with tab:
                         if st.session_state.active_tab == i:
                             # Usar el cache_key específico para cada pestaña
                             tab_cache_key = f"tab_{selected_module}_{i}"
                             if tab_cache_key not in st.session_state:
                                 with st.spinner(f'Cargando {tabs_config[i][0]}...'):
+                                    # Obtener la función y argumentos de la configuración
+                                    _, render_func, args = tabs_config[i]
                                     render_func(*args)
                                     st.session_state[tab_cache_key] = True
                             else:
+                                # Obtener la función y argumentos de la configuración
+                                _, render_func, args = tabs_config[i]
                                 render_func(*args)
 
                 # Actualizar la pestaña activa

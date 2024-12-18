@@ -20,8 +20,20 @@ MONGODB_URI = os.getenv('MONGODB_URI')
 MONGODB_PASSWORD = os.getenv('MONGODB_PASSWORD')
 
 class DataLoader:
+    _instance = None
+    _is_initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DataLoader, cls).__new__(cls)
+        return cls._instance
+
     def __init__(_self):
         """Inicializa las conexiones a MongoDB usando los secrets de Streamlit o variables de entorno."""
+        # Solo inicializar una vez
+        if DataLoader._is_initialized:
+            return
+            
         try:
             logger.info("Iniciando conexión a MongoDB...")
             # Primero intentar obtener la URI desde secrets de Streamlit
@@ -38,13 +50,13 @@ class DataLoader:
 
             # Configuración optimizada de MongoDB
             mongo_options = {
-                'connectTimeoutMS': 5000,
-                'socketTimeoutMS': 10000,
-                'serverSelectionTimeoutMS': 5000,
+                'connectTimeoutMS': 3000,  # Reducido de 5000
+                'socketTimeoutMS': 5000,   # Reducido de 10000
+                'serverSelectionTimeoutMS': 3000,  # Reducido de 5000
                 'maxPoolSize': 10,
-                'minPoolSize': 3,
+                'minPoolSize': 1,          # Reducido de 3
                 'maxIdleTimeMS': 300000,
-                'waitQueueTimeoutMS': 5000,
+                'waitQueueTimeoutMS': 3000,  # Reducido de 5000
                 'appName': 'MigracionesApp',
                 'compressors': ['zlib'],
                 'retryWrites': True,
@@ -60,21 +72,32 @@ class DataLoader:
             # Base de datos para rankings
             _self.expedientes_db = _self.client['expedientes_db']
             
-            # Verificar conexiones con timeout
-            _self.migraciones_db.command('ping', maxTimeMS=5000)
-            _self.expedientes_db.command('ping', maxTimeMS=5000)
+            # Verificar conexión básica sin ping
+            _self.migraciones_db.list_collection_names()
             
-            # Configurar índices para optimizar consultas
-            _self.setup_indexes()
+            # Inicializar índices y caché en segundo plano
+            st.session_state['init_background'] = True
             
-            # Configurar colección de caché
-            _self.setup_cache_collection()
+            DataLoader._is_initialized = True
+            logger.info("Conexión básica a MongoDB establecida")
             
-            logger.info("Conexión exitosa a MongoDB")
         except Exception as e:
             logger.error(f"Error detallado de conexión: {str(e)}")
             st.error(f"Error al conectar con MongoDB: {str(e)}")
             raise
+
+    def ensure_background_init(_self):
+        """Asegura que la inicialización en segundo plano se complete."""
+        if st.session_state.get('init_background', False):
+            try:
+                # Configurar índices para optimizar consultas
+                _self.setup_indexes()
+                # Configurar colección de caché
+                _self.setup_cache_collection()
+                st.session_state['init_background'] = False
+                logger.info("Inicialización en segundo plano completada")
+            except Exception as e:
+                logger.error(f"Error en inicialización en segundo plano: {str(e)}")
 
     def setup_indexes(_self):
         """Configura índices para optimizar consultas frecuentes."""
@@ -189,9 +212,12 @@ class DataLoader:
         """Fuerza una actualización de datos si la contraseña es correcta."""
         return _self.refresh_cache_in_background(password)
 
-    @st.cache_data(ttl=None)  # Cache permanente de Streamlit
+    @st.cache_data(ttl=None)
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
         """Carga datos consolidados desde migraciones_db con caché en MongoDB."""
+        # Asegurar que la inicialización en segundo plano se complete
+        _self.ensure_background_init()
+        
         try:
             # SPE tiene su propia lógica de carga
             if module_name == 'SPE':

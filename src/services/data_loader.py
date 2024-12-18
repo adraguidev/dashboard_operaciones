@@ -275,8 +275,9 @@ class DataLoader:
             logger.error(f"Error cargando datos frescos: {str(e)}")
             return None
 
+    @st.cache_data(ttl=3600, show_spinner=False)  # Cache por 1 hora
     def load_module_data(_self, module_name: str) -> pd.DataFrame:
-        """Carga datos con soporte de cache Redis."""
+        """Carga datos con soporte de cache Redis y Streamlit."""
         try:
             start_time = time.time()
             logger.info(f"Iniciando carga de datos para {module_name}")
@@ -285,25 +286,25 @@ class DataLoader:
             if module_name == 'SPE':
                 return _self._load_spe_from_sheets()
             
-            # Intentar obtener del cache
-            logger.info(f"Intentando obtener {module_name} desde cache...")
+            # Intentar obtener del cache de Redis
+            logger.info(f"Intentando obtener {module_name} desde Redis...")
             cached_data = _self._get_cached_data(module_name)
             
             if cached_data is not None:
                 elapsed = time.time() - start_time
-                logger.info(f"Datos de {module_name} recuperados del cache en {elapsed:.2f} segundos")
+                logger.info(f"Datos de {module_name} recuperados de Redis en {elapsed:.2f} segundos")
                 return cached_data
 
-            # Si no hay cache, cargar datos frescos
+            # Si no hay cache en Redis, cargar datos frescos
             logger.info(f"Cache no encontrado para {module_name}, cargando datos frescos...")
             data = _self._load_fresh_data(module_name)
             
             if data is not None:
-                logger.info(f"Cacheando datos de {module_name}...")
+                logger.info(f"Cacheando datos de {module_name} en Redis...")
                 if _self._cache_data(module_name, data):
-                    logger.info(f"Datos de {module_name} cacheados exitosamente")
+                    logger.info(f"Datos de {module_name} cacheados exitosamente en Redis")
                 else:
-                    logger.warning(f"No se pudo cachear los datos de {module_name}")
+                    logger.warning(f"No se pudo cachear los datos de {module_name} en Redis")
                 
                 elapsed = time.time() - start_time
                 logger.info(f"Carga total de {module_name} completada en {elapsed:.2f} segundos")
@@ -315,6 +316,38 @@ class DataLoader:
         except Exception as e:
             logger.error(f"Error al cargar datos de {module_name}: {str(e)}")
             return None
+
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def prepare_common_data(_self) -> dict:
+        """Prepara y cachea datos comunes para todos los módulos."""
+        try:
+            logger.info("Preparando datos comunes...")
+            start_time = time.time()
+            
+            # Cargar datos base
+            ccm_data = _self.load_module_data('CCM')
+            ccm_esp_data = _self.load_module_data('CCM-ESP')
+            
+            # Preparar CCM-LEY
+            if ccm_data is not None and ccm_esp_data is not None:
+                ccm_ley_data = ccm_data[~ccm_data['NumeroTramite'].isin(ccm_esp_data['NumeroTramite'])]
+            else:
+                ccm_ley_data = None
+            
+            # Preparar diccionario de datos
+            common_data = {
+                'CCM': ccm_data,
+                'CCM-ESP': ccm_esp_data,
+                'CCM-LEY': ccm_ley_data
+            }
+            
+            elapsed = time.time() - start_time
+            logger.info(f"Datos comunes preparados en {elapsed:.2f} segundos")
+            return common_data
+            
+        except Exception as e:
+            logger.error(f"Error preparando datos comunes: {str(e)}")
+            return {}
 
     def setup_indexes(_self):
         """Configura índices para optimizar consultas frecuentes."""

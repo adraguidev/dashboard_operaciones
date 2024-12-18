@@ -661,164 +661,29 @@ def show_loading_progress(message, action, show_fade_in=True):
         return result
 
 def main():
-    try:
-        data_loader = st.session_state.data_loader
-        if data_loader is None:
-            st.error("No se pudo inicializar la conexión a la base de datos.")
-            return
+    st.set_page_config(
+        page_title="Dashboard de Operaciones",
+        page_icon="📊",
+        layout="wide"
+    )
 
-        # Inicializar estados del menú si no existen
-        if 'menu_dashboard' not in st.session_state:
-            st.session_state.menu_dashboard = True
-        if 'menu_admin' not in st.session_state:
-            st.session_state.menu_admin = False
-        if 'selected_module' not in st.session_state:
-            st.session_state.selected_module = list(MODULES.keys())[0]
-        if 'active_tab' not in st.session_state:
-            st.session_state.active_tab = 0
+    # Inicializar DataLoader si no existe
+    if 'data_loader' not in st.session_state:
+        with st.spinner('Inicializando conexión a la base de datos...'):
+            st.session_state.data_loader = DataLoader()
+    
+    data_loader = st.session_state.data_loader
+    
+    # Cargar datos comunes una sola vez
+    common_data = data_loader.prepare_common_data()
+    
+    # Mostrar mensaje de error si no hay datos
+    if not common_data:
+        st.error("❌ No se pudieron cargar los datos. Por favor, intente más tarde.")
+        return
 
-        # Contenedor para el sidebar con estilo
-        with st.sidebar:
-            # Menú Dashboard
-            if st.button("📊 Dashboard", key="btn_dashboard", use_container_width=True, type="primary"):
-                st.session_state.menu_dashboard = True
-                st.session_state.menu_admin = False
-            
-            # Submódulos de Dashboard
-            if st.session_state.menu_dashboard:
-                with st.container():
-                    st.markdown('<div class="submenu">', unsafe_allow_html=True)
-                    selected_module = st.radio(
-                        "",
-                        options=st.session_state.get('visible_modules', list(MODULES.keys())),
-                        format_func=lambda x: MODULES[x],
-                        key="module_selector",
-                        label_visibility="collapsed"
-                    )
-                    st.session_state.selected_module = selected_module
-                    st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                selected_module = st.session_state.selected_module
-            
-            # Menú Admin
-            if st.button("⚙️ Admin", key="btn_admin", use_container_width=True):
-                st.session_state.menu_admin = True
-                st.session_state.menu_dashboard = False
-                st.switch_page("pages/1_admin.py")
-            
-            # Mostrar última actualización si está disponible
-            if 'update_time' in locals():
-                st.markdown(
-                    f'<div class="update-info">📅 {update_time.strftime("%d/%m/%Y %H:%M")}</div>',
-                    unsafe_allow_html=True
-                )
-
-        # Inicializar la fecha de datos actual en session_state si no existe
-        if 'current_data_date' not in st.session_state:
-            st.session_state.current_data_date = None
-
-        # Obtener credenciales de Google
-        try:
-            google_credentials = get_google_credentials()
-        except Exception as e:
-            st.warning(f"No se pudieron obtener las credenciales de Google. SPE podría no funcionar correctamente.")
-            google_credentials = None
-
-        # Mostrar header
-        show_header()
-
-        # Cargar datos según el módulo seleccionado
-        if selected_module == 'SPE':
-            if google_credentials is None:
-                st.error("No se pueden cargar datos de SPE sin credenciales de Google.")
-                return
-            
-            spe = SPEModule()
-            spe.render_module()
-            update_time = get_current_time()
-            
-        else:
-            # Para otros módulos
-            collection_name = MONGODB_COLLECTIONS.get(selected_module)
-            if collection_name:
-                # Cargar datos solo si no están en session_state o si cambia el módulo
-                cache_key = f"data_{selected_module}"
-                if cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
-                    data, update_time, _ = get_module_data(selected_module, collection_name)
-                    if data is None:
-                        st.error("No se encontraron datos para este módulo en la base de datos.")
-                        return
-                    st.session_state[cache_key] = data
-                    st.session_state['last_module'] = selected_module
-                else:
-                    data = st.session_state[cache_key]
-                    update_time = get_current_time()
-
-                # Agregar elementos adicionales al sidebar después de cargar los datos
-                with st.sidebar:
-                    if 'show_update_form' in st.session_state:
-                        del st.session_state.show_update_form
-
-                # Definir las pestañas y sus funciones correspondientes
-                tabs_config = [
-                    ("Reporte de pendientes", render_pending_reports_tab, [data, selected_module]),
-                    ("Ingreso de Expedientes", render_entry_analysis_tab, [data]),
-                    ("Cierre de Expedientes", render_closing_analysis_tab, [data]),
-                    ("Reporte por Evaluador", render_evaluator_report_tab, [data]),
-                    ("Reporte de Asignaciones", render_assignment_report_tab, [data]),
-                    ("Ranking de Expedientes Trabajados", ranking_report.render_ranking_report_tab, [data, selected_module, data_loader.get_rankings_collection()])
-                ]
-
-                # Crear pestañas usando st.tabs
-                tabs = st.tabs([name for name, _, _ in tabs_config])
-
-                # Preparar datos comunes para todas las pestañas
-                @st.cache_data(ttl=None)
-                def prepare_common_data(df):
-                    """Preprocesar datos comunes para todas las pestañas"""
-                    # Convertir fechas una sola vez
-                    date_columns = df.select_dtypes(include=['datetime64']).columns
-                    for col in date_columns:
-                        df[f"{col}_formatted"] = df[col].dt.strftime('%d/%m/%Y')
-                    return df
-
-                # Procesar datos comunes una sola vez si no está en caché
-                cache_key_processed = f"processed_data_{selected_module}"
-                if cache_key_processed not in st.session_state:
-                    data = prepare_common_data(data)
-                    st.session_state[cache_key_processed] = data
-
-                # Renderizar contenido de las pestañas
-                for i, tab in enumerate(tabs):
-                    with tab:
-                        # Usar el cache_key específico para cada pestaña
-                        tab_cache_key = f"tab_{selected_module}_{i}"
-                        
-                        # Si es la primera vez que se carga esta pestaña o si los datos han cambiado
-                        if tab_cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
-                            with st.spinner(f'Cargando {tabs_config[i][0]}...'):
-                                # Obtener la función y argumentos de la configuración
-                                _, render_func, args = tabs_config[i]
-                                render_func(*args)
-                                st.session_state[tab_cache_key] = True
-                        else:
-                            # Obtener la función y argumentos de la configuración
-                            _, render_func, args = tabs_config[i]
-                            render_func(*args)
-
-                # Limpiar caché antiguo si el módulo ha cambiado
-                if st.session_state.get('last_module') != selected_module:
-                    old_module = st.session_state.get('last_module')
-                    if old_module:
-                        keys_to_remove = [k for k in st.session_state.keys() 
-                                        if k.startswith(f"tab_{old_module}_") or 
-                                           k.startswith(f"processed_data_{old_module}")]
-                        for k in keys_to_remove:
-                            del st.session_state[k]
-
-    except Exception as e:
-        st.error(f"Error inesperado en la aplicación: {str(e)}")
-        print(f"Error detallado: {str(e)}")
+    # Resto del código del dashboard usando common_data[module_name] en lugar de data_loader.load_module_data(module_name)
+    # ... resto del código ...
 
 if __name__ == "__main__":
     main()

@@ -230,7 +230,10 @@ class DataLoader:
 
             data = pd.DataFrame(list(cursor))
             
-            # Procesar fechas
+            # Procesar fechas y asegurar EVALASIGN
+            if 'EVALASIGN' in data.columns:
+                data['EVALASIGN'] = data['EVALASIGN'].fillna('')
+                
             for col in DATE_COLUMNS:
                 if col in data.columns:
                     data[col] = pd.to_datetime(data[col], format='%d/%m/%Y', errors='coerce')
@@ -341,7 +344,11 @@ class DataLoader:
 
         def optimize_object_column(col):
             if df[col].dtype == 'object':
-                if df[col].nunique() / len(df) < 0.5:  # Si hay muchos valores repetidos
+                # No convertir EVALASIGN a categórica
+                if col == 'EVALASIGN':
+                    return col, df[col].fillna('')
+                # Para otras columnas de texto
+                elif df[col].nunique() / len(df) < 0.5:
                     return col, pd.Categorical(df[col])
             return col, df[col]
 

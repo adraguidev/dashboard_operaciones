@@ -772,27 +772,23 @@ def main():
                 # Crear pestañas usando st.tabs
                 tabs = st.tabs([name for name, _, _ in tabs_config])
 
-                # Detectar qué pestaña está seleccionada
+                # Renderizar contenido de las pestañas
                 for i, tab in enumerate(tabs):
                     with tab:
-                        # Si hay contenido visible en esta pestaña, está activa
-                        if st.container().id != "":
-                            st.session_state.active_tab = i
-                            break
-
-                # Renderizar contenido solo de la pestaña activa
-                with tabs[st.session_state.active_tab]:
-                    tab_cache_key = f"tab_{selected_module}_{st.session_state.active_tab}"
-                    if tab_cache_key not in st.session_state:
-                        with st.spinner(f'Cargando {tabs_config[st.session_state.active_tab][0]}...'):
+                        # Usar el cache_key específico para cada pestaña
+                        tab_cache_key = f"tab_{selected_module}_{i}"
+                        
+                        # Si es la primera vez que se carga esta pestaña o si los datos han cambiado
+                        if tab_cache_key not in st.session_state or st.session_state.get('last_module') != selected_module:
+                            with st.spinner(f'Cargando {tabs_config[i][0]}...'):
+                                # Obtener la función y argumentos de la configuración
+                                _, render_func, args = tabs_config[i]
+                                render_func(*args)
+                                st.session_state[tab_cache_key] = True
+                        else:
                             # Obtener la función y argumentos de la configuración
-                            _, render_func, args = tabs_config[st.session_state.active_tab]
+                            _, render_func, args = tabs_config[i]
                             render_func(*args)
-                            st.session_state[tab_cache_key] = True
-                    else:
-                        # Obtener la función y argumentos de la configuración
-                        _, render_func, args = tabs_config[st.session_state.active_tab]
-                        render_func(*args)
 
     except Exception as e:
         st.error(f"Error inesperado en la aplicación: {str(e)}")
